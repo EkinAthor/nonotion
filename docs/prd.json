@@ -29,7 +29,9 @@
           "types": ["heading", "paragraph"],
           "formatting": false,
           "dragAndDrop": true,
-          "slashCommands": false
+          "slashCommands": true,
+          "enterCreatesNewBlock": true,
+          "arrowKeyNavigation": true
         },
         "collaboration": {
           "enabled": false,
@@ -111,7 +113,6 @@
       "features": [
         "Additional block types (bullet list, numbered list, toggle, quote, code)",
         "Rich text formatting (bold, italic, underline, strikethrough)",
-        "Slash commands menu",
         "Block nesting"
       ]
     },

@@ -28,6 +28,7 @@ export interface CreateBlockInput {
 }
 
 export interface UpdateBlockInput {
+  type?: BlockType;
   content?: BlockContent;
   order?: number;
 }

@@ -44,10 +44,21 @@ export async function updateBlock(id: string, input: UpdateBlockInput): Promise<
   const existing = await storage.getBlock(id);
   if (!existing) return null;
 
-  return storage.updateBlock(id, {
-    ...input,
+  const updates: Partial<Block> & { version: number } = {
     version: existing.version + 1,
-  });
+  };
+
+  if (input.type !== undefined) {
+    updates.type = input.type;
+  }
+  if (input.content !== undefined) {
+    updates.content = input.content;
+  }
+  if (input.order !== undefined) {
+    updates.order = input.order;
+  }
+
+  return storage.updateBlock(id, updates);
 }
 
 export async function deleteBlock(id: string): Promise<boolean> {

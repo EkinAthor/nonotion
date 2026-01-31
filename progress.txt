@@ -2,7 +2,7 @@
 
 ## Status: COMPLETE
 
-Last Updated: 2026-01-29
+Last Updated: 2026-01-31
 
 ---
 
@@ -82,6 +82,19 @@ Last Updated: 2026-01-29
 - [x] Create pages.spec.ts tests
 - [x] Create blocks.spec.ts tests
 - [x] Create navigation.spec.ts tests
+
+### Phase 9: Block Editing UX Improvements
+- [x] Remove AddBlockButton, replace with EmptyBlockPlaceholder
+- [x] Add BlockContext for passing block operations to edit components
+- [x] Implement Enter key to create new block below (with text splitting)
+- [x] Implement Shift+Enter for newline within block
+- [x] Implement slash commands (/h1, /p) to change block type
+- [x] Add SlashCommandMenu component with keyboard navigation
+- [x] Add arrow key navigation between blocks (up/down)
+- [x] Add Enter on page title creates new block at top
+- [x] Backend support for changing block type via PATCH
+- [x] Fix focus management after block type changes
+- [x] Fix stale block order after drag-and-drop
 
 ---
 

@@ -5,6 +5,7 @@ import { blocksApi } from '@/api/client';
 interface BlockState {
   blocksByPage: Map<string, Block[]>;
   selectedBlockId: string | null;
+  focusBlockId: string | null;
   isLoading: boolean;
   error: string | null;
 
@@ -15,14 +16,19 @@ interface BlockState {
   deleteBlock: (id: string) => Promise<void>;
   reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
+  setFocusBlock: (id: string | null) => void;
+  changeBlockType: (id: string, newType: BlockType, preserveText?: boolean) => Promise<Block>;
 
   // Selectors
   getBlocksForPage: (pageId: string) => Block[];
+  getBlockById: (blockId: string) => Block | undefined;
+  getAdjacentBlockId: (blockId: string, direction: 'prev' | 'next') => string | null;
 }
 
 export const useBlockStore = create<BlockState>((set, get) => ({
   blocksByPage: new Map(),
   selectedBlockId: null,
+  focusBlockId: null,
   isLoading: false,
   error: null,
 
@@ -152,7 +158,78 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     set({ selectedBlockId: id });
   },
 
+  setFocusBlock: (id) => {
+    set({ focusBlockId: id });
+  },
+
+  changeBlockType: async (id, newType, preserveText = true) => {
+    // Find the block to get its current content
+    let existingBlock: Block | undefined;
+    for (const blocks of get().blocksByPage.values()) {
+      existingBlock = blocks.find((b) => b.id === id);
+      if (existingBlock) break;
+    }
+
+    if (!existingBlock) {
+      throw new Error(`Block ${id} not found`);
+    }
+
+    // Extract text from current content
+    const text = preserveText ? existingBlock.content.text : '';
+
+    // Create content for new type
+    const content: BlockContent = newType === 'heading'
+      ? { text, level: 1 }
+      : { text };
+
+    // Update block with new type and content
+    const block = await blocksApi.update(id, { type: newType, content });
+
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = blocksByPage.get(block.pageId);
+
+      if (blocks) {
+        const index = blocks.findIndex((b) => b.id === id);
+        if (index !== -1) {
+          const updatedBlocks = [...blocks];
+          updatedBlocks[index] = block;
+          blocksByPage.set(block.pageId, updatedBlocks);
+        }
+      }
+
+      return { blocksByPage };
+    });
+
+    return block;
+  },
+
   getBlocksForPage: (pageId) => {
     return get().blocksByPage.get(pageId) || [];
+  },
+
+  getBlockById: (blockId) => {
+    for (const blocks of get().blocksByPage.values()) {
+      const block = blocks.find((b) => b.id === blockId);
+      if (block) return block;
+    }
+    return undefined;
+  },
+
+  getAdjacentBlockId: (blockId, direction) => {
+    for (const blocks of get().blocksByPage.values()) {
+      const sortedBlocks = [...blocks].sort((a, b) => a.order - b.order);
+      const currentIndex = sortedBlocks.findIndex((b) => b.id === blockId);
+      if (currentIndex !== -1) {
+        if (direction === 'prev' && currentIndex > 0) {
+          return sortedBlocks[currentIndex - 1].id;
+        }
+        if (direction === 'next' && currentIndex < sortedBlocks.length - 1) {
+          return sortedBlocks[currentIndex + 1].id;
+        }
+        return null;
+      }
+    }
+    return null;
   },
 }));

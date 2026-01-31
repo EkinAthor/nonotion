@@ -17,7 +17,7 @@ import {
 import type { Block } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import BlockWrapper from './BlockWrapper';
-import AddBlockButton from './AddBlockButton';
+import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
 
 interface BlockCanvasProps {
   pageId: string;
@@ -77,13 +77,14 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
             <BlockWrapper
               key={block.id}
               block={block}
+              pageId={pageId}
               isDragging={activeId === block.id}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      <AddBlockButton pageId={pageId} order={blocks.length} />
+      <EmptyBlockPlaceholder pageId={pageId} order={blocks.length} />
     </div>
   );
 }

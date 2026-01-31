@@ -30,6 +30,7 @@ export const createBlockInputSchema = z.object({
 });
 
 export const updateBlockInputSchema = z.object({
+  type: blockTypeSchema.optional(),
   content: blockContentSchema.optional(),
   order: z.number().int().nonnegative().optional(),
 });

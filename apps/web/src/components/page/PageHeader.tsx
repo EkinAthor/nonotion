@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Page } from '@nonotion/shared';
 import { usePageStore } from '@/stores/pageStore';
+import { useBlockStore } from '@/stores/blockStore';
 
 interface PageHeaderProps {
   page: Page;
@@ -11,6 +12,7 @@ const EMOJI_OPTIONS = ['📄', '📝', '📋', '📌', '📎', '🎯', '💡', '
 
 export default function PageHeader({ page }: PageHeaderProps) {
   const { updatePage } = usePageStore();
+  const { createBlock, setFocusBlock } = useBlockStore();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [title, setTitle] = useState(page.title);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -34,9 +36,17 @@ export default function PageHeader({ page }: PageHeaderProps) {
     }
   };
 
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+  const handleTitleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleTitleBlur();
+      e.preventDefault();
+      // Save title first
+      setIsEditingTitle(false);
+      if (title !== page.title) {
+        await updatePage(page.id, { title: title || 'Untitled' });
+      }
+      // Create a new block at the beginning of the page and focus it
+      const newBlock = await createBlock(page.id, 'paragraph', { text: '' }, 0);
+      setFocusBlock(newBlock.id);
     }
     if (e.key === 'Escape') {
       setTitle(page.title);

@@ -45,6 +45,15 @@ Zustand stores update UI immediately, then sync with backend. On error, refetch 
 ### 5. LWW Sync Preparation
 All entities have `version` and `updatedAt` fields for future last-write-wins conflict resolution.
 
+### 6. Block Context Pattern
+`apps/web/src/contexts/BlockContext.tsx` provides block-level operations to edit components:
+- `createBlockBelow()` - Create new block after current
+- `changeBlockType()` - Change block type (heading/paragraph)
+- `focusPreviousBlock()` / `focusNextBlock()` - Navigate between blocks
+
+### 7. Slash Commands
+Typing `/` at the start of an empty block opens a command menu. Shortcuts like `/h1`, `/p` filter and select block types.
+
 ## Critical Files
 
 | File | Purpose |
@@ -55,7 +64,10 @@ All entities have `version` and `updatedAt` fields for future last-write-wins co
 | `apps/web/src/stores/pageStore.ts` | Page state management with tree operations |
 | `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates |
 | `apps/web/src/components/blocks/BlockCanvas.tsx` | Main editing surface with drag-and-drop |
-| `apps/web/src/lib/tiptap/useBlockEditor.ts` | Shared TipTap editor hook with auto-save |
+| `apps/web/src/lib/tiptap/useBlockEditor.ts` | Shared TipTap editor hook with auto-save, keyboard handling, slash commands |
+| `apps/web/src/contexts/BlockContext.tsx` | Context for block operations (create, change type, navigate) |
+| `apps/web/src/components/blocks/SlashCommandMenu.tsx` | Slash command popup for changing block types |
+| `apps/web/src/components/blocks/registry/index.ts` | Block type registry with shortcuts |
 
 ## Commands
 
@@ -113,9 +125,10 @@ pnpm --filter @nonotion/e2e test:e2e  # Run Playwright tests
 
 5. Create edit component in `apps/web/src/components/blocks/registry/NewTypeEdit.tsx`
 
-6. Register in `apps/web/src/components/blocks/registry/index.ts`
-
-7. Add to `AddBlockButton.tsx` menu options
+6. Register in `apps/web/src/components/blocks/registry/index.ts` with:
+   - `type`, `label`, `icon`, `shortcuts` (for slash commands)
+   - `EditComponent` reference
+   - `defaultContent` for new blocks
 
 ## Common Tasks
 
@@ -151,7 +164,7 @@ These are planned but NOT yet implemented:
 - Real-time collaboration (WebSocket)
 - Additional block types (lists, code, images, tables)
 - Database storage (Supabase)
-- Slash command menu for block insertion
+- Rich text formatting (bold, italic, etc.)
 
 When implementing these, check `docs/implementation-plan.md` for architectural guidance.
 

@@ -6,6 +6,7 @@ export interface BlockDefinition {
   type: BlockType;
   label: string;
   icon: string;
+  shortcuts: string[];
   EditComponent: React.ComponentType<{ block: any }>;
   defaultContent: BlockContent;
 }
@@ -15,6 +16,7 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
     type: 'heading',
     label: 'Heading 1',
     icon: 'H1',
+    shortcuts: ['h1', 'h', 'heading', 'head'],
     EditComponent: HeadingEdit,
     defaultContent: { text: '', level: 1 },
   },
@@ -22,6 +24,7 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
     type: 'paragraph',
     label: 'Paragraph',
     icon: 'P',
+    shortcuts: ['p', 'para', 'paragraph', 'text'],
     EditComponent: ParagraphEdit,
     defaultContent: { text: '' },
   },

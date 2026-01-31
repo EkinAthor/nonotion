@@ -1,19 +1,53 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Block } from '@nonotion/shared';
+import type { Block, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
+import { BlockContextProvider } from '@/contexts/BlockContext';
 import HeadingEdit from './registry/HeadingEdit';
 import ParagraphEdit from './registry/ParagraphEdit';
 
 interface BlockWrapperProps {
   block: Block;
+  pageId: string;
   isDragging: boolean;
 }
 
-export default function BlockWrapper({ block, isDragging }: BlockWrapperProps) {
-  const { deleteBlock } = useBlockStore();
+export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapperProps) {
+  const { deleteBlock, createBlock, changeBlockType, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const [showActions, setShowActions] = useState(false);
+
+  const handleCreateBlockBelow = useCallback(async (initialText = ''): Promise<string> => {
+    // Get current order from store to avoid stale closure after drag-and-drop
+    const currentBlock = getBlockById(block.id);
+    const currentOrder = currentBlock?.order ?? block.order;
+    const newBlock = await createBlock(pageId, 'paragraph', { text: initialText }, currentOrder + 1);
+    setFocusBlock(newBlock.id);
+    return newBlock.id;
+  }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
+
+  const handleChangeBlockType = useCallback(async (newType: BlockType): Promise<void> => {
+    await changeBlockType(block.id, newType);
+    // Set focus to this block after type change so the new editor gets focus
+    setFocusBlock(block.id);
+  }, [block.id, changeBlockType, setFocusBlock]);
+
+  const handleFocusPreviousBlock = useCallback(() => {
+    const prevBlockId = getAdjacentBlockId(block.id, 'prev');
+    if (prevBlockId) {
+      setFocusBlock(prevBlockId);
+    }
+  }, [block.id, getAdjacentBlockId, setFocusBlock]);
+
+  const handleFocusNextBlock = useCallback(() => {
+    const nextBlockId = getAdjacentBlockId(block.id, 'next');
+    if (nextBlockId) {
+      setFocusBlock(nextBlockId);
+    } else {
+      // No next block - create a new one
+      handleCreateBlockBelow('');
+    }
+  }, [block.id, getAdjacentBlockId, setFocusBlock, handleCreateBlockBelow]);
 
   const {
     attributes,
@@ -103,7 +137,20 @@ export default function BlockWrapper({ block, isDragging }: BlockWrapperProps) {
       </div>
 
       {/* Block content */}
-      <div className="flex-1 min-w-0">{renderBlockContent()}</div>
+      <div className="flex-1 min-w-0">
+        <BlockContextProvider
+          value={{
+            pageId,
+            blockId: block.id,
+            createBlockBelow: handleCreateBlockBelow,
+            changeBlockType: handleChangeBlockType,
+            focusPreviousBlock: handleFocusPreviousBlock,
+            focusNextBlock: handleFocusNextBlock,
+          }}
+        >
+          {renderBlockContent()}
+        </BlockContextProvider>
+      </div>
     </div>
   );
 }
