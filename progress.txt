@@ -1,0 +1,130 @@
+# Nonotion Phase 1 - Implementation Progress
+
+## Status: COMPLETE
+
+Last Updated: 2026-01-29
+
+---
+
+## Completed Items
+
+### Phase 1: Project Setup
+- [x] Initialize monorepo with pnpm workspaces
+- [x] Configure Turborepo
+- [x] Set up TypeScript base config
+- [x] Configure ESLint + Prettier
+- [x] Create shared types package
+- [x] Define Page and Block types
+- [x] Create Zod validation schemas
+- [x] Set up utility functions (ID generation, timestamps)
+
+### Phase 2: Backend Foundation
+- [x] Initialize Fastify server
+- [x] Configure CORS plugin
+- [x] Implement StorageAdapter interface
+- [x] Implement JsonFileStorage class
+- [x] Create Page CRUD endpoints (GET, POST, PATCH, DELETE)
+- [x] Create Block CRUD endpoints (GET, POST, PATCH, DELETE)
+- [x] Implement block reordering endpoint
+- [x] Add error handling middleware
+
+### Phase 3: Frontend Foundation
+- [x] Initialize Vite + React project
+- [x] Configure Tailwind CSS
+- [x] Set up API client (fetch wrapper)
+- [x] Create pageStore (Zustand)
+- [x] Create blockStore (Zustand)
+- [x] Create uiStore (Zustand)
+- [x] Wire up API client to stores
+
+### Phase 4: Sidebar & Navigation
+- [x] Create MainLayout component
+- [x] Create Sidebar component
+- [x] Create PageTree component (recursive)
+- [x] Create PageTreeItem component
+- [x] Implement expand/collapse functionality
+- [x] Create StarredSection component
+- [x] Create NewPageButton component
+- [x] Wire up page creation
+- [x] Wire up page deletion
+- [x] Implement page navigation
+
+### Phase 5: Page View
+- [x] Create PageView component
+- [x] Create PageHeader component
+- [x] Implement editable page title
+- [x] Implement page icon editing
+- [x] Create PageBreadcrumb component
+- [x] Wire up breadcrumb navigation
+
+### Phase 6: Block System
+- [x] Define BlockPlugin interface
+- [x] Create BlockRegistry class
+- [x] Create HeadingEdit component (TipTap)
+- [x] Create ParagraphEdit component (TipTap)
+- [x] Register heading and paragraph plugins
+- [x] Create BlockCanvas component
+- [x] Create BlockWrapper component
+- [x] Create BlockDragHandle component
+- [x] Implement block CRUD operations
+- [x] Implement debounced auto-save (500ms)
+
+### Phase 7: Drag & Drop
+- [x] Install @dnd-kit/core
+- [x] Integrate DndContext in BlockCanvas
+- [x] Implement drag sensors
+- [x] Implement drop handling
+- [x] Wire up reorder API
+
+### Phase 8: E2E Testing (Playwright)
+- [x] Install Playwright
+- [x] Configure playwright.config.ts
+- [x] Create pages.spec.ts tests
+- [x] Create blocks.spec.ts tests
+- [x] Create navigation.spec.ts tests
+
+---
+
+## Running the Application
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build shared package first
+pnpm --filter @nonotion/shared build
+
+# Start development servers
+pnpm dev
+
+# Or start individually
+pnpm --filter @nonotion/api dev  # http://localhost:3001
+pnpm --filter @nonotion/web dev  # http://localhost:5173
+```
+
+## Running Tests
+
+```bash
+# E2E tests (requires dev servers)
+pnpm --filter @nonotion/e2e test:e2e
+
+# E2E with UI
+pnpm --filter @nonotion/e2e test:e2e:ui
+```
+
+---
+
+## Architecture Notes
+
+- Block registry pattern allows easy addition of new block types
+- All entities have `version` field for future LWW sync
+- Storage adapter interface allows swapping JSON for database
+- Admin user auto-logged in (Phase 1 only)
+
+---
+
+## Notes
+
+- Refer to docs/implementation-plan.md for detailed architecture
+- Refer to docs/prd.json for product requirements
+- Refer to spec/nonotion-spec.md for full application specification

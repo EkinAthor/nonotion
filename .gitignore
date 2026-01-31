@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Data (keep structure, ignore content)
+data/pages/*.json
+data/blocks/*.json
+!data/pages/.gitkeep
+!data/blocks/.gitkeep
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul

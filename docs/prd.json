@@ -1,0 +1,170 @@
+{
+  "product": {
+    "name": "Nonotion",
+    "version": "0.1.0",
+    "phase": 1,
+    "description": "Self-hosted, lightweight Notion alternative with block-based content editing"
+  },
+  "scope": {
+    "phase1": {
+      "description": "Baseline implementation with core features",
+      "features": {
+        "storage": {
+          "type": "local",
+          "format": "JSON files",
+          "multiUser": false
+        },
+        "authentication": {
+          "enabled": false,
+          "defaultUser": "admin",
+          "autoLogin": true
+        },
+        "pages": {
+          "enabled": true,
+          "subPages": true,
+          "database": false,
+          "starring": true
+        },
+        "blocks": {
+          "types": ["heading", "paragraph"],
+          "formatting": false,
+          "dragAndDrop": true,
+          "slashCommands": false
+        },
+        "collaboration": {
+          "enabled": false,
+          "preparedFor": true
+        },
+        "deployment": {
+          "docker": false,
+          "localDev": true
+        }
+      }
+    }
+  },
+  "technicalStack": {
+    "frontend": {
+      "framework": "React",
+      "buildTool": "Vite",
+      "language": "TypeScript",
+      "stateManagement": "Zustand",
+      "styling": "Tailwind CSS",
+      "editor": "TipTap"
+    },
+    "backend": {
+      "runtime": "Node.js",
+      "framework": "Fastify",
+      "language": "TypeScript",
+      "storage": "JSON files"
+    },
+    "testing": {
+      "e2e": "Playwright",
+      "unit": "Vitest"
+    },
+    "monorepo": {
+      "packageManager": "pnpm",
+      "orchestration": "Turborepo"
+    }
+  },
+  "dataModels": {
+    "page": {
+      "id": "string (nanoid)",
+      "title": "string",
+      "parentId": "string | null",
+      "childIds": "string[]",
+      "icon": "string | null",
+      "isStarred": "boolean",
+      "createdAt": "ISO8601 string",
+      "updatedAt": "ISO8601 string",
+      "version": "number"
+    },
+    "block": {
+      "id": "string (nanoid)",
+      "type": "heading | paragraph",
+      "pageId": "string",
+      "order": "number",
+      "content": {
+        "text": "string",
+        "level": "number (heading only)"
+      },
+      "version": "number"
+    }
+  },
+  "apiEndpoints": {
+    "pages": {
+      "list": "GET /api/pages",
+      "get": "GET /api/pages/:id",
+      "create": "POST /api/pages",
+      "update": "PATCH /api/pages/:id",
+      "delete": "DELETE /api/pages/:id"
+    },
+    "blocks": {
+      "list": "GET /api/pages/:pageId/blocks",
+      "create": "POST /api/pages/:pageId/blocks",
+      "update": "PATCH /api/blocks/:id",
+      "delete": "DELETE /api/blocks/:id",
+      "reorder": "PATCH /api/pages/:pageId/blocks/reorder"
+    }
+  },
+  "futurePhases": {
+    "phase2": {
+      "features": [
+        "Additional block types (bullet list, numbered list, toggle, quote, code)",
+        "Rich text formatting (bold, italic, underline, strikethrough)",
+        "Slash commands menu",
+        "Block nesting"
+      ]
+    },
+    "phase3": {
+      "features": [
+        "Database functionality",
+        "Property types (select, multi-select, date, person, URL, checkbox)",
+        "Table view",
+        "Filtering and sorting"
+      ]
+    },
+    "phase4": {
+      "features": [
+        "User authentication (local + Google OAuth)",
+        "Multiple users",
+        "Permissions (view, edit, full access)",
+        "Permission inheritance"
+      ]
+    },
+    "phase5": {
+      "features": [
+        "Real-time collaboration",
+        "LWW conflict resolution",
+        "Presence indicators",
+        "@ mentions"
+      ]
+    },
+    "phase6": {
+      "features": [
+        "Docker deployment",
+        "Supabase storage backend",
+        "Import from Notion",
+        "Export functionality"
+      ]
+    },
+    "phase7": {
+      "features": [
+        "Plugin API",
+        "Custom block types",
+        "Third-party integrations"
+      ]
+    }
+  },
+  "acceptance": {
+    "phase1": [
+      "Can create, edit, and delete pages",
+      "Can create sub-pages with proper tree hierarchy",
+      "Can star/unstar pages",
+      "Can add heading and paragraph blocks",
+      "Can edit block content with auto-save",
+      "Can reorder blocks via drag and drop",
+      "All data persists in JSON files",
+      "All E2E tests pass"
+    ]
+  }
+}
