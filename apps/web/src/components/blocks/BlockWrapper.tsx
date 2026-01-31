@@ -5,6 +5,8 @@ import type { Block, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { BlockContextProvider } from '@/contexts/BlockContext';
 import HeadingEdit from './registry/HeadingEdit';
+import Heading2Edit from './registry/Heading2Edit';
+import Heading3Edit from './registry/Heading3Edit';
 import ParagraphEdit from './registry/ParagraphEdit';
 
 interface BlockWrapperProps {
@@ -71,6 +73,10 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     switch (block.type) {
       case 'heading':
         return <HeadingEdit block={block} />;
+      case 'heading2':
+        return <Heading2Edit block={block} />;
+      case 'heading3':
+        return <Heading3Edit block={block} />;
       case 'paragraph':
         return <ParagraphEdit block={block} />;
       default:
@@ -88,9 +94,8 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     >
       {/* Action buttons */}
       <div
-        className={`flex items-center gap-0.5 mr-1 transition-opacity ${
-          showActions ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`flex items-center gap-0.5 mr-1 transition-opacity ${showActions ? 'opacity-100' : 'opacity-0'
+          }`}
       >
         {/* Drag handle */}
         <button

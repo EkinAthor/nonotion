@@ -23,11 +23,11 @@ export default function SlashCommandMenu({
   const queryLower = query.toLowerCase();
   const filteredOptions = query
     ? allOptions.filter(
-        (opt) =>
-          opt.label.toLowerCase().includes(queryLower) ||
-          opt.type.toLowerCase().includes(queryLower) ||
-          opt.shortcuts.some((s) => s.startsWith(queryLower))
-      )
+      (opt) =>
+        opt.label.toLowerCase().includes(queryLower) ||
+        opt.type.toLowerCase().includes(queryLower) ||
+        opt.shortcuts.some((s) => s.startsWith(queryLower))
+    )
     : allOptions;
 
   // Reset selection when options change
@@ -113,11 +113,10 @@ export default function SlashCommandMenu({
         <button
           key={option.type}
           onClick={() => onSelect(option.type)}
-          className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors ${
-            index === selectedIndex
-              ? 'bg-notion-hover'
-              : 'hover:bg-notion-hover'
-          }`}
+          className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors ${index === selectedIndex
+            ? 'bg-notion-hover'
+            : 'hover:bg-notion-hover'
+            }`}
         >
           <span className="w-8 h-8 flex items-center justify-center bg-notion-sidebar rounded text-sm font-medium">
             {option.icon}
@@ -138,6 +137,10 @@ function getBlockDescription(option: BlockDefinition): string {
   switch (option.type) {
     case 'heading':
       return 'Large section heading';
+    case 'heading2':
+      return 'Medium section heading';
+    case 'heading3':
+      return 'Small section heading';
     case 'paragraph':
       return 'Plain text';
     default:

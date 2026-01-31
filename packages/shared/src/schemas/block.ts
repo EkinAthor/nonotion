@@ -1,17 +1,27 @@
 import { z } from 'zod';
 
-export const blockTypeSchema = z.enum(['heading', 'paragraph']);
+export const blockTypeSchema = z.enum(['heading', 'heading2', 'heading3', 'paragraph']);
 
 export const headingContentSchema = z.object({
   text: z.string(),
   level: z.literal(1),
 });
 
+export const heading2ContentSchema = z.object({
+  text: z.string(),
+  level: z.literal(2),
+});
+
+export const heading3ContentSchema = z.object({
+  text: z.string(),
+  level: z.literal(3),
+});
+
 export const paragraphContentSchema = z.object({
   text: z.string(),
 });
 
-export const blockContentSchema = z.union([headingContentSchema, paragraphContentSchema]);
+export const blockContentSchema = z.union([headingContentSchema, heading2ContentSchema, heading3ContentSchema, paragraphContentSchema]);
 
 export const blockSchema = z.object({
   id: z.string().startsWith('blk_'),

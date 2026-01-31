@@ -1,15 +1,25 @@
-export type BlockType = 'heading' | 'paragraph';
+export type BlockType = 'heading' | 'heading2' | 'heading3' | 'paragraph';
 
 export interface HeadingContent {
   text: string;
   level: 1;
 }
 
+export interface Heading2Content {
+  text: string;
+  level: 2;
+}
+
+export interface Heading3Content {
+  text: string;
+  level: 3;
+}
+
 export interface ParagraphContent {
   text: string;
 }
 
-export type BlockContent = HeadingContent | ParagraphContent;
+export type BlockContent = HeadingContent | Heading2Content | Heading3Content | ParagraphContent;
 
 export interface Block {
   id: string; // "blk_xxxxx"

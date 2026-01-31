@@ -15,7 +15,7 @@ interface SlashMenuState {
 interface UseBlockEditorOptions {
   block: Block;
   placeholder?: string;
-  headingLevel?: 1;
+  headingLevel?: 1 | 2 | 3;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
   onChangeBlockType?: (newType: BlockType) => Promise<void>;
   onFocusPreviousBlock?: () => void;

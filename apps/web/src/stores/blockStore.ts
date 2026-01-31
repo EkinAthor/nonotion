@@ -178,9 +178,16 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const text = preserveText ? existingBlock.content.text : '';
 
     // Create content for new type
-    const content: BlockContent = newType === 'heading'
-      ? { text, level: 1 }
-      : { text };
+    let content: BlockContent;
+    if (newType === 'heading') {
+      content = { text, level: 1 };
+    } else if (newType === 'heading2') {
+      content = { text, level: 2 };
+    } else if (newType === 'heading3') {
+      content = { text, level: 3 };
+    } else {
+      content = { text };
+    }
 
     // Update block with new type and content
     const block = await blocksApi.update(id, { type: newType, content });
