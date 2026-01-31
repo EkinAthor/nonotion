@@ -50,6 +50,8 @@ nonotion/
 ```bash
 # Development
 pnpm dev                # Start all dev servers
+pnpm dev:status         # Check if servers are running
+pnpm dev:stop           # Stop servers (manual kill)
 pnpm --filter @nonotion/api dev   # Start API only
 pnpm --filter @nonotion/web dev   # Start frontend only
 

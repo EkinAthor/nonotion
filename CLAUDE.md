@@ -74,6 +74,8 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 ```bash
 # Development
 pnpm dev                              # Start all (API + Web)
+pnpm dev:status                       # Check if servers are running
+pnpm dev:stop                         # Stop servers (manual kill)
 pnpm --filter @nonotion/api dev       # API only
 pnpm --filter @nonotion/web dev       # Web only
 
@@ -182,7 +184,7 @@ pnpm --filter @nonotion/shared build
 ```
 
 ### Port already in use
-Kill existing processes on ports 3001 (API) or 5173 (Web).
+Run `pnpm dev:stop` to kill existing processes on ports 3001 (API) or 5173 (Web).
 
 ### Blocks not saving
 Check browser console for API errors. Verify API is running. Auto-save has 500ms debounce.
