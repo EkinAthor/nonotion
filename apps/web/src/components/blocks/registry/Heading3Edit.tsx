@@ -8,16 +8,18 @@ import SlashCommandMenu from '../SlashCommandMenu';
 
 interface HeadingEditProps {
   block: Block;
+  readOnly?: boolean;
 }
 
-export default function Heading3Edit({ block }: HeadingEditProps) {
+export default function Heading3Edit({ block, readOnly = false }: HeadingEditProps) {
   const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
     block,
-    placeholder: 'Heading 3',
+    placeholder: readOnly ? '' : 'Heading 3',
     headingLevel: 3,
+    readOnly,
     onCreateBlockBelow: async (textAfterCursor) => {
       await createBlockBelow(textAfterCursor);
     },
@@ -46,7 +48,7 @@ export default function Heading3Edit({ block }: HeadingEditProps) {
   return (
     <div className="text-xl font-bold text-notion-text relative">
       <EditorContent editor={editor} />
-      {slashMenu.isOpen && (
+      {!readOnly && slashMenu.isOpen && (
         <SlashCommandMenu
           query={slashMenu.query}
           position={slashMenu.position}

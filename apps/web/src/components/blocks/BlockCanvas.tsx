@@ -23,9 +23,10 @@ import { getMarkdownPrefix } from './registry';
 interface BlockCanvasProps {
   pageId: string;
   blocks: Block[];
+  readOnly?: boolean;
 }
 
-export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
+export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockCanvasProps) {
   const { reorderBlocks } = useBlockStore();
   const [activeId, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -248,7 +249,7 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: readOnly ? Infinity : 8, // Disable dragging when readOnly
       },
     }),
     useSensor(KeyboardSensor, {
@@ -299,12 +300,13 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
               block={block}
               pageId={pageId}
               isDragging={activeId === block.id}
+              readOnly={readOnly}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      <EmptyBlockPlaceholder pageId={pageId} order={blocks.length} />
+      {!readOnly && <EmptyBlockPlaceholder pageId={pageId} order={blocks.length} />}
     </div>
   );
 }

@@ -1,15 +1,31 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import PageView from './components/page/PageView';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import AuthGuard from './components/auth/AuthGuard';
 
 function App() {
   return (
     <Routes>
-      <Route element={<MainLayout />}>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
+      {/* Protected routes */}
+      <Route
+        element={
+          <AuthGuard>
+            <MainLayout />
+          </AuthGuard>
+        }
+      >
         <Route path="/" element={<WelcomeView />} />
         <Route path="/page/:pageId" element={<PageView />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+
+      {/* Catch all - redirect to home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

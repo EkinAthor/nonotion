@@ -33,6 +33,7 @@ interface UseBlockEditorOptions {
   block: Block;
   placeholder?: string;
   headingLevel?: 1 | 2 | 3;
+  readOnly?: boolean;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
   onChangeBlockType?: (newType: BlockType, newText?: string) => Promise<void>;
   onFocusPreviousBlock?: () => void;
@@ -52,6 +53,7 @@ export function useBlockEditor({
   block,
   placeholder,
   headingLevel,
+  readOnly = false,
   onCreateBlockBelow,
   onChangeBlockType,
   onFocusPreviousBlock,
@@ -429,6 +431,7 @@ export function useBlockEditor({
       ClipboardExtension,
     ],
     content: block.content.text,
+    editable: !readOnly,
     onUpdate: ({ editor }) => {
       const text = editor.getText();
       saveContent(text);

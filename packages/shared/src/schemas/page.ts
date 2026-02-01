@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const pageSchema = z.object({
   id: z.string().startsWith('pg_'),
   title: z.string(),
+  ownerId: z.string().startsWith('usr_'),
   parentId: z.string().startsWith('pg_').nullable(),
   childIds: z.array(z.string().startsWith('pg_')),
   icon: z.string().nullable(),

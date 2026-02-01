@@ -8,15 +8,17 @@ import SlashCommandMenu from '../SlashCommandMenu';
 
 interface ParagraphEditProps {
   block: Block;
+  readOnly?: boolean;
 }
 
-export default function ParagraphEdit({ block }: ParagraphEditProps) {
+export default function ParagraphEdit({ block, readOnly = false }: ParagraphEditProps) {
   const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
     block,
-    placeholder: "Type '/' for commands...",
+    placeholder: readOnly ? '' : "Type '/' for commands...",
+    readOnly,
     onCreateBlockBelow: async (textAfterCursor) => {
       await createBlockBelow(textAfterCursor);
     },
@@ -45,7 +47,7 @@ export default function ParagraphEdit({ block }: ParagraphEditProps) {
   return (
     <div className="text-base text-notion-text leading-relaxed relative">
       <EditorContent editor={editor} />
-      {slashMenu.isOpen && (
+      {!readOnly && slashMenu.isOpen && (
         <SlashCommandMenu
           query={slashMenu.query}
           position={slashMenu.position}

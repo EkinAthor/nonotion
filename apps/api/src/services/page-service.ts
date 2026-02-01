@@ -10,11 +10,12 @@ export async function getPage(id: string): Promise<Page | null> {
   return storage.getPage(id);
 }
 
-export async function createPage(input: CreatePageInput): Promise<Page> {
+export async function createPage(input: CreatePageInput, ownerId: string): Promise<Page> {
   const timestamp = now();
   const page: Page = {
     id: generatePageId(),
     title: input.title,
+    ownerId,
     parentId: input.parentId ?? null,
     childIds: [],
     icon: input.icon ?? null,

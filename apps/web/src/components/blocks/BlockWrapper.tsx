@@ -14,9 +14,10 @@ interface BlockWrapperProps {
   block: Block;
   pageId: string;
   isDragging: boolean;
+  readOnly?: boolean;
 }
 
-export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapperProps) {
+export default function BlockWrapper({ block, pageId, isDragging, readOnly = false }: BlockWrapperProps) {
   const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, updateBlock, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const [showActions, setShowActions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -130,13 +131,13 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
   const renderBlockContent = () => {
     switch (block.type) {
       case 'heading':
-        return <HeadingEdit block={block} />;
+        return <HeadingEdit block={block} readOnly={readOnly} />;
       case 'heading2':
-        return <Heading2Edit block={block} />;
+        return <Heading2Edit block={block} readOnly={readOnly} />;
       case 'heading3':
-        return <Heading3Edit block={block} />;
+        return <Heading3Edit block={block} readOnly={readOnly} />;
       case 'paragraph':
-        return <ParagraphEdit block={block} />;
+        return <ParagraphEdit block={block} readOnly={readOnly} />;
       default:
         return <div className="text-red-500">Unknown block type: {block.type}</div>;
     }
@@ -154,51 +155,53 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => !menuOpen && setShowActions(false)}
     >
-      {/* Action buttons */}
-      <div
-        className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
-          }`}
-      >
-        {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className="p-1 rounded hover:bg-notion-hover cursor-grab active:cursor-grabbing"
-          title="Drag to reorder"
+      {/* Action buttons (hidden in readOnly mode) */}
+      {!readOnly && (
+        <div
+          className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
+            }`}
         >
-          <svg
-            className="w-4 h-4 text-notion-text-secondary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+          {/* Drag handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 rounded hover:bg-notion-hover cursor-grab active:cursor-grabbing"
+            title="Drag to reorder"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 8h16M4 16h16"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-4 h-4 text-notion-text-secondary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 8h16M4 16h16"
+              />
+            </svg>
+          </button>
 
-        {/* Kebab menu button */}
-        <button
-          ref={kebabButtonRef}
-          onClick={handleKebabClick}
-          className="p-1 rounded hover:bg-notion-hover"
-          title="More options"
-        >
-          <svg
-            className="w-4 h-4 text-notion-text-secondary"
-            fill="currentColor"
-            viewBox="0 0 24 24"
+          {/* Kebab menu button */}
+          <button
+            ref={kebabButtonRef}
+            onClick={handleKebabClick}
+            className="p-1 rounded hover:bg-notion-hover"
+            title="More options"
           >
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="12" cy="19" r="2" />
-          </svg>
-        </button>
-      </div>
+            <svg
+              className="w-4 h-4 text-notion-text-secondary"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Context menu */}
       {menuOpen && (

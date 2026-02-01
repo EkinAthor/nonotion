@@ -1,6 +1,7 @@
 export interface Page {
   id: string; // "pg_xxxxx"
   title: string;
+  ownerId: string; // "usr_xxxxx" - page owner
   parentId: string | null; // null = root page
   childIds: string[]; // Ordered children
   icon: string | null; // Emoji

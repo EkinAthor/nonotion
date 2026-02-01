@@ -33,6 +33,7 @@ test-results/
 # Data (keep structure, ignore content)
 data/pages/*.json
 data/blocks/*.json
+data/nonotion.db
 !data/pages/.gitkeep
 !data/blocks/.gitkeep
 

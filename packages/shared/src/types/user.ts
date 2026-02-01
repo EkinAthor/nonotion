@@ -1,16 +1,62 @@
+export type UserRole = 'admin' | 'user';
+
 export interface User {
   id: string; // "usr_xxxxx"
-  name: string;
   email: string;
+  name: string;
+  passwordHash: string; // bcrypt hash (never expose to client)
   avatarUrl: string | null;
-  createdAt: string;
+  role: UserRole;
+  mustChangePassword: boolean;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
 }
 
-// For Phase 1, we have a single admin user auto-logged in
-export const ADMIN_USER: User = {
-  id: 'usr_admin',
-  name: 'Admin',
-  email: 'admin@nonotion.local',
-  avatarUrl: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-};
+// Safe user type without sensitive fields (for client)
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUserInput {
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  avatarUrl?: string | null;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface AdminResetPasswordInput {
+  newPassword: string;
+  mustChangePassword?: boolean;
+}
+
+export interface AuthResponse {
+  user: PublicUser;
+  token: string;
+  mustChangePassword: boolean;
+}

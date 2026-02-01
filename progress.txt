@@ -1,14 +1,14 @@
-# Nonotion Phase 1 - Implementation Progress
+# Nonotion Implementation Progress
 
-## Status: COMPLETE
+## Current Status: Phase 2 COMPLETE
 
-Last Updated: 2026-01-31
+Last Updated: 2026-02-01
 
 ---
 
-## Completed Items
+## Phase 1: Baseline (COMPLETE)
 
-### Phase 1: Project Setup
+### Project Setup
 - [x] Initialize monorepo with pnpm workspaces
 - [x] Configure Turborepo
 - [x] Set up TypeScript base config
@@ -18,7 +18,7 @@ Last Updated: 2026-01-31
 - [x] Create Zod validation schemas
 - [x] Set up utility functions (ID generation, timestamps)
 
-### Phase 2: Backend Foundation
+### Backend Foundation
 - [x] Initialize Fastify server
 - [x] Configure CORS plugin
 - [x] Implement StorageAdapter interface
@@ -28,7 +28,7 @@ Last Updated: 2026-01-31
 - [x] Implement block reordering endpoint
 - [x] Add error handling middleware
 
-### Phase 3: Frontend Foundation
+### Frontend Foundation
 - [x] Initialize Vite + React project
 - [x] Configure Tailwind CSS
 - [x] Set up API client (fetch wrapper)
@@ -37,7 +37,7 @@ Last Updated: 2026-01-31
 - [x] Create uiStore (Zustand)
 - [x] Wire up API client to stores
 
-### Phase 4: Sidebar & Navigation
+### Sidebar & Navigation
 - [x] Create MainLayout component
 - [x] Create Sidebar component
 - [x] Create PageTree component (recursive)
@@ -49,7 +49,7 @@ Last Updated: 2026-01-31
 - [x] Wire up page deletion
 - [x] Implement page navigation
 
-### Phase 5: Page View
+### Page View
 - [x] Create PageView component
 - [x] Create PageHeader component
 - [x] Implement editable page title
@@ -57,7 +57,7 @@ Last Updated: 2026-01-31
 - [x] Create PageBreadcrumb component
 - [x] Wire up breadcrumb navigation
 
-### Phase 6: Block System
+### Block System
 - [x] Define BlockPlugin interface
 - [x] Create BlockRegistry class
 - [x] Create HeadingEdit component (TipTap)
@@ -69,21 +69,21 @@ Last Updated: 2026-01-31
 - [x] Implement block CRUD operations
 - [x] Implement debounced auto-save (500ms)
 
-### Phase 7: Drag & Drop
+### Drag & Drop
 - [x] Install @dnd-kit/core
 - [x] Integrate DndContext in BlockCanvas
 - [x] Implement drag sensors
 - [x] Implement drop handling
 - [x] Wire up reorder API
 
-### Phase 8: E2E Testing (Playwright)
+### E2E Testing (Playwright)
 - [x] Install Playwright
 - [x] Configure playwright.config.ts
 - [x] Create pages.spec.ts tests
 - [x] Create blocks.spec.ts tests
 - [x] Create navigation.spec.ts tests
 
-### Phase 9: Block Editing UX Improvements
+### Block Editing UX Improvements
 - [x] Remove AddBlockButton, replace with EmptyBlockPlaceholder
 - [x] Add BlockContext for passing block operations to edit components
 - [x] Implement Enter key to create new block below (with text splitting)
@@ -95,6 +95,67 @@ Last Updated: 2026-01-31
 - [x] Backend support for changing block type via PATCH
 - [x] Fix focus management after block type changes
 - [x] Fix stale block order after drag-and-drop
+
+---
+
+## Phase 2: Multi-User Support (COMPLETE)
+
+### Phase 2.1: Types & Schemas
+- [x] Extend User type with passwordHash, role, mustChangePassword
+- [x] Create Permission type (owner/editor/viewer)
+- [x] Add ownerId field to Page type
+- [x] Add Zod schemas for auth (register, login, changePassword)
+- [x] Add Zod schemas for permissions
+- [x] Rebuild shared package
+
+### Phase 2.2: SQLite + Drizzle Setup
+- [x] Add better-sqlite3 and drizzle-orm dependencies
+- [x] Create Drizzle schema (users, permissions tables)
+- [x] Create database connection module
+- [x] Configure drizzle.config.ts
+- [x] Generate initial migration
+- [x] Extend StorageAdapter interface with user/permission methods
+
+### Phase 2.3: Backend Auth
+- [x] Add bcryptjs and @fastify/jwt dependencies
+- [x] Create auth middleware (JWT verification)
+- [x] Create auth service (register, login, password change)
+- [x] Create auth routes (/api/auth/*)
+- [x] Register JWT plugin in Fastify
+
+### Phase 2.4: Backend Permissions
+- [x] Create permission service
+- [x] Create share routes (/api/pages/:id/shares)
+- [x] Add auth middleware to page routes
+- [x] Add auth middleware to block routes
+- [x] Update page service with ownership
+
+### Phase 2.5: Backend Admin
+- [x] Create user service
+- [x] Create user routes (/api/users/*)
+- [x] Implement admin password reset
+
+### Phase 2.6: Frontend Auth Store
+- [x] Create authStore with Zustand
+- [x] Update API client with auth headers
+- [x] Add auto-logout on 401
+
+### Phase 2.7: Frontend Auth Components
+- [x] Create LoginPage
+- [x] Create RegisterPage
+- [x] Create AuthGuard component
+- [x] Create ChangePasswordModal
+- [x] Create UserMenu component
+- [x] Update App.tsx routes
+
+### Phase 2.8: Frontend Sharing UI
+- [x] Create ShareModal component
+- [x] Add share button to PageHeader (owner only)
+
+### Phase 2.9: Migration & Docs
+- [x] Create migration script for existing data
+- [x] Add .env.example
+- [x] Update progress.txt
 
 ---
 
@@ -115,6 +176,31 @@ pnpm --filter @nonotion/api dev  # http://localhost:3001
 pnpm --filter @nonotion/web dev  # http://localhost:5173
 ```
 
+## Database Commands
+
+```bash
+# Generate new migration after schema changes
+pnpm --filter @nonotion/api db:generate
+
+# Apply migrations (also runs automatically on API startup)
+pnpm --filter @nonotion/api db:migrate
+
+# Open Drizzle Studio to inspect database
+pnpm --filter @nonotion/api db:studio
+
+# Migrate existing pages to multi-user (assigns to first admin)
+pnpm --filter @nonotion/api migrate:multiuser
+```
+
+## Environment Variables
+
+Create `apps/api/.env` based on `.env.example`:
+
+```
+JWT_SECRET=your-secure-secret-here
+ADMIN_EMAIL=admin@example.com
+```
+
 ## Running Tests
 
 ```bash
@@ -129,10 +215,32 @@ pnpm --filter @nonotion/e2e test:e2e:ui
 
 ## Architecture Notes
 
-- Block registry pattern allows easy addition of new block types
-- All entities have `version` field for future LWW sync
-- Storage adapter interface allows swapping JSON for database
-- Admin user auto-logged in (Phase 1 only)
+### Phase 2 Changes
+
+- Users and permissions stored in SQLite (data/nonotion.db)
+- Pages and blocks remain in JSON files (data/pages/, data/blocks/)
+- JWT tokens for authentication (stored in localStorage)
+- First registered user (or ADMIN_EMAIL) becomes admin
+- Pages have ownerId field for ownership tracking
+- Three permission levels: owner (full control), editor (read/write), viewer (read only)
+
+### Key New Files
+
+| File | Purpose |
+|------|---------|
+| `apps/api/src/db/schema.ts` | Drizzle schema for users/permissions |
+| `apps/api/src/storage/sqlite-storage.ts` | SQLite storage implementation |
+| `apps/api/src/middleware/auth.ts` | JWT auth middleware |
+| `apps/api/src/services/auth-service.ts` | Authentication logic |
+| `apps/api/src/services/permission-service.ts` | Permission checking |
+| `apps/api/src/routes/auth.ts` | Auth endpoints |
+| `apps/api/src/routes/shares.ts` | Page sharing endpoints |
+| `apps/api/src/routes/users.ts` | User management endpoints |
+| `apps/web/src/stores/authStore.ts` | Frontend auth state |
+| `apps/web/src/pages/LoginPage.tsx` | Login page |
+| `apps/web/src/pages/RegisterPage.tsx` | Registration page |
+| `apps/web/src/components/auth/AuthGuard.tsx` | Route protection |
+| `apps/web/src/components/sharing/ShareModal.tsx` | Share dialog |
 
 ---
 

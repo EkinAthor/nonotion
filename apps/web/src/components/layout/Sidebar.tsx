@@ -3,6 +3,7 @@ import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import PageTree from './PageTree';
 import StarredSection from './StarredSection';
+import UserMenu from './UserMenu';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -85,7 +86,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* New Page Button (bottom) */}
+      {/* New Page Button */}
       <div className="border-t border-notion-border px-2 py-2">
         <button
           onClick={handleNewPage}
@@ -106,6 +107,11 @@ export default function Sidebar() {
           </svg>
           New page
         </button>
+      </div>
+
+      {/* User Menu (bottom) */}
+      <div className="border-t border-notion-border px-2 py-2">
+        <UserMenu />
       </div>
     </div>
   );
