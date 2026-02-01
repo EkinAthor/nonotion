@@ -142,11 +142,13 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     }
   };
 
+  const isSelected = useBlockStore((state) => state.selectedBlockIds.has(block.id));
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative flex items-start py-1"
+      className={`group relative flex items-start py-1 ${isSelected ? 'bg-blue-100/50 rounded-sm' : ''}`}
       data-block-id={block.id}
       data-block-type={block.type}
       onMouseEnter={() => setShowActions(true)}

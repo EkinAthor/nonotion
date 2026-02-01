@@ -14,7 +14,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { Block, BlockType } from '@nonotion/shared';
+import type { Block } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import BlockWrapper from './BlockWrapper';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
@@ -31,7 +31,6 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseDownBlockRef = useRef<string | null>(null);
   const isSelectingCrossBlockRef = useRef(false);
-  const selectionAnchorRef = useRef<{ node: Node; offset: number } | null>(null);
 
   // Find the block element that contains a given point
   const getBlockAtPoint = useCallback((x: number, y: number): string | null => {
@@ -48,25 +47,9 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
     return null;
   }, []);
 
-  // TODO: Cross-block text selection is not working properly.
-  // The current approach attempts to use document.caretRangeFromPoint and manual
-  // Range creation, but TipTap editors capture mouse events in a way that prevents
-  // native browser selection from spanning multiple blocks. This needs a different
-  // approach - possibly a custom selection overlay or modifying TipTap's event handling.
 
-  // Get caret position from mouse coordinates
-  const getCaretPositionFromPoint = useCallback((x: number, y: number): { node: Node; offset: number } | null => {
-    // Use caretRangeFromPoint (standard) or caretPositionFromPoint (Firefox)
-    if (document.caretRangeFromPoint) {
-      const range = document.caretRangeFromPoint(x, y);
-      if (range) {
-        return { node: range.startContainer, offset: range.startOffset };
-      }
-    }
-    return null;
-  }, []);
 
-  // Set up document-level mouse event listeners for cross-block selection
+  // Handle mouse selection across blocks
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -79,9 +62,22 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
       mouseDownBlockRef.current = blockId;
       isSelectingCrossBlockRef.current = false;
 
-      // Store the caret position for potential cross-block selection
-      const caretPos = getCaretPositionFromPoint(e.clientX, e.clientY);
-      selectionAnchorRef.current = caretPos;
+      // Handle selection
+      const { selectedBlockIds, clearSelection, startMultiSelection, updateMultiSelection } = useBlockStore.getState();
+
+      if (e.shiftKey && blockId) {
+        // Shift+Click: Update selection from anchor to clicked block
+        // If no anchor exists, start a new selection
+        e.preventDefault(); // Prevent text selection
+        if (selectedBlockIds.size === 0) {
+          startMultiSelection(blockId);
+        } else {
+          updateMultiSelection(blockId);
+        }
+      } else if (selectedBlockIds.size > 0) {
+        // Normal click: clear existing multi-selection
+        clearSelection();
+      }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -95,67 +91,26 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
         if (!isSelectingCrossBlockRef.current) {
           isSelectingCrossBlockRef.current = true;
 
-          // Blur any focused contenteditable to release TipTap's selection
+          // Blur any focused contenteditable to stop TipTap selection
           const editableElements = container.querySelectorAll('[contenteditable="true"]');
           editableElements.forEach((el) => {
             if (el === document.activeElement) {
               (el as HTMLElement).blur();
             }
           });
+
+          // Start multi-selection
+          useBlockStore.getState().startMultiSelection(mouseDownBlockRef.current);
         }
 
-        // Create/update the cross-block selection
-        const anchor = selectionAnchorRef.current;
-        const focus = getCaretPositionFromPoint(e.clientX, e.clientY);
-
-        if (anchor && focus) {
-          const selection = window.getSelection();
-          if (selection) {
-            try {
-              // Create a range from anchor to focus
-              const range = document.createRange();
-
-              // Determine order (anchor might be after focus if dragging up)
-              const anchorElement = anchor.node.parentElement;
-              const focusElement = focus.node.parentElement;
-
-              if (anchorElement && focusElement) {
-                const position = anchorElement.compareDocumentPosition(focusElement);
-
-                if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
-                  // Focus is after anchor (dragging down)
-                  range.setStart(anchor.node, anchor.offset);
-                  range.setEnd(focus.node, focus.offset);
-                } else if (position & Node.DOCUMENT_POSITION_PRECEDING) {
-                  // Focus is before anchor (dragging up)
-                  range.setStart(focus.node, focus.offset);
-                  range.setEnd(anchor.node, anchor.offset);
-                } else {
-                  // Same element, compare offsets
-                  if (anchor.offset <= focus.offset) {
-                    range.setStart(anchor.node, anchor.offset);
-                    range.setEnd(focus.node, focus.offset);
-                  } else {
-                    range.setStart(focus.node, focus.offset);
-                    range.setEnd(anchor.node, anchor.offset);
-                  }
-                }
-
-                selection.removeAllRanges();
-                selection.addRange(range);
-              }
-            } catch {
-              // Range creation can fail if nodes are in different documents or invalid
-            }
-          }
-        }
+        // Update the cross-block selection
+        useBlockStore.getState().updateMultiSelection(currentBlockId);
       }
     };
 
     const handleMouseUp = () => {
       mouseDownBlockRef.current = null;
-      selectionAnchorRef.current = null;
-      // Keep isSelectingCrossBlockRef true so copy handler knows it's a cross-block selection
+      // isSelectingCrossBlockRef persists until next mousedown
     };
 
     // Use capture phase to intercept before TipTap
@@ -168,86 +123,125 @@ export default function BlockCanvas({ pageId, blocks }: BlockCanvasProps) {
       document.removeEventListener('mousemove', handleMouseMove, true);
       document.removeEventListener('mouseup', handleMouseUp, true);
     };
-  }, [getBlockAtPoint, getCaretPositionFromPoint]);
+  }, [getBlockAtPoint, reorderBlocks]); // reorderBlocks dependency just to satisfy linter if needed, though we use getState()
 
-  // Handle copy with markdown prefixes
+  // Handle copy for multi-block selection
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
     const handleCopy = (event: ClipboardEvent) => {
-      // Only handle if the event originates from our container
-      if (!container.contains(event.target as Node)) return;
+      const { selectedBlockIds, blocksByPage } = useBlockStore.getState();
 
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) return;
+      if (selectedBlockIds.size === 0) return;
 
-      const range = selection.getRangeAt(0);
+      // Get selected blocks in order
+      const blocks = blocksByPage.get(pageId) || [];
+      const selectedBlocks = blocks
+        .filter(b => selectedBlockIds.has(b.id))
+        .sort((a, b) => a.order - b.order);
 
-      // Get all block wrapper elements
-      const blockElements = container.querySelectorAll('[data-block-id]');
-      const selectedBlocks: Array<{ id: string; type: BlockType; element: Element; text: string }> = [];
-
-      blockElements.forEach((blockEl) => {
-        // Check if this block intersects with the selection
-        if (range.intersectsNode(blockEl)) {
-          const blockId = blockEl.getAttribute('data-block-id');
-          const blockType = blockEl.getAttribute('data-block-type') as BlockType;
-          if (blockId && blockType) {
-            // Get the selected text within this block
-            const blockRange = document.createRange();
-            blockRange.selectNodeContents(blockEl);
-
-            // Calculate the intersection of selection with this block
-            const startInBlock = range.compareBoundaryPoints(Range.START_TO_START, blockRange) >= 0;
-            const endInBlock = range.compareBoundaryPoints(Range.END_TO_END, blockRange) <= 0;
-
-            let text = '';
-            if (startInBlock && endInBlock) {
-              // Selection is entirely within this block
-              text = selection.toString();
-            } else {
-              // Get text from the intersecting portion
-              const intersectRange = document.createRange();
-              if (startInBlock) {
-                intersectRange.setStart(range.startContainer, range.startOffset);
-              } else {
-                intersectRange.setStart(blockRange.startContainer, blockRange.startOffset);
-              }
-              if (endInBlock) {
-                intersectRange.setEnd(range.endContainer, range.endOffset);
-              } else {
-                intersectRange.setEnd(blockRange.endContainer, blockRange.endOffset);
-              }
-              text = intersectRange.toString();
-            }
-
-            if (text) {
-              selectedBlocks.push({ id: blockId, type: blockType, element: blockEl, text });
-            }
-          }
-        }
-      });
-
-      // No blocks found in selection
       if (selectedBlocks.length === 0) return;
 
-      // Build the copy text with markdown prefixes for ALL blocks (including single block)
-      const copyText = selectedBlocks.map(({ type, text }) => {
-        const prefix = getMarkdownPrefix(type);
-        return prefix + text;
+      // Build copy text with markdown prefixes
+      const copyText = selectedBlocks.map((block) => {
+        const prefix = getMarkdownPrefix(block.type);
+        return prefix + block.content.text;
       }).join('\n');
 
-      // Set clipboard data
       event.clipboardData?.setData('text/plain', copyText);
       event.preventDefault();
     };
 
-    // Use capture phase to intercept before TipTap handles copy
+    // Global copy listener
     document.addEventListener('copy', handleCopy, true);
 
     return () => {
       document.removeEventListener('copy', handleCopy, true);
+    };
+  }, [pageId]);
+
+  // Handle delete for multi-block selection
+  useEffect(() => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      const {
+        selectedBlockIds,
+        deleteSelectedBlocks,
+        selectionAnchorId,
+        blocksByPage,
+        updateMultiSelection
+      } = useBlockStore.getState();
+
+      if (selectedBlockIds.size === 0) return;
+
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault();
+        await deleteSelectedBlocks();
+        return;
+      }
+
+      // Handle Shift+ArrowUp/Down for expanding selection
+      if (event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+
+        if (!selectionAnchorId) return;
+
+        const blocks = blocksByPage.get(pageId) || [];
+        const sortedBlocks = [...blocks].sort((a, b) => a.order - b.order);
+
+        // Find the "current focus" of the selection
+        // If anchor is first selected -> focus is last selected
+        // If anchor is last selected -> focus is first selected
+
+        const selectedList = sortedBlocks.filter(b => selectedBlockIds.has(b.id));
+        if (selectedList.length === 0) return;
+
+        const anchorIndex = selectedList.findIndex(b => b.id === selectionAnchorId);
+        if (anchorIndex === -1) return; // Should not happen
+
+        let focusBlock: Block;
+
+        // Determine current focus block
+        // Note: selectedList is sorted by order
+        // If anchor is at index 0, focus is at end
+        // If anchor is at end, focus is at 0
+        // BUT: this assumes contiguous selection, which valid for now
+
+        // More robust logic:
+        // Compare anchor with first and last in selection to decide direction
+
+        const firstSelected = selectedList[0];
+        const lastSelected = selectedList[selectedList.length - 1];
+
+        if (selectionAnchorId === firstSelected.id) {
+          // Growing downwards or shrinking upwards from bottom
+          focusBlock = lastSelected;
+        } else {
+          // Growing upwards or shrinking downwards from top
+          focusBlock = firstSelected;
+        }
+
+        // Find the current focus index in global list
+        const focusIndex = sortedBlocks.findIndex(b => b.id === focusBlock.id);
+        if (focusIndex === -1) return;
+
+        let targetIndex = focusIndex;
+
+        if (event.key === 'ArrowDown') {
+          // If we are selecting UPWARDS (focus < anchor), and we press DOWN, we should move focus DOWN (towards anchor)
+          // If we are selecting DOWNWARDS (focus >= anchor), and we press DOWN, we should move focus DOWN (away from anchor)
+          targetIndex = focusIndex + 1;
+        } else { // ArrowUp
+          targetIndex = focusIndex - 1;
+        }
+
+        if (targetIndex >= 0 && targetIndex < sortedBlocks.length) {
+          updateMultiSelection(sortedBlocks[targetIndex].id);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
 

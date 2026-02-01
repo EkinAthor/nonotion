@@ -31,6 +31,15 @@ interface BlockState {
   getBlocksForPage: (pageId: string) => Block[];
   getBlockById: (blockId: string) => Block | undefined;
   getAdjacentBlockId: (blockId: string, direction: 'prev' | 'next') => string | null;
+
+  // Multi-selection
+  selectedBlockIds: Set<string>;
+  selectionAnchorId: string | null; // The block where selection started
+  startMultiSelection: (id: string) => void;
+  updateMultiSelection: (currentId: string) => void;
+  clearSelection: () => void;
+  selectAll: (pageId: string) => void;
+  deleteSelectedBlocks: () => Promise<void>;
 }
 
 export const useBlockStore = create<BlockState>((set, get) => ({
@@ -40,6 +49,8 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   focusPosition: 'end' as FocusPosition,
   isLoading: false,
   error: null,
+  selectedBlockIds: new Set(),
+  selectionAnchorId: null,
 
   fetchBlocks: async (pageId) => {
     set({ isLoading: true, error: null });
@@ -281,5 +292,103 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       }
     }
     return null;
+  },
+
+  startMultiSelection: (id) => {
+    set({
+      selectionAnchorId: id,
+      selectedBlockIds: new Set([id]),
+      focusBlockId: null, // Blur any active editor
+    });
+  },
+
+  updateMultiSelection: (currentId) => {
+    const { selectionAnchorId, blocksByPage } = get();
+    if (!selectionAnchorId) return;
+
+    // Find page and blocks
+    let pageBlocks: Block[] | undefined;
+    for (const blocks of blocksByPage.values()) {
+      if (blocks.find(b => b.id === selectionAnchorId)) {
+        pageBlocks = blocks;
+        break;
+      }
+    }
+
+    if (!pageBlocks) return;
+
+    const sortedBlocks = [...pageBlocks].sort((a, b) => a.order - b.order);
+    const startIndex = sortedBlocks.findIndex(b => b.id === selectionAnchorId);
+    const currentIndex = sortedBlocks.findIndex(b => b.id === currentId);
+
+    if (startIndex === -1 || currentIndex === -1) return;
+
+    const start = Math.min(startIndex, currentIndex);
+    const end = Math.max(startIndex, currentIndex);
+
+    const newSelection = new Set<string>();
+    for (let i = start; i <= end; i++) {
+      newSelection.add(sortedBlocks[i].id);
+    }
+
+    set({ selectedBlockIds: newSelection });
+  },
+
+  clearSelection: () => {
+    set({
+      selectedBlockIds: new Set(),
+      selectionAnchorId: null,
+    });
+  },
+
+  selectAll: (pageId) => {
+    const blocks = get().blocksByPage.get(pageId);
+    if (blocks) {
+      set({
+        selectedBlockIds: new Set(blocks.map(b => b.id)),
+        selectionAnchorId: blocks[0]?.id || null,
+        focusBlockId: null,
+      });
+    }
+  },
+
+  deleteSelectedBlocks: async () => {
+    const { selectedBlockIds, deleteBlock, clearSelection } = get();
+    const ids = Array.from(selectedBlockIds);
+
+    // Sort ids by order to delete cleanly or batch
+    // taking a simple approach: delete one by one
+    // Ideally backend should support batch delete
+
+    // We should find the block before the first deleted block to focus it
+    // But since we delete one by one, we can just focus the one before the TOPMOST deleted block
+
+    // 1. Find all selected blocks
+    // 2. Find the block immediately preceding the first selected block
+
+    /* 
+       Actually, `deleteBlock` handles reordering. 
+       If we delete multiple, we should probably do it carefully.
+       For now, let's just delete them one by one.
+    */
+
+    if (ids.length === 0) return;
+
+    // Find the page and sort blocks to find the top-most selected block
+    const allBlocks = Array.from(get().blocksByPage.values()).flat();
+    const selectedBlocks = allBlocks.filter(b => selectedBlockIds.has(b.id)).sort((a, b) => a.order - b.order);
+
+    if (selectedBlocks.length === 0) return;
+
+    const firstBlock = selectedBlocks[0];
+    const prevBlockId = get().getAdjacentBlockId(firstBlock.id, 'prev');
+
+    await Promise.all(ids.map(id => deleteBlock(id)));
+
+    clearSelection();
+
+    if (prevBlockId) {
+      get().setFocusBlock(prevBlockId, 'end');
+    }
   },
 }));

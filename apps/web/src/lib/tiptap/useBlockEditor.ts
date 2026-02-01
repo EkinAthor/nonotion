@@ -363,30 +363,42 @@ export function useBlockEditor({
         },
         // Shift+Arrow handlers for cross-block selection
         'Shift-ArrowUp': ({ editor }) => {
-          // Check if cursor is on the first line
           const { from } = editor.state.selection;
           const text = editor.getText();
           const firstNewlineIndex = text.indexOf('\n');
           const textIndex = from - 1;
 
           if (firstNewlineIndex === -1 || textIndex <= firstNewlineIndex) {
-            // At the top boundary - blur to allow native cross-block selection
-            editor.commands.blur();
-            return false; // Let browser handle native selection
+            // At the top boundary - trigger block selection
+            const { getAdjacentBlockId, startMultiSelection, updateMultiSelection } = useBlockStore.getState();
+            const prevId = getAdjacentBlockId(block.id, 'prev');
+
+            if (prevId) {
+              editor.commands.blur();
+              startMultiSelection(block.id);
+              updateMultiSelection(prevId);
+              return true;
+            }
           }
           return false;
         },
         'Shift-ArrowDown': ({ editor }) => {
-          // Check if cursor is on the last line
           const { from } = editor.state.selection;
           const text = editor.getText();
           const lastNewlineIndex = text.lastIndexOf('\n');
           const textIndex = from - 1;
 
           if (lastNewlineIndex === -1 || textIndex > lastNewlineIndex) {
-            // At the bottom boundary - blur to allow native cross-block selection
-            editor.commands.blur();
-            return false; // Let browser handle native selection
+            // At the bottom boundary - trigger block selection
+            const { getAdjacentBlockId, startMultiSelection, updateMultiSelection } = useBlockStore.getState();
+            const nextId = getAdjacentBlockId(block.id, 'next');
+
+            if (nextId) {
+              editor.commands.blur();
+              startMultiSelection(block.id);
+              updateMultiSelection(nextId);
+              return true;
+            }
           }
           return false;
         },
