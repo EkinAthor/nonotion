@@ -1,10 +1,27 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { useEditor, Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import type { Block, BlockContent, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
+import type { PasteBlockData } from '@/contexts/BlockContext';
+import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/registry';
+
+function parseLineForBlockType(line: string): PasteBlockData {
+  const { type, text } = parseMarkdownLine(line);
+  const definition = getBlockDefinition(type);
+
+  // Use the default content structure from the registry, but with our text
+  if (definition) {
+    const content = { ...definition.defaultContent, text };
+    return { type, content };
+  }
+
+  // Fallback to paragraph
+  return { type: 'paragraph', content: { text } };
+}
 
 interface SlashMenuState {
   isOpen: boolean;
@@ -17,9 +34,10 @@ interface UseBlockEditorOptions {
   placeholder?: string;
   headingLevel?: 1 | 2 | 3;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
-  onChangeBlockType?: (newType: BlockType) => Promise<void>;
+  onChangeBlockType?: (newType: BlockType, newText?: string) => Promise<void>;
   onFocusPreviousBlock?: () => void;
   onFocusNextBlock?: () => void;
+  onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
 }
 
 interface UseBlockEditorResult {
@@ -37,6 +55,7 @@ export function useBlockEditor({
   onChangeBlockType,
   onFocusPreviousBlock,
   onFocusNextBlock,
+  onPasteMultipleBlocks,
 }: UseBlockEditorOptions): UseBlockEditorResult {
   const { updateBlock } = useBlockStore();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -82,6 +101,17 @@ export function useBlockEditor({
   }, []);
 
   const editorRef = useRef<Editor | null>(null);
+  const pasteCallbackRef = useRef(onPasteMultipleBlocks);
+  const changeBlockTypeRef = useRef(onChangeBlockType);
+
+  // Keep callback refs in sync
+  useEffect(() => {
+    pasteCallbackRef.current = onPasteMultipleBlocks;
+  }, [onPasteMultipleBlocks]);
+
+  useEffect(() => {
+    changeBlockTypeRef.current = onChangeBlockType;
+  }, [onChangeBlockType]);
 
   const closeSlashMenu = useCallback(() => {
     setSlashMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
@@ -118,6 +148,99 @@ export function useBlockEditor({
     },
     [closeSlashMenu, onChangeBlockType, block.id, headingLevel, updateBlock]
   );
+
+  // Create clipboard extension for paste handling
+  const ClipboardExtension = Extension.create({
+    name: 'clipboardHandler',
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('clipboardHandler'),
+          props: {
+            handlePaste: (view, event) => {
+              const clipboardData = event.clipboardData;
+              if (!clipboardData) return false;
+
+              const text = clipboardData.getData('text/plain');
+              if (!text) return false;
+
+              // Normalize line endings
+              const normalizedText = text.replace(/\r\n/g, '\n');
+              const lines = normalizedText.split('\n');
+
+              // Check if first line has markdown syntax
+              const firstLineData = parseLineForBlockType(lines[0]);
+              const firstLineHasMarkdown = firstLineData.type !== 'paragraph';
+
+              // Single line paste
+              if (lines.length === 1) {
+                // If the line has markdown syntax and we're at the start of an empty block
+                if (firstLineHasMarkdown) {
+                  const currentText = view.state.doc.textContent;
+                  const { from } = view.state.selection;
+
+                  // If block is empty or cursor is at start, convert the block type
+                  if (currentText === '' || from === 1) {
+                    // Don't insert text into editor - pass it to changeBlockType instead
+                    // The editor will be replaced when block type changes
+                    if (changeBlockTypeRef.current) {
+                      changeBlockTypeRef.current(firstLineData.type, firstLineData.content.text);
+                    }
+
+                    event.preventDefault();
+                    return true;
+                  }
+                }
+                // Otherwise let TipTap handle single-line paste normally
+                return false;
+              }
+
+              // Multi-line paste handling
+              if (!pasteCallbackRef.current) return false;
+
+              // Get text after cursor in current block
+              const { from } = view.state.selection;
+              const docEnd = view.state.doc.content.size - 1;
+              const textAfterCursor = from < docEnd ? view.state.doc.textBetween(from, docEnd) : '';
+
+              // Delete text after cursor (it will be moved to a new block)
+              if (textAfterCursor) {
+                const tr = view.state.tr.deleteRange(from, docEnd);
+                view.dispatch(tr);
+              }
+
+              // Handle first line - if it has markdown and we're at start of empty block, change type
+              const currentText = view.state.doc.textContent;
+              if (firstLineHasMarkdown && (currentText === '' || from === 1)) {
+                // Don't insert text into editor - pass it to changeBlockType instead
+                // The editor will be replaced when block type changes
+                if (changeBlockTypeRef.current) {
+                  changeBlockTypeRef.current(firstLineData.type, firstLineData.content.text);
+                }
+              } else {
+                // Insert first line as-is at cursor position
+                const firstLine = lines[0];
+                if (firstLine) {
+                  const tr = view.state.tr.insertText(firstLine);
+                  view.dispatch(tr);
+                }
+              }
+
+              // Parse remaining lines into blocks
+              const remainingLines = lines.slice(1);
+              const blocksToCreate: PasteBlockData[] = remainingLines.map(parseLineForBlockType);
+
+              // Create the remaining blocks (paste callback will handle textAfterCursor as final block)
+              pasteCallbackRef.current(blocksToCreate, textAfterCursor);
+
+              event.preventDefault();
+              return true;
+            },
+          },
+        }),
+      ];
+    },
+  });
 
   // Create keyboard extension
   const BlockKeyboardExtension = Extension.create({
@@ -209,6 +332,35 @@ export function useBlockEditor({
 
           return false;
         },
+        // Shift+Arrow handlers for cross-block selection
+        'Shift-ArrowUp': ({ editor }) => {
+          // Check if cursor is on the first line
+          const { from } = editor.state.selection;
+          const text = editor.getText();
+          const firstNewlineIndex = text.indexOf('\n');
+          const textIndex = from - 1;
+
+          if (firstNewlineIndex === -1 || textIndex <= firstNewlineIndex) {
+            // At the top boundary - blur to allow native cross-block selection
+            editor.commands.blur();
+            return false; // Let browser handle native selection
+          }
+          return false;
+        },
+        'Shift-ArrowDown': ({ editor }) => {
+          // Check if cursor is on the last line
+          const { from } = editor.state.selection;
+          const text = editor.getText();
+          const lastNewlineIndex = text.lastIndexOf('\n');
+          const textIndex = from - 1;
+
+          if (lastNewlineIndex === -1 || textIndex > lastNewlineIndex) {
+            // At the bottom boundary - blur to allow native cross-block selection
+            editor.commands.blur();
+            return false; // Let browser handle native selection
+          }
+          return false;
+        },
       };
     },
   });
@@ -233,6 +385,7 @@ export function useBlockEditor({
         emptyEditorClass: 'is-editor-empty',
       }),
       BlockKeyboardExtension,
+      ClipboardExtension,
     ],
     content: block.content.text,
     onUpdate: ({ editor }) => {

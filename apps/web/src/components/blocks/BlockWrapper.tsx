@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Block, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
-import { BlockContextProvider } from '@/contexts/BlockContext';
+import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
 import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
@@ -16,7 +16,7 @@ interface BlockWrapperProps {
 }
 
 export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapperProps) {
-  const { deleteBlock, createBlock, changeBlockType, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
+  const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const [showActions, setShowActions] = useState(false);
 
   const handleCreateBlockBelow = useCallback(async (initialText = ''): Promise<string> => {
@@ -28,8 +28,8 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     return newBlock.id;
   }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
-  const handleChangeBlockType = useCallback(async (newType: BlockType): Promise<void> => {
-    await changeBlockType(block.id, newType);
+  const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string): Promise<void> => {
+    await changeBlockType(block.id, newType, newText);
     // Set focus to this block after type change so the new editor gets focus
     setFocusBlock(block.id);
   }, [block.id, changeBlockType, setFocusBlock]);
@@ -50,6 +50,26 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
       handleCreateBlockBelow('');
     }
   }, [block.id, getAdjacentBlockId, setFocusBlock, handleCreateBlockBelow]);
+
+  const handlePasteMultipleBlocks = useCallback(async (blocks: PasteBlockData[], textAfterCursor: string): Promise<void> => {
+    // Get current order from store to avoid stale closure
+    const currentBlock = getBlockById(block.id);
+    const currentOrder = currentBlock?.order ?? block.order;
+
+    // If there's text after cursor, we need to create a final block for it
+    const blocksToCreate = textAfterCursor
+      ? [...blocks, { type: 'paragraph' as BlockType, content: { text: textAfterCursor } }]
+      : blocks;
+
+    if (blocksToCreate.length === 0) return;
+
+    const createdBlocks = await createMultipleBlocks(pageId, blocksToCreate, currentOrder);
+
+    // Focus the last created block
+    if (createdBlocks.length > 0) {
+      setFocusBlock(createdBlocks[createdBlocks.length - 1].id);
+    }
+  }, [pageId, block.id, block.order, createMultipleBlocks, setFocusBlock, getBlockById]);
 
   const {
     attributes,
@@ -89,6 +109,8 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
       ref={setNodeRef}
       style={style}
       className="group relative flex items-start py-1 -ml-8"
+      data-block-id={block.id}
+      data-block-type={block.type}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -151,6 +173,7 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
             changeBlockType: handleChangeBlockType,
             focusPreviousBlock: handleFocusPreviousBlock,
             focusNextBlock: handleFocusNextBlock,
+            pasteMultipleBlocks: handlePasteMultipleBlocks,
           }}
         >
           {renderBlockContent()}

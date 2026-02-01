@@ -12,12 +12,17 @@ interface BlockState {
   // Actions
   fetchBlocks: (pageId: string) => Promise<void>;
   createBlock: (pageId: string, type: BlockType, content: BlockContent, order?: number) => Promise<Block>;
+  createMultipleBlocks: (
+    pageId: string,
+    blocks: Array<{ type: BlockType; content: BlockContent }>,
+    afterOrder: number
+  ) => Promise<Block[]>;
   updateBlock: (id: string, input: UpdateBlockInput) => Promise<Block>;
   deleteBlock: (id: string) => Promise<void>;
   reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
   setFocusBlock: (id: string | null) => void;
-  changeBlockType: (id: string, newType: BlockType, preserveText?: boolean) => Promise<Block>;
+  changeBlockType: (id: string, newType: BlockType, newText?: string) => Promise<Block>;
 
   // Selectors
   getBlocksForPage: (pageId: string) => Block[];
@@ -72,6 +77,40 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     });
 
     return block;
+  },
+
+  createMultipleBlocks: async (pageId, blocksToCreate, afterOrder) => {
+    const createdBlocks: Block[] = [];
+
+    // Create blocks sequentially to maintain order
+    for (let i = 0; i < blocksToCreate.length; i++) {
+      const { type, content } = blocksToCreate[i];
+      const order = afterOrder + 1 + i;
+      const input: Omit<CreateBlockInput, 'pageId'> = { type, content, order };
+      const block = await blocksApi.create(pageId, input);
+      createdBlocks.push(block);
+    }
+
+    // Update state with all new blocks
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = [...(blocksByPage.get(pageId) || [])];
+
+      // Shift existing blocks that come after the insertion point
+      const shiftAmount = blocksToCreate.length;
+      blocks.forEach((b, i) => {
+        if (b.order > afterOrder) {
+          blocks[i] = { ...b, order: b.order + shiftAmount };
+        }
+      });
+
+      // Add all new blocks
+      blocks.push(...createdBlocks);
+      blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
+      return { blocksByPage };
+    });
+
+    return createdBlocks;
   },
 
   updateBlock: async (id, input) => {
@@ -162,7 +201,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     set({ focusBlockId: id });
   },
 
-  changeBlockType: async (id, newType, preserveText = true) => {
+  changeBlockType: async (id, newType, newText) => {
     // Find the block to get its current content
     let existingBlock: Block | undefined;
     for (const blocks of get().blocksByPage.values()) {
@@ -174,8 +213,8 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       throw new Error(`Block ${id} not found`);
     }
 
-    // Extract text from current content
-    const text = preserveText ? existingBlock.content.text : '';
+    // Use newText if provided, otherwise preserve existing text
+    const text = newText !== undefined ? newText : existingBlock.content.text;
 
     // Create content for new type
     let content: BlockContent;

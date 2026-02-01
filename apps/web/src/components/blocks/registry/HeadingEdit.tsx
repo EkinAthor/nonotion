@@ -11,7 +11,7 @@ interface HeadingEditProps {
 }
 
 export default function HeadingEdit({ block }: HeadingEditProps) {
-  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock } = useBlockContext();
+  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks } = useBlockContext();
   const { focusBlockId, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
@@ -24,6 +24,7 @@ export default function HeadingEdit({ block }: HeadingEditProps) {
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
+    onPasteMultipleBlocks: pasteMultipleBlocks,
   });
 
   // Handle focus when this block is the focus target

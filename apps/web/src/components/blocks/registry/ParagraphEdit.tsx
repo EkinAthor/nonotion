@@ -11,7 +11,7 @@ interface ParagraphEditProps {
 }
 
 export default function ParagraphEdit({ block }: ParagraphEditProps) {
-  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock } = useBlockContext();
+  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks } = useBlockContext();
   const { focusBlockId, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
@@ -23,6 +23,7 @@ export default function ParagraphEdit({ block }: ParagraphEditProps) {
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
+    onPasteMultipleBlocks: pasteMultipleBlocks,
   });
 
   // Handle focus when this block is the focus target

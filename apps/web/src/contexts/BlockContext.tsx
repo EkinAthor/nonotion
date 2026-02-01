@@ -1,13 +1,19 @@
 import { createContext, useContext } from 'react';
-import type { BlockType } from '@nonotion/shared';
+import type { BlockType, BlockContent } from '@nonotion/shared';
+
+export interface PasteBlockData {
+  type: BlockType;
+  content: BlockContent;
+}
 
 export interface BlockContextValue {
   pageId: string;
   blockId: string;
   createBlockBelow: (initialText?: string) => Promise<string>;
-  changeBlockType: (newType: BlockType) => Promise<void>;
+  changeBlockType: (newType: BlockType, newText?: string) => Promise<void>;
   focusPreviousBlock: () => void;
   focusNextBlock: () => void;
+  pasteMultipleBlocks: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
 }
 
 const BlockContext = createContext<BlockContextValue | null>(null);
