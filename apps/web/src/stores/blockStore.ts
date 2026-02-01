@@ -2,10 +2,13 @@ import { create } from 'zustand';
 import type { Block, BlockType, BlockContent, CreateBlockInput, UpdateBlockInput } from '@nonotion/shared';
 import { blocksApi } from '@/api/client';
 
+export type FocusPosition = 'start' | 'end' | number | null;
+
 interface BlockState {
   blocksByPage: Map<string, Block[]>;
   selectedBlockId: string | null;
   focusBlockId: string | null;
+  focusPosition: FocusPosition;
   isLoading: boolean;
   error: string | null;
 
@@ -21,7 +24,7 @@ interface BlockState {
   deleteBlock: (id: string) => Promise<void>;
   reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
-  setFocusBlock: (id: string | null) => void;
+  setFocusBlock: (id: string | null, position?: FocusPosition) => void;
   changeBlockType: (id: string, newType: BlockType, newText?: string) => Promise<Block>;
 
   // Selectors
@@ -34,6 +37,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   blocksByPage: new Map(),
   selectedBlockId: null,
   focusBlockId: null,
+  focusPosition: 'end' as FocusPosition,
   isLoading: false,
   error: null,
 
@@ -197,8 +201,8 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     set({ selectedBlockId: id });
   },
 
-  setFocusBlock: (id) => {
-    set({ focusBlockId: id });
+  setFocusBlock: (id, position = 'end') => {
+    set({ focusBlockId: id, focusPosition: position });
   },
 
   changeBlockType: async (id, newType, newText) => {

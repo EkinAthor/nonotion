@@ -38,6 +38,7 @@ interface UseBlockEditorOptions {
   onFocusPreviousBlock?: () => void;
   onFocusNextBlock?: () => void;
   onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
+  onDeleteAndMergeToPrevious?: (currentText: string) => Promise<void>;
 }
 
 interface UseBlockEditorResult {
@@ -56,6 +57,7 @@ export function useBlockEditor({
   onFocusPreviousBlock,
   onFocusNextBlock,
   onPasteMultipleBlocks,
+  onDeleteAndMergeToPrevious,
 }: UseBlockEditorOptions): UseBlockEditorResult {
   const { updateBlock } = useBlockStore();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -74,6 +76,14 @@ export function useBlockEditor({
 
   const saveContent = useCallback(
     (text: string) => {
+      // Skip saving if we're syncing external content
+      if (isSyncingExternalContentRef.current) {
+        return;
+      }
+
+      // Update last known content to match what we're about to save
+      lastKnownContentRef.current = text;
+
       // Clear existing debounce
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
@@ -103,6 +113,11 @@ export function useBlockEditor({
   const editorRef = useRef<Editor | null>(null);
   const pasteCallbackRef = useRef(onPasteMultipleBlocks);
   const changeBlockTypeRef = useRef(onChangeBlockType);
+  const mergeCallbackRef = useRef(onDeleteAndMergeToPrevious);
+  // Track the last content we know about to detect external changes
+  const lastKnownContentRef = useRef(block.content.text);
+  // Flag to skip saving during external content sync
+  const isSyncingExternalContentRef = useRef(false);
 
   // Keep callback refs in sync
   useEffect(() => {
@@ -112,6 +127,10 @@ export function useBlockEditor({
   useEffect(() => {
     changeBlockTypeRef.current = onChangeBlockType;
   }, [onChangeBlockType]);
+
+  useEffect(() => {
+    mergeCallbackRef.current = onDeleteAndMergeToPrevious;
+  }, [onDeleteAndMergeToPrevious]);
 
   const closeSlashMenu = useCallback(() => {
     setSlashMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
@@ -247,6 +266,16 @@ export function useBlockEditor({
     name: 'blockKeyboard',
     addKeyboardShortcuts() {
       return {
+        Backspace: ({ editor }) => {
+          const { from } = editor.state.selection;
+          // Only handle if cursor is at the very start (position 1 in TipTap)
+          if (from !== 1) return false;
+          if (!mergeCallbackRef.current) return false;
+
+          const text = editor.getText();
+          mergeCallbackRef.current(text);
+          return true;
+        },
         Enter: ({ editor }) => {
           // If slash menu is open, don't handle Enter (let menu handle it)
           if (slashMenuOpenRef.current) {
@@ -433,6 +462,37 @@ export function useBlockEditor({
   useEffect(() => {
     editorRef.current = editor;
   }, [editor]);
+
+  // Sync editor content when block content changes externally (e.g., from merge operation)
+  useEffect(() => {
+    if (!editor) return;
+
+    const blockText = block.content.text;
+    const editorText = editor.getText();
+
+    // If block content changed and it's different from what the editor has,
+    // this is an external update - sync the editor
+    if (blockText !== lastKnownContentRef.current && blockText !== editorText) {
+      // Cancel any pending save since we're about to overwrite with external content
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      // Set flag to prevent onUpdate from saving during sync
+      isSyncingExternalContentRef.current = true;
+
+      // Update editor content
+      editor.commands.setContent(blockText);
+
+      // Clear the flag after a microtask to allow onUpdate to complete
+      queueMicrotask(() => {
+        isSyncingExternalContentRef.current = false;
+      });
+    }
+
+    // Always keep track of the latest block content
+    lastKnownContentRef.current = blockText;
+  }, [editor, block.content.text]);
 
   return { editor, slashMenu, closeSlashMenu, selectSlashCommand };
 }

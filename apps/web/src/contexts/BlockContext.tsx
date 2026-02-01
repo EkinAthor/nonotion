@@ -14,6 +14,7 @@ export interface BlockContextValue {
   focusPreviousBlock: () => void;
   focusNextBlock: () => void;
   pasteMultipleBlocks: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
+  deleteAndMergeToPrevious: (currentText: string) => Promise<void>;
 }
 
 const BlockContext = createContext<BlockContextValue | null>(null);

@@ -11,8 +11,8 @@ interface HeadingEditProps {
 }
 
 export default function Heading2Edit({ block }: HeadingEditProps) {
-  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks } = useBlockContext();
-  const { focusBlockId, setFocusBlock } = useBlockStore();
+  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
+  const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
     block,
@@ -25,15 +25,23 @@ export default function Heading2Edit({ block }: HeadingEditProps) {
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
     onPasteMultipleBlocks: pasteMultipleBlocks,
+    onDeleteAndMergeToPrevious: deleteAndMergeToPrevious,
   });
 
   // Handle focus when this block is the focus target
   useEffect(() => {
     if (focusBlockId === block.id && editor) {
-      editor.commands.focus('end');
+      if (typeof focusPosition === 'number') {
+        editor.commands.focus();
+        editor.commands.setTextSelection(focusPosition);
+      } else if (focusPosition === 'start') {
+        editor.commands.focus('start');
+      } else {
+        editor.commands.focus('end');
+      }
       setFocusBlock(null);
     }
-  }, [focusBlockId, block.id, editor, setFocusBlock]);
+  }, [focusBlockId, focusPosition, block.id, editor, setFocusBlock]);
 
   return (
     <div className="text-2xl font-bold text-notion-text relative">

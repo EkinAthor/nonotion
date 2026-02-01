@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Block, BlockType } from '@nonotion/shared';
@@ -8,6 +8,7 @@ import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
 import ParagraphEdit from './registry/ParagraphEdit';
+import BlockContextMenu from './BlockContextMenu';
 
 interface BlockWrapperProps {
   block: Block;
@@ -16,8 +17,11 @@ interface BlockWrapperProps {
 }
 
 export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapperProps) {
-  const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
+  const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, updateBlock, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const [showActions, setShowActions] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const kebabButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleCreateBlockBelow = useCallback(async (initialText = ''): Promise<string> => {
     // Get current order from store to avoid stale closure after drag-and-drop
@@ -71,6 +75,40 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     }
   }, [pageId, block.id, block.order, createMultipleBlocks, setFocusBlock, getBlockById]);
 
+  const handleDeleteAndMergeToPrevious = useCallback(async (currentText: string): Promise<void> => {
+    const prevBlockId = getAdjacentBlockId(block.id, 'prev');
+
+    // If no previous block, do nothing (first block edge case)
+    if (!prevBlockId) return;
+
+    const prevBlock = getBlockById(prevBlockId);
+    if (!prevBlock) return;
+
+    // Calculate cursor position: previous block text length + 1 (for TipTap position offset)
+    const prevText = prevBlock.content.text || '';
+    const cursorPosition = prevText.length + 1;
+
+    // If current block has text, merge it to the previous block
+    if (currentText) {
+      const mergedText = prevText + currentText;
+      await updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
+    }
+
+    // Delete the current block
+    await deleteBlock(block.id);
+
+    // Focus previous block at the join position
+    setFocusBlock(prevBlockId, cursorPosition);
+  }, [block.id, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
+
+  const handleKebabClick = useCallback(() => {
+    if (kebabButtonRef.current) {
+      const rect = kebabButtonRef.current.getBoundingClientRect();
+      setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+      setMenuOpen(true);
+    }
+  }, []);
+
   const {
     attributes,
     listeners,
@@ -112,11 +150,11 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
       data-block-id={block.id}
       data-block-type={block.type}
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseLeave={() => !menuOpen && setShowActions(false)}
     >
       {/* Action buttons */}
       <div
-        className={`flex items-center gap-0.5 mr-1 transition-opacity ${showActions ? 'opacity-100' : 'opacity-0'
+        className={`flex items-center gap-0.5 mr-1 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
           }`}
       >
         {/* Drag handle */}
@@ -141,27 +179,35 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
           </svg>
         </button>
 
-        {/* Delete button */}
+        {/* Kebab menu button */}
         <button
-          onClick={handleDelete}
+          ref={kebabButtonRef}
+          onClick={handleKebabClick}
           className="p-1 rounded hover:bg-notion-hover"
-          title="Delete block"
+          title="More options"
         >
           <svg
             className="w-4 h-4 text-notion-text-secondary"
-            fill="none"
-            stroke="currentColor"
+            fill="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
+            <circle cx="12" cy="5" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="12" cy="19" r="2" />
           </svg>
         </button>
       </div>
+
+      {/* Context menu */}
+      {menuOpen && (
+        <BlockContextMenu
+          currentBlockType={block.type}
+          position={menuPosition}
+          onDelete={handleDelete}
+          onChangeType={handleChangeBlockType}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
 
       {/* Block content */}
       <div className="flex-1 min-w-0">
@@ -174,6 +220,7 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
             focusPreviousBlock: handleFocusPreviousBlock,
             focusNextBlock: handleFocusNextBlock,
             pasteMultipleBlocks: handlePasteMultipleBlocks,
+            deleteAndMergeToPrevious: handleDeleteAndMergeToPrevious,
           }}
         >
           {renderBlockContent()}
