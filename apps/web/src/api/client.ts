@@ -59,7 +59,7 @@ async function request<T>(
   });
 
   // Handle 401 - clear auth and redirect to login
-  if (response.status === 401) {
+  if (response.status === 401 && !options?.skipAuth) {
     localStorage.removeItem('nonotion-auth');
     window.location.href = '/login';
     throw new Error('Session expired');
