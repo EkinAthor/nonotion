@@ -86,7 +86,7 @@ export default function PageHeader({ page }: PageHeaderProps) {
           </button>
 
           {showEmojiPicker && (
-            <div className="absolute top-full left-0 mt-1 p-2 bg-white rounded-lg shadow-lg border border-notion-border z-10">
+            <div className="absolute top-full left-0 mt-1 p-2 bg-white rounded-lg shadow-lg border border-notion-border z-10 w-72">
               <div className="grid grid-cols-6 gap-1">
                 {EMOJI_OPTIONS.map((emoji) => (
                   <button
@@ -112,9 +112,8 @@ export default function PageHeader({ page }: PageHeaderProps) {
 
         <button
           onClick={handleToggleStar}
-          className={`p-1 rounded hover:bg-notion-hover ${
-            page.isStarred ? 'text-yellow-500' : 'text-notion-text-secondary'
-          }`}
+          className={`p-1 rounded hover:bg-notion-hover ${page.isStarred ? 'text-yellow-500' : 'text-notion-text-secondary'
+            }`}
           title={page.isStarred ? 'Remove from starred' : 'Add to starred'}
         >
           <svg

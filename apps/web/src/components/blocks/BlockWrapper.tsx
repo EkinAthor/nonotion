@@ -146,7 +146,7 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative flex items-start py-1 -ml-8"
+      className="group relative flex items-start py-1"
       data-block-id={block.id}
       data-block-type={block.type}
       onMouseEnter={() => setShowActions(true)}
@@ -154,7 +154,7 @@ export default function BlockWrapper({ block, pageId, isDragging }: BlockWrapper
     >
       {/* Action buttons */}
       <div
-        className={`flex items-center gap-0.5 mr-1 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
+        className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
           }`}
       >
         {/* Drag handle */}
