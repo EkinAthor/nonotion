@@ -19,3 +19,11 @@ export async function searchUsersByEmail(query: string): Promise<PublicUser[]> {
     .filter((u) => u.email.toLowerCase().includes(lowerQuery))
     .map(toPublicUser);
 }
+
+export async function updateUserRole(userId: string, role: 'admin' | 'user'): Promise<PublicUser> {
+  const updated = await userStorage.updateUser(userId, { role });
+  if (!updated) {
+    throw new Error('User not found');
+  }
+  return toPublicUser(updated);
+}

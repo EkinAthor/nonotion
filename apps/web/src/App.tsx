@@ -4,6 +4,8 @@ import PageView from './components/page/PageView';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AuthGuard from './components/auth/AuthGuard';
+import AdminGuard from './components/auth/AdminGuard';
+import UserManagementPage from './pages/admin/UserManagementPage';
 
 function App() {
   return (
@@ -22,6 +24,14 @@ function App() {
       >
         <Route path="/" element={<WelcomeView />} />
         <Route path="/page/:pageId" element={<PageView />} />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminGuard>
+              <UserManagementPage />
+            </AdminGuard>
+          }
+        />
       </Route>
 
       {/* Catch all - redirect to home */}

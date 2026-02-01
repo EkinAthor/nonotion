@@ -83,6 +83,23 @@ export default function UserMenu() {
             <div className="text-xs text-notion-text-secondary">{user.email}</div>
           </div>
 
+          {isAdmin() && (
+            <div className="py-1 border-b border-notion-border">
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate('/admin/users');
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left text-notion-text hover:bg-notion-hover"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Manage Users
+              </button>
+            </div>
+          )}
+
           <div className="py-1">
             <button
               onClick={handleLogout}

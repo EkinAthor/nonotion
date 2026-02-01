@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { adminResetPasswordInputSchema } from '@nonotion/shared';
+import { adminResetPasswordInputSchema, updateUserRoleInputSchema } from '@nonotion/shared';
 import * as userService from '../services/user-service.js';
 import * as authService from '../services/auth-service.js';
 import { authMiddleware, adminMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
@@ -70,6 +70,48 @@ export async function usersRoutes(fastify: FastifyInstance): Promise<void> {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to reset password';
+        if (message.includes('not found')) {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message },
+            success: false,
+          });
+        }
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message },
+          success: false,
+        });
+      }
+    }
+  );
+
+  // PATCH /api/users/:id/role - Update user role (admin only)
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/users/:id/role',
+    { preHandler: [adminMiddleware, mustChangePasswordMiddleware] },
+    async (request, reply) => {
+      const parsed = updateUserRoleInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          success: false,
+        });
+      }
+
+      if (request.user?.userId === request.params.id) {
+        return reply.status(400).send({
+          error: { code: 'INVALID_OPERATION', message: 'Cannot change your own role' },
+          success: false,
+        });
+      }
+
+      try {
+        const user = await userService.updateUserRole(request.params.id, parsed.data.role);
+        return reply.send({
+          data: user,
+          success: true,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update user role';
         if (message.includes('not found')) {
           return reply.status(404).send({
             error: { code: 'NOT_FOUND', message },

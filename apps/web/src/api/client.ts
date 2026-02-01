@@ -118,6 +118,12 @@ export const usersApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  updateRole: (id: string, role: 'admin' | 'user') =>
+    request<PublicUser>(`/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
 };
 
 // Shares API

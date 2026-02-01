@@ -57,3 +57,9 @@ export type LoginInputSchema = z.infer<typeof loginInputSchema>;
 export type ChangePasswordInputSchema = z.infer<typeof changePasswordInputSchema>;
 export type AdminResetPasswordInputSchema = z.infer<typeof adminResetPasswordInputSchema>;
 export type UpdateUserInputSchema = z.infer<typeof updateUserInputSchema>;
+
+export const updateUserRoleInputSchema = z.object({
+  role: userRoleSchema,
+});
+
+export type UpdateUserRoleInputSchema = z.infer<typeof updateUserRoleInputSchema>;
