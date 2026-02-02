@@ -3,7 +3,9 @@ import path from 'path';
 import type { Page, Block } from '@nonotion/shared';
 import type { StorageAdapter } from './storage-adapter.js';
 
-const DATA_DIR = path.resolve(process.cwd(), '../../data');
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.resolve(process.cwd(), '../../data');
 const PAGES_DIR = path.join(DATA_DIR, 'pages');
 const BLOCKS_DIR = path.join(DATA_DIR, 'blocks');
 

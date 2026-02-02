@@ -1,7 +1,9 @@
 import { defineConfig } from 'drizzle-kit';
 import path from 'path';
 
-const DATA_DIR = path.resolve(process.cwd(), '../../data');
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.resolve(process.cwd(), '../../data');
 
 export default defineConfig({
   schema: './src/db/schema.ts',

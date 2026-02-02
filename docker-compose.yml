@@ -1,0 +1,67 @@
+# ==============================================================================
+# Nonotion Docker Compose
+# Run both API and Web services together
+# ==============================================================================
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose down               # Stop all services
+#   docker-compose logs -f            # View logs
+#   docker-compose build              # Rebuild images
+# ==============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: nonotion-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:80}
+    volumes:
+      - nonotion-data:/app/data
+    networks:
+      - nonotion-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        - VITE_API_URL=/api
+    container_name: nonotion-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    environment:
+      - API_UPSTREAM=api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - nonotion-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  nonotion-data:
+    driver: local
+
+networks:
+  nonotion-network:
+    driver: bridge

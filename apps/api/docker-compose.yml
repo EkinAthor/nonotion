@@ -1,0 +1,38 @@
+# ==============================================================================
+# Nonotion API Standalone Docker Compose
+# Run the API service independently
+# ==============================================================================
+# Usage:
+#   docker-compose up -d              # Start API
+#   docker-compose down               # Stop API
+#   docker-compose logs -f            # View logs
+# ==============================================================================
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    container_name: nonotion-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    volumes:
+      - nonotion-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  nonotion-data:
+    driver: local

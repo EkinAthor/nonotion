@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+.turbo
+**/.turbo
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+e2e
+coverage
+**/.nyc_output
+
+# Data (runtime storage)
+data
+**/data
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in images)
+docs
+*.md
+!README.md

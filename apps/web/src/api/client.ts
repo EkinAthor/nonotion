@@ -19,7 +19,7 @@ import type {
   AdminResetPasswordInput,
 } from '@nonotion/shared';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Get token from localStorage (zustand persist)
 function getToken(): string | null {

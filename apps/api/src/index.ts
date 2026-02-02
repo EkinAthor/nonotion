@@ -27,9 +27,14 @@ const fastify = Fastify({
   logger: true,
 });
 
+// Parse CORS origins from environment variable
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
 // Register CORS
 await fastify.register(cors, {
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: corsOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
@@ -51,10 +56,12 @@ fastify.get('/health', async () => {
 });
 
 // Start server
+const port = parseInt(process.env.PORT || '3001', 10);
+
 const start = async () => {
   try {
-    await fastify.listen({ port: 3001, host: '0.0.0.0' });
-    console.log('Server listening on http://localhost:3001');
+    await fastify.listen({ port, host: '0.0.0.0' });
+    console.log(`Server listening on http://localhost:${port}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

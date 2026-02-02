@@ -38,7 +38,7 @@
           "preparedFor": true
         },
         "deployment": {
-          "docker": false,
+          "docker": true,
           "localDev": true
         }
       }
