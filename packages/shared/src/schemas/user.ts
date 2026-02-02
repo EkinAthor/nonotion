@@ -10,6 +10,7 @@ export const userSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   role: userRoleSchema,
   mustChangePassword: z.boolean(),
+  approved: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -20,6 +21,7 @@ export const publicUserSchema = z.object({
   name: z.string().min(1).max(100),
   avatarUrl: z.string().url().nullable(),
   role: userRoleSchema,
+  approved: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -63,3 +65,9 @@ export const updateUserRoleInputSchema = z.object({
 });
 
 export type UpdateUserRoleInputSchema = z.infer<typeof updateUserRoleInputSchema>;
+
+export const approveUserInputSchema = z.object({
+  approved: z.boolean(),
+});
+
+export type ApproveUserInputSchema = z.infer<typeof approveUserInputSchema>;

@@ -8,6 +8,7 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   mustChangePassword: boolean;
+  pendingApproval: boolean;
   error: string | null;
 
   // Actions
@@ -21,6 +22,7 @@ interface AuthState {
   // Selectors
   isAuthenticated: () => boolean;
   isAdmin: () => boolean;
+  isPendingApproval: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -30,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isLoading: false,
       mustChangePassword: false,
+      pendingApproval: false,
       error: null,
 
       login: async (email, password) => {
@@ -40,6 +43,7 @@ export const useAuthStore = create<AuthState>()(
             user: response.user,
             token: response.token,
             mustChangePassword: response.mustChangePassword,
+            pendingApproval: !response.user.approved,
             isLoading: false,
           });
         } catch (error) {
@@ -59,6 +63,7 @@ export const useAuthStore = create<AuthState>()(
             user: response.user,
             token: response.token,
             mustChangePassword: response.mustChangePassword,
+            pendingApproval: !response.user.approved,
             isLoading: false,
           });
         } catch (error) {
@@ -75,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           token: null,
           mustChangePassword: false,
+          pendingApproval: false,
           error: null,
         });
       },
@@ -89,6 +95,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: response,
             mustChangePassword: response.mustChangePassword,
+            pendingApproval: !response.approved,
             isLoading: false,
           });
         } catch (error) {
@@ -97,6 +104,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             mustChangePassword: false,
+            pendingApproval: false,
             error: (error as Error).message,
             isLoading: false,
           });
@@ -122,6 +130,8 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: () => !!get().token && !!get().user,
 
       isAdmin: () => get().user?.role === 'admin',
+
+      isPendingApproval: () => get().pendingApproval,
     }),
     {
       name: 'nonotion-auth',
@@ -129,6 +139,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         user: state.user,
         mustChangePassword: state.mustChangePassword,
+        pendingApproval: state.pendingApproval,
       }),
     }
   )

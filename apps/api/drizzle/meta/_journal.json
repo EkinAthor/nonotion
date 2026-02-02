@@ -8,6 +8,13 @@
       "when": 1769924330880,
       "tag": "0000_free_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1769992769582,
+      "tag": "0001_loving_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

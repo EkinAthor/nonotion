@@ -12,6 +12,7 @@ export function toPublicUser(user: User): PublicUser {
     name: user.name,
     avatarUrl: user.avatarUrl,
     role: user.role,
+    approved: user.approved,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -29,6 +30,12 @@ export async function register(input: RegisterInput): Promise<User> {
   const userCount = await userStorage.countUsers();
   const isAdmin = input.email.toLowerCase() === adminEmail || userCount === 0;
 
+  // Determine if user should be auto-approved
+  // Admins are always approved, regular users require approval by default
+  // Set REQUIRE_USER_APPROVAL=false to auto-approve new users
+  const autoApprove = process.env.REQUIRE_USER_APPROVAL === 'false';
+  const approved = isAdmin || autoApprove;
+
   // Hash password
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
@@ -41,6 +48,7 @@ export async function register(input: RegisterInput): Promise<User> {
     avatarUrl: null,
     role: isAdmin ? 'admin' : 'user',
     mustChangePassword: false,
+    approved,
     createdAt: timestamp,
     updatedAt: timestamp,
   };

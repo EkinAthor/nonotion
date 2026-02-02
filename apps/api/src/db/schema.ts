@@ -8,6 +8,7 @@ export const users = sqliteTable('users', {
   avatarUrl: text('avatar_url'),
   role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
   mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
+  approved: integer('approved', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

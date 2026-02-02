@@ -2,12 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { createBlockInputSchema, updateBlockInputSchema, reorderBlocksInputSchema } from '@nonotion/shared';
 import * as blockService from '../services/block-service.js';
 import * as permissionService from '../services/permission-service.js';
-import { authMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
+import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
 
 export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
-  // Add auth and password change check to all routes
+  // Add auth, password change check, and approval check to all routes
   fastify.addHook('preHandler', authMiddleware);
   fastify.addHook('preHandler', mustChangePasswordMiddleware);
+  fastify.addHook('preHandler', approvedUserMiddleware);
 
   // GET /api/pages/:pageId/blocks - Get blocks for page
   fastify.get<{ Params: { pageId: string } }>('/api/pages/:pageId/blocks', async (request, reply) => {

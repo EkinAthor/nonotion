@@ -2,6 +2,7 @@ import { useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import ChangePasswordModal from './ChangePasswordModal';
+import PendingApprovalPage from './PendingApprovalPage';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -10,7 +11,7 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, mustChangePassword, fetchCurrentUser, isLoading } = useAuthStore();
+  const { isAuthenticated, mustChangePassword, pendingApproval, fetchCurrentUser, isLoading } = useAuthStore();
 
   useEffect(() => {
     // Verify token is still valid on mount
@@ -36,6 +37,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   // If not authenticated, return null (will redirect)
   if (!isAuthenticated()) {
     return null;
+  }
+
+  // If pending approval, show waiting page
+  if (pendingApproval) {
+    return <PendingApprovalPage />;
   }
 
   // If must change password, show modal

@@ -2,12 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { createPageInputSchema, updatePageInputSchema } from '@nonotion/shared';
 import * as pageService from '../services/page-service.js';
 import * as permissionService from '../services/permission-service.js';
-import { authMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
+import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
 
 export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
-  // Add auth and password change check to all routes
+  // Add auth, password change check, and approval check to all routes
   fastify.addHook('preHandler', authMiddleware);
   fastify.addHook('preHandler', mustChangePasswordMiddleware);
+  fastify.addHook('preHandler', approvedUserMiddleware);
 
   // GET /api/pages - List all pages user has access to
   fastify.get('/api/pages', async (request, reply) => {

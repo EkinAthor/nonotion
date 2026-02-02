@@ -12,6 +12,7 @@ export default function UserManagementPage() {
     const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
     const [newPassword, setNewPassword] = useState('');
     const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+    const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -65,6 +66,37 @@ export default function UserManagementPage() {
         }
     }
 
+    async function handleDeleteUser() {
+        if (!deleteUserId) return;
+
+        try {
+            setActionLoading(deleteUserId);
+            await usersApi.delete(deleteUserId);
+            setUsers(users.filter(u => u.id !== deleteUserId));
+            setDeleteUserId(null);
+            setResetSuccess('User deleted successfully.');
+            setTimeout(() => setResetSuccess(null), 3000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to delete user');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function toggleApproval(user: PublicUser) {
+        if (user.id === currentUser?.id) return;
+
+        try {
+            setActionLoading(user.id);
+            const updated = await usersApi.approve(user.id, !user.approved);
+            setUsers(users.map(u => u.id === user.id ? updated : u));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to update approval status');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -97,6 +129,7 @@ export default function UserManagementPage() {
                             <th className="py-3 px-4 font-semibold text-sm text-notion-text-secondary">User</th>
                             <th className="py-3 px-4 font-semibold text-sm text-notion-text-secondary">Email</th>
                             <th className="py-3 px-4 font-semibold text-sm text-notion-text-secondary">Role</th>
+                            <th className="py-3 px-4 font-semibold text-sm text-notion-text-secondary">Status</th>
                             <th className="py-3 px-4 font-semibold text-sm text-notion-text-secondary">Actions</th>
                         </tr>
                     </thead>
@@ -127,9 +160,34 @@ export default function UserManagementPage() {
                                     </span>
                                 </td>
                                 <td className="py-3 px-4">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.approved
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                        {user.approved ? 'Approved' : 'Pending'}
+                                    </span>
+                                </td>
+                                <td className="py-3 px-4">
                                     <div className="flex items-center gap-2">
                                         {user.id !== currentUser?.id && (
                                             <>
+                                                {!user.approved ? (
+                                                    <button
+                                                        onClick={() => toggleApproval(user)}
+                                                        disabled={actionLoading === user.id}
+                                                        className="text-xs px-2 py-1 border border-green-300 rounded hover:bg-green-50 text-green-600 disabled:opacity-50"
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                ) : user.role !== 'admin' && (
+                                                    <button
+                                                        onClick={() => toggleApproval(user)}
+                                                        disabled={actionLoading === user.id}
+                                                        className="text-xs px-2 py-1 border border-yellow-300 rounded hover:bg-yellow-50 text-yellow-600 disabled:opacity-50"
+                                                    >
+                                                        Revoke
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => toggleAdmin(user)}
                                                     disabled={actionLoading === user.id}
@@ -147,6 +205,13 @@ export default function UserManagementPage() {
                                                     className="text-xs px-2 py-1 border border-notion-border rounded hover:bg-notion-hover text-notion-text disabled:opacity-50"
                                                 >
                                                     Reset Password
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteUserId(user.id)}
+                                                    disabled={actionLoading === user.id}
+                                                    className="text-xs px-2 py-1 border border-red-300 rounded hover:bg-red-50 text-red-600 disabled:opacity-50"
+                                                >
+                                                    Delete
                                                 </button>
                                             </>
                                         )}
@@ -196,6 +261,34 @@ export default function UserManagementPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {deleteUserId && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-bold text-notion-text mb-4">Delete User</h3>
+                        <p className="text-sm text-notion-text-secondary mb-4">
+                            Are you sure you want to delete this user? Their pages will be transferred to you.
+                            This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteUserId(null)}
+                                className="px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteUser}
+                                disabled={actionLoading === deleteUserId}
+                                className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                            >
+                                {actionLoading === deleteUserId ? 'Deleting...' : 'Delete User'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -124,6 +124,17 @@ export const usersApi = {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     }),
+
+  delete: (id: string) =>
+    request<void>(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+
+  approve: (id: string, approved: boolean) =>
+    request<PublicUser>(`/users/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ approved }),
+    }),
 };
 
 // Shares API

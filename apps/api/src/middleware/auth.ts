@@ -77,3 +77,27 @@ export async function mustChangePasswordMiddleware(
     });
   }
 }
+
+export async function approvedUserMiddleware(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  if (!request.userId) return;
+
+  const user = await userStorage.getUser(request.userId);
+  if (!user) return;
+
+  // Admins are always allowed
+  if (user.role === 'admin') return;
+
+  // Allow unapproved users to access auth endpoints to check status and logout
+  if (request.url === '/api/auth/me' && request.method === 'GET') return;
+  if (request.url === '/api/auth/logout' && request.method === 'POST') return;
+
+  if (!user.approved) {
+    reply.status(403).send({
+      success: false,
+      error: { code: 'APPROVAL_REQUIRED', message: 'Your account is pending admin approval' },
+    });
+  }
+}

@@ -8,6 +8,7 @@ export interface User {
   avatarUrl: string | null;
   role: UserRole;
   mustChangePassword: boolean;
+  approved: boolean; // Whether admin has approved user access
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
@@ -19,6 +20,7 @@ export interface PublicUser {
   name: string;
   avatarUrl: string | null;
   role: UserRole;
+  approved: boolean;
   createdAt: string;
   updatedAt: string;
 }

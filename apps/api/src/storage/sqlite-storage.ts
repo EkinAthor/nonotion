@@ -13,6 +13,7 @@ function rowToUser(row: typeof users.$inferSelect): User {
     avatarUrl: row.avatarUrl,
     role: row.role as UserRole,
     mustChangePassword: row.mustChangePassword,
+    approved: row.approved,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -54,6 +55,7 @@ class SqliteStorage implements UserStorageAdapter {
       avatarUrl: user.avatarUrl,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
+      approved: user.approved,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     }).run();
@@ -71,6 +73,7 @@ class SqliteStorage implements UserStorageAdapter {
     if (updates.avatarUrl !== undefined) updateData.avatarUrl = updates.avatarUrl;
     if (updates.role !== undefined) updateData.role = updates.role;
     if (updates.mustChangePassword !== undefined) updateData.mustChangePassword = updates.mustChangePassword;
+    if (updates.approved !== undefined) updateData.approved = updates.approved;
     if (updates.updatedAt !== undefined) updateData.updatedAt = updates.updatedAt;
 
     if (Object.keys(updateData).length > 0) {
@@ -151,6 +154,21 @@ class SqliteStorage implements UserStorageAdapter {
 
   async deletePagePermissions(pageId: string): Promise<void> {
     db.delete(permissions).where(eq(permissions.pageId, pageId)).run();
+  }
+
+  async transferOwnerPermissions(fromUserId: string, toUserId: string): Promise<void> {
+    // Update all owner permissions from the deleted user to the new owner
+    db.update(permissions)
+      .set({ userId: toUserId })
+      .where(and(eq(permissions.userId, fromUserId), eq(permissions.level, 'owner')))
+      .run();
+
+    // Delete any non-owner permissions for the deleted user
+    db.delete(permissions).where(eq(permissions.userId, fromUserId)).run();
+  }
+
+  async deleteUserPermissions(userId: string): Promise<void> {
+    db.delete(permissions).where(eq(permissions.userId, userId)).run();
   }
 }
 

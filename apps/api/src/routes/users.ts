@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { adminResetPasswordInputSchema, updateUserRoleInputSchema } from '@nonotion/shared';
+import { adminResetPasswordInputSchema, updateUserRoleInputSchema, approveUserInputSchema } from '@nonotion/shared';
 import * as userService from '../services/user-service.js';
 import * as authService from '../services/auth-service.js';
 import { authMiddleware, adminMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
@@ -112,6 +112,79 @@ export async function usersRoutes(fastify: FastifyInstance): Promise<void> {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to update user role';
+        if (message.includes('not found')) {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message },
+            success: false,
+          });
+        }
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message },
+          success: false,
+        });
+      }
+    }
+  );
+
+  // DELETE /api/users/:id - Delete user (admin only)
+  fastify.delete<{ Params: { id: string } }>(
+    '/api/users/:id',
+    { preHandler: [adminMiddleware, mustChangePasswordMiddleware] },
+    async (request, reply) => {
+      try {
+        await userService.deleteUser(request.params.id, request.userId!);
+        return reply.status(204).send();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete user';
+        if (message.includes('not found')) {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message },
+            success: false,
+          });
+        }
+        if (message.includes('Cannot delete')) {
+          return reply.status(400).send({
+            error: { code: 'INVALID_OPERATION', message },
+            success: false,
+          });
+        }
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message },
+          success: false,
+        });
+      }
+    }
+  );
+
+  // PATCH /api/users/:id/approve - Approve or revoke user access (admin only)
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/users/:id/approve',
+    { preHandler: [adminMiddleware, mustChangePasswordMiddleware] },
+    async (request, reply) => {
+      const parsed = approveUserInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          success: false,
+        });
+      }
+
+      // Prevent unapproving self
+      if (request.userId === request.params.id && !parsed.data.approved) {
+        return reply.status(400).send({
+          error: { code: 'INVALID_OPERATION', message: 'Cannot revoke your own approval' },
+          success: false,
+        });
+      }
+
+      try {
+        const user = await userService.updateUserApproval(request.params.id, parsed.data.approved);
+        return reply.send({
+          data: user,
+          success: true,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update user approval';
         if (message.includes('not found')) {
           return reply.status(404).send({
             error: { code: 'NOT_FOUND', message },

@@ -108,3 +108,23 @@ export async function deletePage(id: string): Promise<boolean> {
 
   return storage.deletePage(id);
 }
+
+export async function getPagesByOwner(ownerId: string): Promise<Page[]> {
+  const allPages = await storage.getAllPages();
+  return allPages.filter((page) => page.ownerId === ownerId);
+}
+
+export async function transferPageOwnership(
+  pageId: string,
+  newOwnerId: string
+): Promise<Page | null> {
+  const existing = await storage.getPage(pageId);
+  if (!existing) return null;
+
+  const timestamp = now();
+  return storage.updatePage(pageId, {
+    ownerId: newOwnerId,
+    updatedAt: timestamp,
+    version: existing.version + 1,
+  });
+}
