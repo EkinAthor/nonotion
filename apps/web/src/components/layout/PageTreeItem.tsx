@@ -84,7 +84,7 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
 
         {/* Icon */}
         <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-sm">
-          {node.icon || '📄'}
+          {node.icon || (node.type === 'database' ? '🗃️' : '📄')}
         </span>
 
         {/* Title */}

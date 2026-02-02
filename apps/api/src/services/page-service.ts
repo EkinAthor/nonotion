@@ -1,6 +1,7 @@
 import type { Page, CreatePageInput, UpdatePageInput } from '@nonotion/shared';
 import { generatePageId, now } from '@nonotion/shared';
 import { storage } from '../storage/json-storage.js';
+import { createDefaultSchema } from './database-service.js';
 
 export async function getAllPages(): Promise<Page[]> {
   return storage.getAllPages();
@@ -12,9 +13,12 @@ export async function getPage(id: string): Promise<Page | null> {
 
 export async function createPage(input: CreatePageInput, ownerId: string): Promise<Page> {
   const timestamp = now();
+  const pageType = input.type ?? 'document';
+
   const page: Page = {
     id: generatePageId(),
     title: input.title,
+    type: pageType,
     ownerId,
     parentId: input.parentId ?? null,
     childIds: [],
@@ -24,6 +28,16 @@ export async function createPage(input: CreatePageInput, ownerId: string): Promi
     updatedAt: timestamp,
     version: 1,
   };
+
+  // Add database schema for database pages
+  if (pageType === 'database') {
+    page.databaseSchema = input.databaseSchema ?? createDefaultSchema();
+  }
+
+  // Add properties for row pages (pages that are children of databases)
+  if (input.properties) {
+    page.properties = input.properties;
+  }
 
   // If page has a parent, add it to parent's childIds
   if (page.parentId) {

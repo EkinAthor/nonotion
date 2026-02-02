@@ -17,6 +17,9 @@ import type {
   SharePageInput,
   UpdateShareInput,
   AdminResetPasswordInput,
+  DatabaseRow,
+  UpdateSchemaInput,
+  UpdatePropertiesInput,
 } from '@nonotion/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -215,6 +218,45 @@ export const blocksApi = {
 
   reorder: (pageId: string, input: ReorderBlocksInput) =>
     request<Block[]>(`/pages/${pageId}/blocks/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+};
+
+// Database API
+interface GetRowsOptions {
+  sort?: string;
+  filter?: string;
+  limit?: number;
+  offset?: number;
+}
+
+interface GetRowsResult {
+  rows: DatabaseRow[];
+  total: number;
+}
+
+export const databaseApi = {
+  getRows: (databaseId: string, options: GetRowsOptions = {}) => {
+    const params = new URLSearchParams();
+    if (options.sort) params.set('sort', options.sort);
+    if (options.filter) params.set('filter', options.filter);
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.offset) params.set('offset', String(options.offset));
+
+    const query = params.toString();
+    const url = `/databases/${databaseId}/rows${query ? `?${query}` : ''}`;
+    return request<GetRowsResult>(url);
+  },
+
+  updateSchema: (databaseId: string, input: UpdateSchemaInput) =>
+    request<Page>(`/pages/${databaseId}/schema`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  updateProperties: (pageId: string, input: UpdatePropertiesInput) =>
+    request<Page>(`/pages/${pageId}/properties`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),

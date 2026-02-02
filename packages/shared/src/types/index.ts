@@ -3,3 +3,4 @@ export * from './block.js';
 export * from './user.js';
 export * from './permission.js';
 export * from './api.js';
+export * from './database.js';

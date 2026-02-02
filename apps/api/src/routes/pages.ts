@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { createPageInputSchema, updatePageInputSchema } from '@nonotion/shared';
+import { createPageInputSchema, updatePageInputSchema, updateSchemaInputSchema, updatePropertiesInputSchema } from '@nonotion/shared';
 import * as pageService from '../services/page-service.js';
+import * as databaseService from '../services/database-service.js';
 import * as permissionService from '../services/permission-service.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
 
@@ -131,5 +132,61 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
     return reply.status(204).send();
+  });
+
+  // PATCH /api/pages/:id/schema - Update database schema
+  fastify.patch<{ Params: { id: string } }>('/api/pages/:id/schema', async (request, reply) => {
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!);
+    if (!canEdit) {
+      return reply.status(403).send({
+        error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this database' },
+        success: false,
+      });
+    }
+
+    const parsed = updateSchemaInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        success: false,
+      });
+    }
+
+    const page = await databaseService.updateSchema(request.params.id, parsed.data);
+    if (!page) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Database not found' },
+        success: false,
+      });
+    }
+    return reply.send({ data: page, success: true });
+  });
+
+  // PATCH /api/pages/:id/properties - Update row property values
+  fastify.patch<{ Params: { id: string } }>('/api/pages/:id/properties', async (request, reply) => {
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!);
+    if (!canEdit) {
+      return reply.status(403).send({
+        error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },
+        success: false,
+      });
+    }
+
+    const parsed = updatePropertiesInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        success: false,
+      });
+    }
+
+    const page = await databaseService.updateRowProperties(request.params.id, parsed.data.properties);
+    if (!page) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Page not found' },
+        success: false,
+      });
+    }
+    return reply.send({ data: page, success: true });
   });
 }

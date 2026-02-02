@@ -36,6 +36,10 @@ export class JsonFileStorage implements StorageAdapter {
         if (file.endsWith('.json')) {
           const content = await fs.readFile(path.join(PAGES_DIR, file), 'utf-8');
           const page = JSON.parse(content) as Page;
+          // Migration: ensure type field exists (default to 'document' for existing pages)
+          if (!page.type) {
+            page.type = 'document';
+          }
           this.pagesCache.set(page.id, page);
         }
       }

@@ -20,6 +20,14 @@ export function generateUserId(): string {
   return `usr_${generateRandomString(12)}`;
 }
 
+export function generatePropertyId(): string {
+  return `prop_${generateRandomString(12)}`;
+}
+
+export function generateOptionId(): string {
+  return `opt_${generateRandomString(12)}`;
+}
+
 export function isPageId(id: string): boolean {
   return id.startsWith('pg_') && id.length === 15;
 }
@@ -30,4 +38,12 @@ export function isBlockId(id: string): boolean {
 
 export function isUserId(id: string): boolean {
   return id.startsWith('usr_') && id.length === 16;
+}
+
+export function isPropertyId(id: string): boolean {
+  return id.startsWith('prop_') && id.length === 17;
+}
+
+export function isOptionId(id: string): boolean {
+  return id.startsWith('opt_') && id.length === 16;
 }

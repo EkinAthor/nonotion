@@ -5,7 +5,9 @@ import { useBlockStore } from '@/stores/blockStore';
 import { pagesApi } from '@/api/client';
 import PageHeader from './PageHeader';
 import PageBreadcrumb from './PageBreadcrumb';
+import PageProperties from './PageProperties';
 import BlockCanvas from '../blocks/BlockCanvas';
+import DatabaseView from '../database/DatabaseView';
 
 type PermissionLevel = 'owner' | 'full_access' | 'editor' | 'viewer';
 
@@ -19,10 +21,15 @@ export default function PageView() {
   const page = pageId ? pages.get(pageId) : null;
   const blocks = pageId ? getBlocksForPage(pageId) : [];
 
+  const isDatabase = page?.type === 'database';
+
   useEffect(() => {
     if (pageId) {
       setCurrentPage(pageId);
-      fetchBlocks(pageId);
+      // Only fetch blocks for document pages
+      if (!isDatabase) {
+        fetchBlocks(pageId);
+      }
       setPermissionLoading(true);
 
       // Fetch user's permission for this page
@@ -36,7 +43,7 @@ export default function PageView() {
       setPermission(null);
       setPermissionLoading(true);
     };
-  }, [pageId, setCurrentPage, fetchBlocks]);
+  }, [pageId, setCurrentPage, fetchBlocks, isDatabase]);
 
   if (!page) {
     return (
@@ -59,7 +66,7 @@ export default function PageView() {
 
   return (
     <div className="min-h-full">
-      <div className="max-w-3xl mx-auto px-24 py-4">
+      <div className={`mx-auto py-4 ${isDatabase ? 'max-w-6xl px-8' : 'max-w-3xl px-24'}`}>
         <PageBreadcrumb pageId={page.id} />
         <PageHeader page={page} readOnly={!canEdit} canShare={permission === 'owner' || permission === 'full_access'} />
         {!canEdit && (
@@ -67,7 +74,15 @@ export default function PageView() {
             You have view-only access to this page
           </div>
         )}
-        <BlockCanvas pageId={page.id} blocks={blocks} readOnly={!canEdit} />
+
+        {isDatabase ? (
+          <DatabaseView page={page} canEdit={canEdit} />
+        ) : (
+          <>
+            <PageProperties page={page} canEdit={canEdit} />
+            <BlockCanvas pageId={page.id} blocks={blocks} readOnly={!canEdit} />
+          </>
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { blocksRoutes } from './routes/blocks.js';
 import { authRoutes } from './routes/auth.js';
 import { sharesRoutes } from './routes/shares.js';
 import { usersRoutes } from './routes/users.js';
+import { databasesRoutes } from './routes/databases.js';
 
 // Run database migrations on startup
 import { db } from './db/index.js';
@@ -49,6 +50,7 @@ await fastify.register(usersRoutes);
 await fastify.register(pagesRoutes);
 await fastify.register(blocksRoutes);
 await fastify.register(sharesRoutes);
+await fastify.register(databasesRoutes);
 
 // Health check
 fastify.get('/health', async () => {
