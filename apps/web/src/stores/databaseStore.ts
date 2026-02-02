@@ -6,6 +6,7 @@ import type {
   PropertyDefinition,
   PropertyValue,
   UpdateSchemaInput,
+  SelectOption,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
 
@@ -51,6 +52,9 @@ interface DatabaseState {
   setSort: (sort: SortConfig | undefined) => void;
   setFilter: (filter: FilterConfig | undefined) => void;
   setColumnWidth: (propertyId: string, width: number) => void;
+
+  // Property options management
+  updatePropertyOptions: (propertyId: string, options: SelectOption[]) => Promise<void>;
 
   // Selectors
   getProperty: (propertyId: string) => PropertyDefinition | undefined;
@@ -198,6 +202,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         },
       },
     }));
+  },
+
+  updatePropertyOptions: async (propertyId, options) => {
+    await get().updateSchema({
+      updateProperties: [{ id: propertyId, options }],
+    });
   },
 
   getProperty: (propertyId) => {

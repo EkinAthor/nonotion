@@ -59,6 +59,7 @@ export default function CellRenderer({
           value={(value as { type: 'select'; value: string | null })?.value ?? null}
           onChange={(v) => onChange({ type: 'select', value: v })}
           options={property.options ?? []}
+          propertyId={property.id}
           {...commonProps}
         />
       );
@@ -69,6 +70,7 @@ export default function CellRenderer({
           value={(value as { type: 'multi_select'; value: string[] })?.value ?? []}
           onChange={(v) => onChange({ type: 'multi_select', value: v })}
           options={property.options ?? []}
+          propertyId={property.id}
           {...commonProps}
         />
       );

@@ -194,12 +194,25 @@ function createPropertyDefinition(
     order,
   };
 
-  if (input.options && (input.type === 'select' || input.type === 'multi_select')) {
-    prop.options = input.options.map((opt) => ({
-      id: generateOptionId(),
-      name: opt.name,
-      color: opt.color,
-    }));
+  if (input.type === 'select') {
+    // Select properties get default options if none provided
+    if (input.options && input.options.length > 0) {
+      prop.options = input.options.map((opt) => ({
+        id: generateOptionId(),
+        name: opt.name,
+        color: opt.color,
+        isDefault: true,
+      }));
+    } else {
+      prop.options = [
+        { id: generateOptionId(), name: 'To Do', color: 'gray', isDefault: true },
+        { id: generateOptionId(), name: 'In Progress', color: 'blue', isDefault: true },
+        { id: generateOptionId(), name: 'Done', color: 'green', isDefault: true },
+      ];
+    }
+  } else if (input.type === 'multi_select') {
+    // Multi-select starts empty - user creates all tags
+    prop.options = [];
   }
 
   return prop;

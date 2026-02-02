@@ -26,6 +26,7 @@ export interface SelectOption {
   id: string; // "opt_xxxxxxxxxxxx"
   name: string;
   color: SelectColor;
+  isDefault?: boolean; // Marks system-created options that cannot be deleted
 }
 
 // Definition of a property column in a database

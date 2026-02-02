@@ -30,6 +30,7 @@ export const selectOptionSchema = z.object({
   id: z.string().startsWith('opt_'),
   name: z.string().min(1).max(100),
   color: selectColorSchema,
+  isDefault: z.boolean().optional(),
 });
 
 // Property definition

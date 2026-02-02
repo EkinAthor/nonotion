@@ -36,18 +36,16 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     const input: AddPropertyInput = { name, type };
 
     // Add default options for select types
+    // Note: Backend handles default options - select gets default status options,
+    // multi-select starts empty so users create their own tags
     if (type === 'select') {
       input.options = [
         { name: 'To Do', color: 'gray' },
         { name: 'In Progress', color: 'blue' },
         { name: 'Done', color: 'green' },
       ];
-    } else if (type === 'multi_select') {
-      input.options = [
-        { name: 'Tag 1', color: 'blue' },
-        { name: 'Tag 2', color: 'purple' },
-      ];
     }
+    // multi-select intentionally has no default options
 
     await updateSchema({ addProperties: [input] });
     setShowAddProperty(false);
