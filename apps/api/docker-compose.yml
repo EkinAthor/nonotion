@@ -3,9 +3,10 @@
 # Run the API service independently
 # ==============================================================================
 # Usage:
-#   docker-compose up -d              # Start API
-#   docker-compose down               # Stop API
-#   docker-compose logs -f            # View logs
+#   docker compose up -d        # Start API
+#   docker compose down         # Stop API
+#   docker compose logs -f      # View logs
+#   docker compose build        # Rebuild
 # ==============================================================================
 
 services:
@@ -21,8 +22,11 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
+      - STORAGE_TYPE=${STORAGE_TYPE:-json-sqlite}
+      - DATABASE_URL=${DATABASE_URL:-}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - REQUIRE_USER_APPROVAL=${REQUIRE_USER_APPROVAL:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
     volumes:
       - nonotion-data:/app/data

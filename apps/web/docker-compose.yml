@@ -3,9 +3,10 @@
 # Run the Web service independently (requires external API)
 # ==============================================================================
 # Usage:
-#   docker-compose up -d              # Start Web
-#   docker-compose down               # Stop Web
-#   docker-compose logs -f            # View logs
+#   docker compose up -d        # Start Web
+#   docker compose down         # Stop Web
+#   docker compose logs -f      # View logs
+#   docker compose build        # Rebuild
 #
 # Note: Set API_UPSTREAM to point to your API server
 # ==============================================================================

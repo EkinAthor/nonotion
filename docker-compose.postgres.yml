@@ -1,12 +1,17 @@
 # ==============================================================================
-# Nonotion Docker Compose with PostgreSQL
-# Run both API and Web services with PostgreSQL database
+# PostgreSQL for Local Development
+# Start PostgreSQL database for local development with postgres storage backend
 # ==============================================================================
 # Usage:
-#   docker-compose -f docker-compose.postgres.yml up -d      # Start all services
-#   docker-compose -f docker-compose.postgres.yml down       # Stop all services
-#   docker-compose -f docker-compose.postgres.yml logs -f    # View logs
-#   docker-compose -f docker-compose.postgres.yml build      # Rebuild images
+#   docker compose -f docker-compose.postgres.yml up -d    # Start PostgreSQL
+#   docker compose -f docker-compose.postgres.yml down     # Stop PostgreSQL
+#   docker compose -f docker-compose.postgres.yml logs -f  # View logs
+#
+# Then run the API locally with:
+#   STORAGE_TYPE=postgres DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion pnpm --filter @nonotion/api dev
+#
+# Windows PowerShell:
+#   $env:STORAGE_TYPE="postgres"; $env:DATABASE_URL="postgresql://nonotion:nonotion@localhost:5432/nonotion"; pnpm --filter @nonotion/api dev
 # ==============================================================================
 
 services:
@@ -22,69 +27,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    networks:
-      - nonotion-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U nonotion -d nonotion" ]
+      test: ["CMD-SHELL", "pg_isready -U nonotion -d nonotion"]
       interval: 10s
       timeout: 5s
       start_period: 10s
       retries: 5
 
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    container_name: nonotion-api
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - STORAGE_TYPE=postgres
-      - DATABASE_URL=postgresql://nonotion:nonotion@postgres:5432/nonotion
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:80}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - nonotion-network
-    healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health" ]
-      interval: 30s
-      timeout: 10s
-      start_period: 10s
-      retries: 3
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        - VITE_API_URL=/api
-    container_name: nonotion-web
-    restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-80}:80"
-    environment:
-      - API_UPSTREAM=api:3001
-    depends_on:
-      api:
-        condition: service_healthy
-    networks:
-      - nonotion-network
-    healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health" ]
-      interval: 30s
-      timeout: 10s
-      start_period: 5s
-      retries: 3
-
 volumes:
   postgres-data:
     driver: local
-
-networks:
-  nonotion-network:
-    driver: bridge

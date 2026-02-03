@@ -1,48 +1,47 @@
 {
   "product": {
     "name": "Nonotion",
-    "version": "0.1.0",
-    "phase": 1,
+    "version": "0.2.0",
     "description": "Self-hosted, lightweight Notion alternative with block-based content editing"
   },
-  "scope": {
-    "phase1": {
-      "description": "Baseline implementation with core features",
-      "features": {
-        "storage": {
-          "type": "configurable",
-          "backends": ["json-sqlite", "postgres"],
-          "default": "json-sqlite",
-          "supabaseCompatible": true
-        },
-        "authentication": {
-          "enabled": false,
-          "defaultUser": "admin",
-          "autoLogin": true
-        },
-        "pages": {
-          "enabled": true,
-          "subPages": true,
-          "database": false,
-          "starring": true
-        },
-        "blocks": {
-          "types": ["heading", "paragraph"],
-          "formatting": false,
-          "dragAndDrop": true,
-          "slashCommands": true,
-          "enterCreatesNewBlock": true,
-          "arrowKeyNavigation": true
-        },
-        "collaboration": {
-          "enabled": false,
-          "preparedFor": true
-        },
-        "deployment": {
-          "docker": true,
-          "localDev": true
-        }
-      }
+  "currentFeatures": {
+    "storage": {
+      "backends": ["json-sqlite", "postgres"],
+      "default": "json-sqlite",
+      "supabaseCompatible": true
+    },
+    "authentication": {
+      "enabled": true,
+      "method": "JWT",
+      "features": ["register", "login", "password-change", "admin-reset"],
+      "userApproval": true
+    },
+    "pages": {
+      "enabled": true,
+      "subPages": true,
+      "database": true,
+      "starring": true,
+      "sharing": true,
+      "permissionLevels": ["owner", "full_access", "editor", "viewer"]
+    },
+    "blocks": {
+      "types": ["heading", "heading2", "heading3", "paragraph"],
+      "formatting": false,
+      "dragAndDrop": true,
+      "slashCommands": true,
+      "enterCreatesNewBlock": true,
+      "arrowKeyNavigation": true
+    },
+    "database": {
+      "enabled": true,
+      "tableView": true,
+      "propertyTypes": ["title", "text", "select", "multi_select", "date", "person", "url", "checkbox"],
+      "filtering": true,
+      "sorting": true
+    },
+    "deployment": {
+      "docker": true,
+      "localDev": true
     }
   },
   "technicalStack": {
@@ -58,12 +57,11 @@
       "runtime": "Node.js",
       "framework": "Fastify",
       "language": "TypeScript",
-      "storage": "JSON files / SQLite / PostgreSQL",
-      "orm": "Drizzle ORM"
+      "orm": "Drizzle ORM",
+      "storage": ["JSON files", "SQLite", "PostgreSQL"]
     },
     "testing": {
-      "e2e": "Playwright",
-      "unit": "Vitest"
+      "e2e": "Playwright"
     },
     "monorepo": {
       "packageManager": "pnpm",
@@ -71,30 +69,63 @@
     }
   },
   "dataModels": {
+    "user": {
+      "id": "string (usr_xxx)",
+      "email": "string",
+      "name": "string",
+      "passwordHash": "string",
+      "role": "admin | user",
+      "approved": "boolean",
+      "mustChangePassword": "boolean",
+      "createdAt": "ISO8601 string",
+      "updatedAt": "ISO8601 string"
+    },
     "page": {
-      "id": "string (nanoid)",
+      "id": "string (pg_xxx)",
       "title": "string",
+      "type": "document | database",
+      "ownerId": "string",
       "parentId": "string | null",
       "childIds": "string[]",
       "icon": "string | null",
       "isStarred": "boolean",
+      "databaseSchema": "object | null",
+      "properties": "object | null",
       "createdAt": "ISO8601 string",
       "updatedAt": "ISO8601 string",
       "version": "number"
     },
     "block": {
-      "id": "string (nanoid)",
-      "type": "heading | paragraph",
+      "id": "string (blk_xxx)",
+      "type": "heading | heading2 | heading3 | paragraph",
       "pageId": "string",
       "order": "number",
-      "content": {
-        "text": "string",
-        "level": "number (heading only)"
-      },
+      "content": "object",
       "version": "number"
+    },
+    "permission": {
+      "pageId": "string",
+      "userId": "string",
+      "level": "owner | full_access | editor | viewer",
+      "grantedBy": "string",
+      "grantedAt": "ISO8601 string"
     }
   },
   "apiEndpoints": {
+    "auth": {
+      "register": "POST /api/auth/register",
+      "login": "POST /api/auth/login",
+      "me": "GET /api/auth/me",
+      "changePassword": "POST /api/auth/change-password"
+    },
+    "users": {
+      "list": "GET /api/users",
+      "search": "GET /api/users/search",
+      "updateRole": "PATCH /api/users/:id/role",
+      "approve": "PATCH /api/users/:id/approve",
+      "resetPassword": "POST /api/users/:id/reset-password",
+      "delete": "DELETE /api/users/:id"
+    },
     "pages": {
       "list": "GET /api/pages",
       "get": "GET /api/pages/:id",
@@ -108,66 +139,42 @@
       "update": "PATCH /api/blocks/:id",
       "delete": "DELETE /api/blocks/:id",
       "reorder": "PATCH /api/pages/:pageId/blocks/reorder"
+    },
+    "shares": {
+      "list": "GET /api/pages/:id/shares",
+      "create": "POST /api/pages/:id/shares",
+      "update": "PATCH /api/pages/:id/shares/:userId",
+      "delete": "DELETE /api/pages/:id/shares/:userId"
+    },
+    "databases": {
+      "getRows": "GET /api/databases/:id/rows",
+      "updateSchema": "PATCH /api/databases/:id/schema",
+      "updateRowProperties": "PATCH /api/databases/:id/rows/:rowId/properties"
     }
   },
-  "futurePhases": {
-    "phase2": {
-      "features": [
-        "Additional block types (bullet list, numbered list, toggle, quote, code)",
-        "Rich text formatting (bold, italic, underline, strikethrough)",
-        "Block nesting"
-      ]
-    },
-    "phase3": {
-      "features": [
-        "Database functionality",
-        "Property types (select, multi-select, date, person, URL, checkbox)",
-        "Table view",
-        "Filtering and sorting"
-      ]
-    },
-    "phase4": {
-      "features": [
-        "User authentication (local + Google OAuth)",
-        "Multiple users",
-        "Permissions (view, edit, full access)",
-        "Permission inheritance"
-      ]
-    },
-    "phase5": {
-      "features": [
-        "Real-time collaboration",
-        "LWW conflict resolution",
-        "Presence indicators",
-        "@ mentions"
-      ]
-    },
-    "phase6": {
-      "features": [
-        "Docker deployment (DONE)",
-        "PostgreSQL/Supabase storage backend (DONE)",
-        "Import from Notion",
-        "Export functionality"
-      ]
-    },
-    "phase7": {
-      "features": [
-        "Plugin API",
-        "Custom block types",
-        "Third-party integrations"
-      ]
-    }
-  },
-  "acceptance": {
-    "phase1": [
-      "Can create, edit, and delete pages",
-      "Can create sub-pages with proper tree hierarchy",
-      "Can star/unstar pages",
-      "Can add heading and paragraph blocks",
-      "Can edit block content with auto-save",
-      "Can reorder blocks via drag and drop",
-      "All data persists in JSON files",
-      "All E2E tests pass"
+  "futureFeatures": {
+    "blocks": [
+      "Bullet list",
+      "Numbered list",
+      "Toggle",
+      "Quote",
+      "Code block",
+      "Rich text formatting (bold, italic, etc.)",
+      "Block nesting"
+    ],
+    "collaboration": [
+      "Real-time collaboration",
+      "Presence indicators",
+      "@ mentions"
+    ],
+    "integrations": [
+      "Import from Notion",
+      "Export functionality",
+      "Plugin API"
+    ],
+    "authentication": [
+      "Google OAuth",
+      "Other OAuth providers"
     ]
   }
 }
