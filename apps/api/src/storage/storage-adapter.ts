@@ -35,4 +35,6 @@ export interface UserStorageAdapter {
   updatePermission(pageId: string, userId: string, updates: Partial<PagePermission>): Promise<PagePermission | null>;
   deletePermission(pageId: string, userId: string): Promise<boolean>;
   deletePagePermissions(pageId: string): Promise<void>;
+  transferOwnerPermissions(fromUserId: string, toUserId: string): Promise<void>;
+  deleteUserPermissions(userId: string): Promise<void>;
 }

@@ -1,20 +1,19 @@
 import type { Page, PagePermission, PermissionLevel } from '@nonotion/shared';
 import { now } from '@nonotion/shared';
-import { userStorage } from '../storage/sqlite-storage.js';
-import { storage } from '../storage/json-storage.js';
+import { getStorage, getUserStorage } from '../storage/storage-factory.js';
 
 export async function getEffectivePermission(
   pageId: string,
   userId: string
 ): Promise<PermissionLevel | null> {
   // First check direct permission on this page
-  const permission = await userStorage.getPermission(pageId, userId);
+  const permission = await getUserStorage().getPermission(pageId, userId);
   if (permission) {
     return permission.level;
   }
 
   // Check inherited permission from parent pages
-  const page = await storage.getPage(pageId);
+  const page = await getStorage().getPage(pageId);
   if (page?.parentId) {
     return getEffectivePermission(page.parentId, userId);
   }
@@ -51,12 +50,12 @@ export async function createOwnerPermission(pageId: string, userId: string): Pro
     grantedBy: userId,
     grantedAt: timestamp,
   };
-  return userStorage.createPermission(permission);
+  return getUserStorage().createPermission(permission);
 }
 
 // Get all descendant page IDs recursively
 async function getDescendantPageIds(pageId: string): Promise<string[]> {
-  const page = await storage.getPage(pageId);
+  const page = await getStorage().getPage(pageId);
   if (!page || page.childIds.length === 0) {
     return [];
   }
@@ -89,7 +88,7 @@ export async function sharePage(
   const descendantIds = await getDescendantPageIds(pageId);
   for (const descendantId of descendantIds) {
     // Check if descendant has an explicit permission for this user
-    const existingPermission = await userStorage.getPermission(descendantId, targetUserId);
+    const existingPermission = await getUserStorage().getPermission(descendantId, targetUserId);
     if (!existingPermission) {
       // No existing permission - create one
       await sharePageDirect(descendantId, targetUserId, level, grantedBy, timestamp);
@@ -111,11 +110,11 @@ async function sharePageDirect(
   timestamp: string
 ): Promise<PagePermission> {
   // Check if permission already exists
-  const existing = await userStorage.getPermission(pageId, targetUserId);
+  const existing = await getUserStorage().getPermission(pageId, targetUserId);
 
   if (existing) {
     // Update existing permission
-    const updated = await userStorage.updatePermission(pageId, targetUserId, {
+    const updated = await getUserStorage().updatePermission(pageId, targetUserId, {
       level,
       grantedBy,
       grantedAt: timestamp,
@@ -134,25 +133,25 @@ async function sharePageDirect(
     grantedBy,
     grantedAt: timestamp,
   };
-  return userStorage.createPermission(permission);
+  return getUserStorage().createPermission(permission);
 }
 
 export async function unshare(pageId: string, userId: string): Promise<boolean> {
   // Don't allow unsharing owner
-  const permission = await userStorage.getPermission(pageId, userId);
+  const permission = await getUserStorage().getPermission(pageId, userId);
   if (permission?.level === 'owner') {
     throw new Error('Cannot remove owner permission');
   }
 
   // Unshare from this page
-  const result = await userStorage.deletePermission(pageId, userId);
+  const result = await getUserStorage().deletePermission(pageId, userId);
 
   // Also remove from all descendants (unless they have owner permission there)
   const descendantIds = await getDescendantPageIds(pageId);
   for (const descendantId of descendantIds) {
-    const descendantPermission = await userStorage.getPermission(descendantId, userId);
+    const descendantPermission = await getUserStorage().getPermission(descendantId, userId);
     if (descendantPermission && descendantPermission.level !== 'owner') {
-      await userStorage.deletePermission(descendantId, userId);
+      await getUserStorage().deletePermission(descendantId, userId);
     }
   }
 
@@ -160,20 +159,20 @@ export async function unshare(pageId: string, userId: string): Promise<boolean> 
 }
 
 export async function getPagePermissions(pageId: string): Promise<PagePermission[]> {
-  return userStorage.getPagePermissions(pageId);
+  return getUserStorage().getPagePermissions(pageId);
 }
 
 export async function deletePagePermissions(pageId: string): Promise<void> {
-  return userStorage.deletePagePermissions(pageId);
+  return getUserStorage().deletePagePermissions(pageId);
 }
 
 export async function getUserAccessiblePages(userId: string): Promise<Page[]> {
   // Get all permissions for this user
-  const permissions = await userStorage.getUserPermissions(userId);
+  const permissions = await getUserStorage().getUserPermissions(userId);
   const pageIds = new Set(permissions.map((p) => p.pageId));
 
   // Get all pages and filter to accessible ones
-  const allPages = await storage.getAllPages();
+  const allPages = await getStorage().getAllPages();
 
   // A page is accessible if user has direct permission OR if any ancestor has permission
   const accessiblePages: Page[] = [];
@@ -202,7 +201,7 @@ export async function getUserAccessiblePages(userId: string): Promise<Page[]> {
 
 // Copy permissions from parent page to child page (for newly created pages)
 export async function inheritParentPermissions(childPageId: string, parentPageId: string): Promise<void> {
-  const parentPermissions = await userStorage.getPagePermissions(parentPageId);
+  const parentPermissions = await getUserStorage().getPagePermissions(parentPageId);
   const timestamp = now();
 
   for (const parentPerm of parentPermissions) {
@@ -210,9 +209,9 @@ export async function inheritParentPermissions(childPageId: string, parentPageId
     if (parentPerm.level === 'owner') continue;
 
     // Create the same permission for child
-    const exists = await userStorage.getPermission(childPageId, parentPerm.userId);
+    const exists = await getUserStorage().getPermission(childPageId, parentPerm.userId);
     if (!exists) {
-      await userStorage.createPermission({
+      await getUserStorage().createPermission({
         pageId: childPageId,
         userId: parentPerm.userId,
         level: parentPerm.level,

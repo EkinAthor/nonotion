@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sharePageInputSchema, updateShareInputSchema } from '@nonotion/shared';
 import * as permissionService from '../services/permission-service.js';
-import { userStorage } from '../storage/sqlite-storage.js';
+import { getUserStorage } from '../storage/storage-factory.js';
 import { toPublicUser } from '../services/auth-service.js';
 import { authMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
 
@@ -25,7 +25,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
     // Get user details for each permission
     const sharesWithUsers = await Promise.all(
       permissions.map(async (p) => {
-        const user = await userStorage.getUser(p.userId);
+        const user = await getUserStorage().getUser(p.userId);
         return {
           ...p,
           user: user ? toPublicUser(user) : null,
@@ -55,7 +55,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Check target user exists
-    const targetUser = await userStorage.getUser(parsed.data.userId);
+    const targetUser = await getUserStorage().getUser(parsed.data.userId);
     if (!targetUser) {
       return reply.status(404).send({
         error: { code: 'NOT_FOUND', message: 'User not found' },
@@ -122,7 +122,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
           request.userId!
         );
 
-        const targetUser = await userStorage.getUser(request.params.userId);
+        const targetUser = await getUserStorage().getUser(request.params.userId);
         return reply.send({
           data: {
             ...permission,

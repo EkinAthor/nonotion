@@ -8,7 +8,7 @@ import type {
   AddPropertyInput,
 } from '@nonotion/shared';
 import { generatePropertyId, generateOptionId, now } from '@nonotion/shared';
-import { storage } from '../storage/json-storage.js';
+import { getStorage } from '../storage/storage-factory.js';
 
 export interface GetRowsOptions {
   sort?: string;
@@ -24,13 +24,13 @@ export async function getRows(
   databaseId: string,
   options: GetRowsOptions = {}
 ): Promise<{ rows: DatabaseRow[]; total: number }> {
-  const database = await storage.getPage(databaseId);
+  const database = await getStorage().getPage(databaseId);
   if (!database || database.type !== 'database') {
     throw new Error('Database not found');
   }
 
   // Get all child pages (rows)
-  const allPages = await storage.getAllPages();
+  const allPages = await getStorage().getAllPages();
   let rows = allPages.filter((p) => p.parentId === databaseId);
 
   // Apply filtering
@@ -70,7 +70,7 @@ export async function updateSchema(
   databaseId: string,
   input: UpdateSchemaInput
 ): Promise<Page | null> {
-  const database = await storage.getPage(databaseId);
+  const database = await getStorage().getPage(databaseId);
   if (!database || database.type !== 'database') {
     return null;
   }
@@ -127,7 +127,7 @@ export async function updateSchema(
   }
 
   const timestamp = now();
-  return storage.updatePage(databaseId, {
+  return getStorage().updatePage(databaseId, {
     databaseSchema: { properties },
     updatedAt: timestamp,
     version: database.version + 1,
@@ -141,7 +141,7 @@ export async function updateRowProperties(
   rowId: string,
   properties: Record<string, PropertyValue>
 ): Promise<Page | null> {
-  const row = await storage.getPage(rowId);
+  const row = await getStorage().getPage(rowId);
   if (!row) {
     return null;
   }
@@ -157,7 +157,7 @@ export async function updateRowProperties(
     }
   }
 
-  return storage.updatePage(rowId, {
+  return getStorage().updatePage(rowId, {
     ...titleUpdate,
     properties: { ...existingProps, ...properties },
     updatedAt: timestamp,

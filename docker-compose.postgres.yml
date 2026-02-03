@@ -1,15 +1,36 @@
 # ==============================================================================
-# Nonotion Docker Compose
-# Run both API and Web services together
+# Nonotion Docker Compose with PostgreSQL
+# Run both API and Web services with PostgreSQL database
 # ==============================================================================
 # Usage:
-#   docker-compose up -d              # Start all services
-#   docker-compose down               # Stop all services
-#   docker-compose logs -f            # View logs
-#   docker-compose build              # Rebuild images
+#   docker-compose -f docker-compose.postgres.yml up -d      # Start all services
+#   docker-compose -f docker-compose.postgres.yml down       # Stop all services
+#   docker-compose -f docker-compose.postgres.yml logs -f    # View logs
+#   docker-compose -f docker-compose.postgres.yml build      # Rebuild images
 # ==============================================================================
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nonotion-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nonotion
+      POSTGRES_PASSWORD: nonotion
+      POSTGRES_DB: nonotion
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - nonotion-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U nonotion -d nonotion" ]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
   api:
     build:
       context: .
@@ -19,14 +40,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATA_DIR=/app/data
-      - STORAGE_TYPE=${STORAGE_TYPE:-json-sqlite}
-      - DATABASE_URL=${DATABASE_URL:-}
+      - STORAGE_TYPE=postgres
+      - DATABASE_URL=postgresql://nonotion:nonotion@postgres:5432/nonotion
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:80}
-    volumes:
-      - nonotion-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - nonotion-network
     healthcheck:
@@ -61,7 +82,7 @@ services:
       retries: 3
 
 volumes:
-  nonotion-data:
+  postgres-data:
     driver: local
 
 networks:

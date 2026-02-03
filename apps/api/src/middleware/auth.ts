@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { userStorage } from '../storage/sqlite-storage.js';
+import { getUserStorage } from '../storage/storage-factory.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -60,7 +60,7 @@ export async function mustChangePasswordMiddleware(
 ): Promise<void> {
   if (!request.userId) return;
 
-  const user = await userStorage.getUser(request.userId);
+  const user = await getUserStorage().getUser(request.userId);
   if (user?.mustChangePassword) {
     // Allow access to change-password endpoint
     if (request.url === '/api/auth/change-password' && request.method === 'POST') {
@@ -84,7 +84,7 @@ export async function approvedUserMiddleware(
 ): Promise<void> {
   if (!request.userId) return;
 
-  const user = await userStorage.getUser(request.userId);
+  const user = await getUserStorage().getUser(request.userId);
   if (!user) return;
 
   // Admins are always allowed

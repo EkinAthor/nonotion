@@ -10,9 +10,10 @@
       "description": "Baseline implementation with core features",
       "features": {
         "storage": {
-          "type": "local",
-          "format": "JSON files",
-          "multiUser": false
+          "type": "configurable",
+          "backends": ["json-sqlite", "postgres"],
+          "default": "json-sqlite",
+          "supabaseCompatible": true
         },
         "authentication": {
           "enabled": false,
@@ -57,7 +58,8 @@
       "runtime": "Node.js",
       "framework": "Fastify",
       "language": "TypeScript",
-      "storage": "JSON files"
+      "storage": "JSON files / SQLite / PostgreSQL",
+      "orm": "Drizzle ORM"
     },
     "testing": {
       "e2e": "Playwright",
@@ -142,8 +144,8 @@
     },
     "phase6": {
       "features": [
-        "Docker deployment",
-        "Supabase storage backend",
+        "Docker deployment (DONE)",
+        "PostgreSQL/Supabase storage backend (DONE)",
         "Import from Notion",
         "Export functionality"
       ]

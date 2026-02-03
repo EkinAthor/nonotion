@@ -1,6 +1,6 @@
 # ==============================================================================
 # Nonotion API Dockerfile
-# Multi-stage build for Fastify API with SQLite storage
+# Multi-stage build for Fastify API with SQLite or PostgreSQL storage
 # ==============================================================================
 
 # Stage 1: Install dependencies
@@ -73,6 +73,7 @@ RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/drizzle ./apps/api/drizzle
+COPY --from=builder /app/apps/api/drizzle-pg ./apps/api/drizzle-pg
 
 # Create data directory
 RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data

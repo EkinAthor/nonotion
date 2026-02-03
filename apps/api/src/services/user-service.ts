@@ -1,20 +1,20 @@
 import type { PublicUser } from '@nonotion/shared';
-import { userStorage } from '../storage/sqlite-storage.js';
+import { getUserStorage } from '../storage/storage-factory.js';
 import { toPublicUser } from './auth-service.js';
 import * as pageService from './page-service.js';
 
 export async function getAllUsers(): Promise<PublicUser[]> {
-  const users = await userStorage.getAllUsers();
+  const users = await getUserStorage().getAllUsers();
   return users.map(toPublicUser);
 }
 
 export async function getPublicUser(id: string): Promise<PublicUser | null> {
-  const user = await userStorage.getUser(id);
+  const user = await getUserStorage().getUser(id);
   return user ? toPublicUser(user) : null;
 }
 
 export async function searchUsersByEmail(query: string): Promise<PublicUser[]> {
-  const users = await userStorage.getAllUsers();
+  const users = await getUserStorage().getAllUsers();
   const lowerQuery = query.toLowerCase();
   return users
     .filter((u) => u.email.toLowerCase().includes(lowerQuery))
@@ -22,7 +22,7 @@ export async function searchUsersByEmail(query: string): Promise<PublicUser[]> {
 }
 
 export async function updateUserRole(userId: string, role: 'admin' | 'user'): Promise<PublicUser> {
-  const updated = await userStorage.updateUser(userId, { role });
+  const updated = await getUserStorage().updateUser(userId, { role });
   if (!updated) {
     throw new Error('User not found');
   }
@@ -30,7 +30,7 @@ export async function updateUserRole(userId: string, role: 'admin' | 'user'): Pr
 }
 
 export async function updateUserApproval(userId: string, approved: boolean): Promise<PublicUser> {
-  const updated = await userStorage.updateUser(userId, { approved });
+  const updated = await getUserStorage().updateUser(userId, { approved });
   if (!updated) {
     throw new Error('User not found');
   }
@@ -42,7 +42,7 @@ export async function deleteUser(
   requestingAdminId: string
 ): Promise<void> {
   // Validate user exists
-  const userToDelete = await userStorage.getUser(userIdToDelete);
+  const userToDelete = await getUserStorage().getUser(userIdToDelete);
   if (!userToDelete) {
     throw new Error('User not found');
   }
@@ -54,7 +54,7 @@ export async function deleteUser(
 
   // Prevent deleting last admin
   if (userToDelete.role === 'admin') {
-    const allUsers = await userStorage.getAllUsers();
+    const allUsers = await getUserStorage().getAllUsers();
     const adminCount = allUsers.filter((u) => u.role === 'admin').length;
     if (adminCount <= 1) {
       throw new Error('Cannot delete the last admin user');
@@ -68,8 +68,8 @@ export async function deleteUser(
   }
 
   // Update permission records: transfer owner permissions to admin
-  await userStorage.transferOwnerPermissions(userIdToDelete, requestingAdminId);
+  await getUserStorage().transferOwnerPermissions(userIdToDelete, requestingAdminId);
 
   // Delete user
-  await userStorage.deleteUser(userIdToDelete);
+  await getUserStorage().deleteUser(userIdToDelete);
 }

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import type { User, PublicUser, RegisterInput, LoginInput, ChangePasswordInput } from '@nonotion/shared';
 import { generateUserId, now } from '@nonotion/shared';
-import { userStorage } from '../storage/sqlite-storage.js';
+import { getUserStorage } from '../storage/storage-factory.js';
 
 const SALT_ROUNDS = 10;
 
@@ -20,14 +20,14 @@ export function toPublicUser(user: User): PublicUser {
 
 export async function register(input: RegisterInput): Promise<User> {
   // Check if user already exists
-  const existingUser = await userStorage.getUserByEmail(input.email);
+  const existingUser = await getUserStorage().getUserByEmail(input.email);
   if (existingUser) {
     throw new Error('User with this email already exists');
   }
 
   // Check if this should be an admin
   const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-  const userCount = await userStorage.countUsers();
+  const userCount = await getUserStorage().countUsers();
   const isAdmin = input.email.toLowerCase() === adminEmail || userCount === 0;
 
   // Determine if user should be auto-approved
@@ -53,11 +53,11 @@ export async function register(input: RegisterInput): Promise<User> {
     updatedAt: timestamp,
   };
 
-  return userStorage.createUser(user);
+  return getUserStorage().createUser(user);
 }
 
 export async function login(input: LoginInput): Promise<User> {
-  const user = await userStorage.getUserByEmail(input.email);
+  const user = await getUserStorage().getUserByEmail(input.email);
   if (!user) {
     throw new Error('Invalid email or password');
   }
@@ -74,7 +74,7 @@ export async function changePassword(
   userId: string,
   input: ChangePasswordInput
 ): Promise<User> {
-  const user = await userStorage.getUser(userId);
+  const user = await getUserStorage().getUser(userId);
   if (!user) {
     throw new Error('User not found');
   }
@@ -87,7 +87,7 @@ export async function changePassword(
   const newPasswordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
   const timestamp = now();
 
-  const updated = await userStorage.updateUser(userId, {
+  const updated = await getUserStorage().updateUser(userId, {
     passwordHash: newPasswordHash,
     mustChangePassword: false,
     updatedAt: timestamp,
@@ -105,7 +105,7 @@ export async function adminResetPassword(
   newPassword: string,
   mustChangePassword: boolean = true
 ): Promise<User> {
-  const user = await userStorage.getUser(userId);
+  const user = await getUserStorage().getUser(userId);
   if (!user) {
     throw new Error('User not found');
   }
@@ -113,7 +113,7 @@ export async function adminResetPassword(
   const newPasswordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   const timestamp = now();
 
-  const updated = await userStorage.updateUser(userId, {
+  const updated = await getUserStorage().updateUser(userId, {
     passwordHash: newPasswordHash,
     mustChangePassword,
     updatedAt: timestamp,
@@ -127,5 +127,5 @@ export async function adminResetPassword(
 }
 
 export async function getCurrentUser(userId: string): Promise<User | null> {
-  return userStorage.getUser(userId);
+  return getUserStorage().getUser(userId);
 }

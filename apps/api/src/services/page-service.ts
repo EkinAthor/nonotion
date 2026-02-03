@@ -1,14 +1,14 @@
 import type { Page, CreatePageInput, UpdatePageInput } from '@nonotion/shared';
 import { generatePageId, now } from '@nonotion/shared';
-import { storage } from '../storage/json-storage.js';
+import { getStorage } from '../storage/storage-factory.js';
 import { createDefaultSchema } from './database-service.js';
 
 export async function getAllPages(): Promise<Page[]> {
-  return storage.getAllPages();
+  return getStorage().getAllPages();
 }
 
 export async function getPage(id: string): Promise<Page | null> {
-  return storage.getPage(id);
+  return getStorage().getPage(id);
 }
 
 export async function createPage(input: CreatePageInput, ownerId: string): Promise<Page> {
@@ -41,9 +41,9 @@ export async function createPage(input: CreatePageInput, ownerId: string): Promi
 
   // If page has a parent, add it to parent's childIds
   if (page.parentId) {
-    const parent = await storage.getPage(page.parentId);
+    const parent = await getStorage().getPage(page.parentId);
     if (parent) {
-      await storage.updatePage(page.parentId, {
+      await getStorage().updatePage(page.parentId, {
         childIds: [...parent.childIds, page.id],
         updatedAt: timestamp,
         version: parent.version + 1,
@@ -51,11 +51,11 @@ export async function createPage(input: CreatePageInput, ownerId: string): Promi
     }
   }
 
-  return storage.createPage(page);
+  return getStorage().createPage(page);
 }
 
 export async function updatePage(id: string, input: UpdatePageInput): Promise<Page | null> {
-  const existing = await storage.getPage(id);
+  const existing = await getStorage().getPage(id);
   if (!existing) return null;
 
   const timestamp = now();
@@ -64,9 +64,9 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
   if (input.parentId !== undefined && input.parentId !== existing.parentId) {
     // Remove from old parent
     if (existing.parentId) {
-      const oldParent = await storage.getPage(existing.parentId);
+      const oldParent = await getStorage().getPage(existing.parentId);
       if (oldParent) {
-        await storage.updatePage(existing.parentId, {
+        await getStorage().updatePage(existing.parentId, {
           childIds: oldParent.childIds.filter((cid) => cid !== id),
           updatedAt: timestamp,
           version: oldParent.version + 1,
@@ -76,9 +76,9 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
 
     // Add to new parent
     if (input.parentId) {
-      const newParent = await storage.getPage(input.parentId);
+      const newParent = await getStorage().getPage(input.parentId);
       if (newParent) {
-        await storage.updatePage(input.parentId, {
+        await getStorage().updatePage(input.parentId, {
           childIds: [...newParent.childIds, id],
           updatedAt: timestamp,
           version: newParent.version + 1,
@@ -87,7 +87,7 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
     }
   }
 
-  return storage.updatePage(id, {
+  return getStorage().updatePage(id, {
     ...input,
     updatedAt: timestamp,
     version: existing.version + 1,
@@ -95,16 +95,16 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
 }
 
 export async function deletePage(id: string): Promise<boolean> {
-  const page = await storage.getPage(id);
+  const page = await getStorage().getPage(id);
   if (!page) return false;
 
   const timestamp = now();
 
   // Remove from parent's childIds
   if (page.parentId) {
-    const parent = await storage.getPage(page.parentId);
+    const parent = await getStorage().getPage(page.parentId);
     if (parent) {
-      await storage.updatePage(page.parentId, {
+      await getStorage().updatePage(page.parentId, {
         childIds: parent.childIds.filter((cid) => cid !== id),
         updatedAt: timestamp,
         version: parent.version + 1,
@@ -118,13 +118,13 @@ export async function deletePage(id: string): Promise<boolean> {
   }
 
   // Delete all blocks for this page
-  await storage.deleteBlocksByPage(id);
+  await getStorage().deleteBlocksByPage(id);
 
-  return storage.deletePage(id);
+  return getStorage().deletePage(id);
 }
 
 export async function getPagesByOwner(ownerId: string): Promise<Page[]> {
-  const allPages = await storage.getAllPages();
+  const allPages = await getStorage().getAllPages();
   return allPages.filter((page) => page.ownerId === ownerId);
 }
 
@@ -132,11 +132,11 @@ export async function transferPageOwnership(
   pageId: string,
   newOwnerId: string
 ): Promise<Page | null> {
-  const existing = await storage.getPage(pageId);
+  const existing = await getStorage().getPage(pageId);
   if (!existing) return null;
 
   const timestamp = now();
-  return storage.updatePage(pageId, {
+  return getStorage().updatePage(pageId, {
     ownerId: newOwnerId,
     updatedAt: timestamp,
     version: existing.version + 1,

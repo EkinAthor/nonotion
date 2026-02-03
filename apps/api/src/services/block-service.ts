@@ -1,17 +1,17 @@
 import type { Block, CreateBlockInput, UpdateBlockInput, ReorderBlocksInput } from '@nonotion/shared';
 import { generateBlockId } from '@nonotion/shared';
-import { storage } from '../storage/json-storage.js';
+import { getStorage } from '../storage/storage-factory.js';
 
 export async function getBlocksByPage(pageId: string): Promise<Block[]> {
-  return storage.getBlocksByPage(pageId);
+  return getStorage().getBlocksByPage(pageId);
 }
 
 export async function getBlock(id: string): Promise<Block | null> {
-  return storage.getBlock(id);
+  return getStorage().getBlock(id);
 }
 
 export async function createBlock(input: CreateBlockInput): Promise<Block> {
-  const existingBlocks = await storage.getBlocksByPage(input.pageId);
+  const existingBlocks = await getStorage().getBlocksByPage(input.pageId);
 
   // If order is not specified, add at the end
   const order = input.order ?? existingBlocks.length;
@@ -20,7 +20,7 @@ export async function createBlock(input: CreateBlockInput): Promise<Block> {
   if (order < existingBlocks.length) {
     for (const block of existingBlocks) {
       if (block.order >= order) {
-        await storage.updateBlock(block.id, {
+        await getStorage().updateBlock(block.id, {
           order: block.order + 1,
           version: block.version + 1,
         });
@@ -37,11 +37,11 @@ export async function createBlock(input: CreateBlockInput): Promise<Block> {
     version: 1,
   };
 
-  return storage.createBlock(block);
+  return getStorage().createBlock(block);
 }
 
 export async function updateBlock(id: string, input: UpdateBlockInput): Promise<Block | null> {
-  const existing = await storage.getBlock(id);
+  const existing = await getStorage().getBlock(id);
   if (!existing) return null;
 
   const updates: Partial<Block> & { version: number } = {
@@ -58,21 +58,21 @@ export async function updateBlock(id: string, input: UpdateBlockInput): Promise<
     updates.order = input.order;
   }
 
-  return storage.updateBlock(id, updates);
+  return getStorage().updateBlock(id, updates);
 }
 
 export async function deleteBlock(id: string): Promise<boolean> {
-  const block = await storage.getBlock(id);
+  const block = await getStorage().getBlock(id);
   if (!block) return false;
 
-  const success = await storage.deleteBlock(id);
+  const success = await getStorage().deleteBlock(id);
   if (!success) return false;
 
   // Reorder remaining blocks
-  const remainingBlocks = await storage.getBlocksByPage(block.pageId);
+  const remainingBlocks = await getStorage().getBlocksByPage(block.pageId);
   for (let i = 0; i < remainingBlocks.length; i++) {
     if (remainingBlocks[i].order !== i) {
-      await storage.updateBlock(remainingBlocks[i].id, {
+      await getStorage().updateBlock(remainingBlocks[i].id, {
         order: i,
         version: remainingBlocks[i].version + 1,
       });
@@ -83,7 +83,7 @@ export async function deleteBlock(id: string): Promise<boolean> {
 }
 
 export async function reorderBlocks(pageId: string, input: ReorderBlocksInput): Promise<Block[]> {
-  const existingBlocks = await storage.getBlocksByPage(pageId);
+  const existingBlocks = await getStorage().getBlocksByPage(pageId);
 
   // Validate that all block IDs exist and belong to this page
   const existingIds = new Set(existingBlocks.map((b) => b.id));
@@ -98,12 +98,12 @@ export async function reorderBlocks(pageId: string, input: ReorderBlocksInput): 
     const blockId = input.blockIds[i];
     const block = existingBlocks.find((b) => b.id === blockId);
     if (block && block.order !== i) {
-      await storage.updateBlock(blockId, {
+      await getStorage().updateBlock(blockId, {
         order: i,
         version: block.version + 1,
       });
     }
   }
 
-  return storage.getBlocksByPage(pageId);
+  return getStorage().getBlocksByPage(pageId);
 }

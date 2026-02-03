@@ -1,8 +1,8 @@
 # Nonotion Implementation Progress
 
-## Current Status: Phase 3 COMPLETE
+## Current Status: PostgreSQL Storage Added
 
-Last Updated: 2026-02-01
+Last Updated: 2026-02-02
 
 ---
 
@@ -127,6 +127,62 @@ Last Updated: 2026-02-01
 
 ---
 
+## PostgreSQL Storage (COMPLETE)
+
+### Phase PG.1: Interface & Dependencies
+- [x] Update UserStorageAdapter interface with missing methods
+- [x] Add pg and @types/pg dependencies
+- [x] Add npm scripts for PostgreSQL migrations
+
+### Phase PG.2: PostgreSQL Schema
+- [x] Create Drizzle schema for PostgreSQL (pg-schema.ts)
+- [x] Define users, pages, blocks, permissions tables
+- [x] Add indexes for frequently queried columns
+- [x] Use JSONB for flexible data (databaseSchema, properties, content)
+
+### Phase PG.3: PostgresStorage Implementation
+- [x] Create PostgresStorage class implementing StorageAdapter and UserStorageAdapter
+- [x] Implement all CRUD operations for pages, blocks, users, permissions
+- [x] Handle type conversions (Date/string, JSONB/TypeScript)
+
+### Phase PG.4: Storage Factory
+- [x] Create storage-factory.ts for backend selection
+- [x] Support json-sqlite (default) and postgres modes
+- [x] Add getStorage(), getUserStorage(), getStorageType() functions
+
+### Phase PG.5: Service Updates
+- [x] Update page-service.ts to use storage factory
+- [x] Update block-service.ts to use storage factory
+- [x] Update database-service.ts to use storage factory
+- [x] Update permission-service.ts to use storage factory
+- [x] Update user-service.ts to use storage factory
+- [x] Update auth-service.ts to use storage factory
+
+### Phase PG.6: Application Initialization
+- [x] Update index.ts to initialize storage factory first
+- [x] Add conditional migration logic (SQLite vs PostgreSQL)
+- [x] Add storageType to health check response
+
+### Phase PG.7: Drizzle Configuration
+- [x] Create drizzle.pg.config.ts
+- [x] Create migrate-pg.ts migration runner
+- [x] Add db:generate:pg, db:migrate:pg, db:studio:pg scripts
+
+### Phase PG.8: Docker Configuration
+- [x] Create docker-compose.postgres.yml for PostgreSQL development
+- [x] Update docker-compose.yml with STORAGE_TYPE and DATABASE_URL vars
+
+### Phase PG.9: Migration Script
+- [x] Create migrate-to-postgres.ts script
+- [x] Support migration from JSON/SQLite to PostgreSQL
+
+### Phase PG.10: Documentation
+- [x] Create .env.example with storage configuration
+- [x] Create docs/postgres-storage-implementation.md
+- [x] Update progress.txt
+
+---
+
 ## Phase 2: Multi-User Support (COMPLETE)
 
 ### Phase 2.1: Types & Schemas
@@ -208,26 +264,35 @@ pnpm --filter @nonotion/web dev  # http://localhost:5173
 ## Database Commands
 
 ```bash
-# Generate new migration after schema changes
-pnpm --filter @nonotion/api db:generate
+# SQLite commands (default mode)
+pnpm --filter @nonotion/api db:generate      # Generate migration
+pnpm --filter @nonotion/api db:migrate       # Apply migrations
+pnpm --filter @nonotion/api db:studio        # Open Drizzle Studio
 
-# Apply migrations (also runs automatically on API startup)
-pnpm --filter @nonotion/api db:migrate
+# PostgreSQL commands
+pnpm --filter @nonotion/api db:generate:pg   # Generate migration
+pnpm --filter @nonotion/api db:migrate:pg    # Apply migrations
+pnpm --filter @nonotion/api db:studio:pg     # Open Drizzle Studio
 
-# Open Drizzle Studio to inspect database
-pnpm --filter @nonotion/api db:studio
-
-# Migrate existing pages to multi-user (assigns to first admin)
-pnpm --filter @nonotion/api migrate:multiuser
+# Data migration
+pnpm --filter @nonotion/api migrate:multiuser    # Migrate to multi-user
+pnpm --filter @nonotion/api migrate:to-postgres  # Migrate to PostgreSQL
 ```
 
 ## Environment Variables
 
-Create `apps/api/.env` based on `.env.example`:
+Create `.env` based on `.env.example`:
 
-```
+```bash
+# Authentication
 JWT_SECRET=your-secure-secret-here
 ADMIN_EMAIL=admin@example.com
+
+# Storage backend: 'json-sqlite' (default) or 'postgres'
+STORAGE_TYPE=json-sqlite
+
+# PostgreSQL URL (required when STORAGE_TYPE=postgres)
+DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion
 ```
 
 ## Running Tests
@@ -244,10 +309,21 @@ pnpm --filter @nonotion/e2e test:e2e:ui
 
 ## Architecture Notes
 
+### Storage Backends
+
+Nonotion supports two storage backends:
+
+1. **json-sqlite** (default):
+   - Pages and blocks stored in JSON files (data/pages/, data/blocks/)
+   - Users and permissions stored in SQLite (data/nonotion.db)
+
+2. **postgres**:
+   - All data stored in PostgreSQL
+   - Compatible with standard PostgreSQL and Supabase
+   - Set `STORAGE_TYPE=postgres` and `DATABASE_URL` to enable
+
 ### Phase 2 Changes
 
-- Users and permissions stored in SQLite (data/nonotion.db)
-- Pages and blocks remain in JSON files (data/pages/, data/blocks/)
 - JWT tokens for authentication (stored in localStorage)
 - First registered user (or ADMIN_EMAIL) becomes admin
 - Pages have ownerId field for ownership tracking
@@ -257,8 +333,11 @@ pnpm --filter @nonotion/e2e test:e2e:ui
 
 | File | Purpose |
 |------|---------|
-| `apps/api/src/db/schema.ts` | Drizzle schema for users/permissions |
+| `apps/api/src/db/schema.ts` | Drizzle schema for SQLite |
+| `apps/api/src/db/pg-schema.ts` | Drizzle schema for PostgreSQL |
 | `apps/api/src/storage/sqlite-storage.ts` | SQLite storage implementation |
+| `apps/api/src/storage/postgres-storage.ts` | PostgreSQL storage implementation |
+| `apps/api/src/storage/storage-factory.ts` | Storage backend selection |
 | `apps/api/src/middleware/auth.ts` | JWT auth middleware |
 | `apps/api/src/services/auth-service.ts` | Authentication logic |
 | `apps/api/src/services/permission-service.ts` | Permission checking |
