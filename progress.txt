@@ -1,8 +1,8 @@
 # Nonotion Implementation Progress
 
-## Current Status: PostgreSQL Storage Added
+## Current Status: Text Formatting Added
 
-Last Updated: 2026-02-02
+Last Updated: 2026-02-03
 
 ---
 
@@ -180,6 +180,55 @@ Last Updated: 2026-02-02
 - [x] Create .env.example with storage configuration
 - [x] Create docs/postgres-storage-implementation.md
 - [x] Update progress.txt
+
+---
+
+## Text Formatting (COMPLETE)
+
+### Phase TF.1: Content Format Migration
+- [x] Install TipTap extensions (underline, link, color, text-style, highlight)
+- [x] Create html-utils.ts (stripOuterPTag, getPlainTextLength)
+- [x] Switch content serialization from getText() to getHTML() with strip
+- [x] Re-enable inline code in StarterKit
+- [x] Add Underline, Link, TextStyle, Color, Highlight extensions
+- [x] Update Enter key handler to preserve formatting in split blocks (DOMSerializer)
+- [x] Update Backspace handler to pass HTML content for merge
+- [x] Update external content sync to compare HTML
+- [x] Update BlockWrapper cursor position calc for HTML content
+- [x] Add ProseMirror CSS for inline code, links, and highlights
+
+### Phase TF.2: Floating Toolbar (BubbleMenu)
+- [x] Create formatting-colors.ts (10 text colors, 10 background colors)
+- [x] Create FormatToolbar.tsx with BubbleMenu
+- [x] Implement Bold, Italic, Underline, Inline Code buttons
+- [x] Implement Link button with URL input popover
+- [x] Implement text color picker dropdown
+- [x] Implement background color picker dropdown
+- [x] Add FormatToolbar to ParagraphEdit, HeadingEdit, Heading2Edit, Heading3Edit
+
+### Phase TF.3: Copy/Paste Markdown
+- [x] Create html-markdown.ts (htmlToInlineMarkdown, inlineMarkdownToHtml)
+- [x] Update multi-block copy handler to convert HTML to inline markdown for text/plain
+- [x] Add text/html clipboard format for rich paste
+- [x] Add getHtmlTag() helper to block registry
+- [x] Update paste handler to convert inline markdown to HTML
+- [x] Add clipboardTextSerializer for single-block copy with markdown notation
+
+### Phase TF.4: Cross-Block Formatting
+- [x] Create editorRegistry.ts (global Map of blockId -> Editor)
+- [x] Register/unregister editors in useBlockEditor hook
+- [x] Create CrossBlockFormatToolbar.tsx
+- [x] Mount CrossBlockFormatToolbar in BlockCanvas
+
+### Key New Files
+| File | Purpose |
+|------|---------|
+| `apps/web/src/lib/tiptap/html-utils.ts` | HTML utilities for TipTap content |
+| `apps/web/src/lib/formatting-colors.ts` | Color palette constants |
+| `apps/web/src/lib/html-markdown.ts` | HTML/Markdown converters |
+| `apps/web/src/components/blocks/FormatToolbar.tsx` | BubbleMenu formatting toolbar |
+| `apps/web/src/components/blocks/CrossBlockFormatToolbar.tsx` | Multi-block formatting toolbar |
+| `apps/web/src/stores/editorRegistry.ts` | Global editor instance registry |
 
 ---
 

@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Block, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
+import { getPlainTextLength } from '@/lib/tiptap/html-utils';
 import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
@@ -85,9 +86,9 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
 
-    // Calculate cursor position: previous block text length + 1 (for TipTap position offset)
+    // Calculate cursor position: previous block plain text length + 1 (for TipTap position offset)
     const prevText = prevBlock.content.text || '';
-    const cursorPosition = prevText.length + 1;
+    const cursorPosition = getPlainTextLength(prevText) + 1;
 
     // If current block has text, merge it to the previous block
     if (currentText) {

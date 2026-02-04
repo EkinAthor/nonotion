@@ -5,6 +5,7 @@ import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
+import FormatToolbar from '../FormatToolbar';
 
 interface HeadingEditProps {
   block: Block;
@@ -48,6 +49,7 @@ export default function HeadingEdit({ block, readOnly = false }: HeadingEditProp
   return (
     <div className="text-3xl font-bold text-notion-text relative">
       <EditorContent editor={editor} />
+      {editor && !readOnly && <FormatToolbar editor={editor} />}
       {!readOnly && slashMenu.isOpen && (
         <SlashCommandMenu
           query={slashMenu.query}

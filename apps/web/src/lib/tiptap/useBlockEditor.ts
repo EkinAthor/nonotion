@@ -2,25 +2,37 @@ import { useCallback, useRef, useEffect, useState } from 'react';
 import { useEditor, Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { DOMSerializer } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import TextStyle from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
 import type { Block, BlockContent, BlockType } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import type { PasteBlockData } from '@/contexts/BlockContext';
 import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/registry';
+import { stripOuterPTag } from './html-utils';
+import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
+import { inlineMarkdownToHtml } from '@/lib/html-markdown';
 
 function parseLineForBlockType(line: string): PasteBlockData {
   const { type, text } = parseMarkdownLine(line);
   const definition = getBlockDefinition(type);
 
+  // Convert any inline markdown in the text content to HTML
+  const htmlText = inlineMarkdownToHtml(text);
+
   // Use the default content structure from the registry, but with our text
   if (definition) {
-    const content = { ...definition.defaultContent, text };
+    const content = { ...definition.defaultContent, text: htmlText };
     return { type, content };
   }
 
   // Fallback to paragraph
-  return { type: 'paragraph', content: { text } };
+  return { type: 'paragraph', content: { text: htmlText } };
 }
 
 interface SlashMenuState {
@@ -154,7 +166,7 @@ export function useBlockEditor({
         }
 
         // Immediately save the cleaned content (without slash) to store
-        const cleanedText = currentEditor.getText();
+        const cleanedText = stripOuterPTag(currentEditor.getHTML());
         const content: BlockContent = headingLevel
           ? { text: cleanedText, level: headingLevel }
           : { text: cleanedText };
@@ -182,7 +194,21 @@ export function useBlockEditor({
               const clipboardData = event.clipboardData;
               if (!clipboardData) return false;
 
+              // Check for HTML content first (from rich text copy)
+              const htmlContent = clipboardData.getData('text/html');
               const text = clipboardData.getData('text/plain');
+
+              if (!text && !htmlContent) return false;
+
+              // If there's HTML content and it's a single-line paste, let TipTap handle it natively
+              // This preserves formatting when copying between blocks
+              if (htmlContent && text && !text.includes('\n')) {
+                // Check if it contains formatting marks we care about
+                if (/<(strong|em|u|code|a |span |mark)/.test(htmlContent)) {
+                  return false; // Let TipTap handle rich paste natively
+                }
+              }
+
               if (!text) return false;
 
               // Normalize line endings
@@ -212,6 +238,19 @@ export function useBlockEditor({
                     return true;
                   }
                 }
+
+                // Check for inline markdown in single-line paste
+                const inlineHtml = inlineMarkdownToHtml(lines[0]);
+                if (inlineHtml !== lines[0]) {
+                  // Contains inline markdown - insert as HTML
+                  const currentEditor = editorRef.current;
+                  if (currentEditor) {
+                    currentEditor.commands.insertContent(inlineHtml);
+                    event.preventDefault();
+                    return true;
+                  }
+                }
+
                 // Otherwise let TipTap handle single-line paste normally
                 return false;
               }
@@ -257,6 +296,58 @@ export function useBlockEditor({
               event.preventDefault();
               return true;
             },
+            // Convert formatting marks to inline markdown when copying as plain text
+            clipboardTextSerializer: (slice) => {
+              let text = '';
+              slice.content.forEach((node) => {
+                if (node.isText && node.text) {
+                  let chunk = node.text;
+                  // Apply marks in markdown notation
+                  for (const mark of node.marks) {
+                    switch (mark.type.name) {
+                      case 'bold':
+                        chunk = `**${chunk}**`;
+                        break;
+                      case 'italic':
+                        chunk = `*${chunk}*`;
+                        break;
+                      case 'code':
+                        chunk = `\`${chunk}\``;
+                        break;
+                      case 'link':
+                        chunk = `[${chunk}](${mark.attrs.href})`;
+                        break;
+                    }
+                  }
+                  text += chunk;
+                } else if (node.isBlock) {
+                  // Recurse into block nodes
+                  node.content.forEach((child) => {
+                    if (child.isText && child.text) {
+                      let chunk = child.text;
+                      for (const mark of child.marks) {
+                        switch (mark.type.name) {
+                          case 'bold':
+                            chunk = `**${chunk}**`;
+                            break;
+                          case 'italic':
+                            chunk = `*${chunk}*`;
+                            break;
+                          case 'code':
+                            chunk = `\`${chunk}\``;
+                            break;
+                          case 'link':
+                            chunk = `[${chunk}](${mark.attrs.href})`;
+                            break;
+                        }
+                      }
+                      text += chunk;
+                    }
+                  });
+                }
+              });
+              return text;
+            },
           },
         }),
       ];
@@ -274,7 +365,7 @@ export function useBlockEditor({
           if (from !== 1) return false;
           if (!mergeCallbackRef.current) return false;
 
-          const text = editor.getText();
+          const text = stripOuterPTag(editor.getHTML());
           mergeCallbackRef.current(text);
           return true;
         },
@@ -288,18 +379,29 @@ export function useBlockEditor({
             return false;
           }
 
-          // Get text after cursor
+          // Get the HTML fragment after cursor
           const { from } = editor.state.selection;
           const docEnd = editor.state.doc.content.size - 1;
-          const textAfter = from < docEnd ? editor.state.doc.textBetween(from, docEnd) : '';
+
+          let htmlAfter = '';
+          if (from < docEnd) {
+            // Extract the content after cursor as a slice
+            const slice = editor.state.doc.slice(from, docEnd);
+            // Serialize the fragment to HTML
+            const serializer = DOMSerializer.fromSchema(editor.schema);
+            const fragment = serializer.serializeFragment(slice.content);
+            const temp = document.createElement('div');
+            temp.appendChild(fragment);
+            htmlAfter = temp.innerHTML;
+          }
 
           // Delete text after cursor from current block
-          if (textAfter) {
+          if (from < docEnd) {
             editor.commands.deleteRange({ from, to: docEnd });
           }
 
-          // Call callback to create new block with the text
-          onCreateBlockBelow(textAfter);
+          // Call callback to create new block with the HTML content
+          onCreateBlockBelow(htmlAfter);
           return true;
         },
         'Shift-Enter': () => {
@@ -411,21 +513,34 @@ export function useBlockEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable most features, keep only basic text
+        // Disable block-level features, keep inline formatting
         heading: false,
         bulletList: false,
         orderedList: false,
         listItem: false,
         blockquote: false,
         codeBlock: false,
-        code: false,
         horizontalRule: false,
         dropcursor: false,
         gapcursor: false,
+        // Keep code (inline) enabled - removed code: false
       }),
       Placeholder.configure({
         placeholder,
         emptyEditorClass: 'is-editor-empty',
+      }),
+      Underline,
+      Link.configure({
+        openOnClick: true,
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
+      }),
+      TextStyle,
+      Color,
+      Highlight.configure({
+        multicolor: true,
       }),
       BlockKeyboardExtension,
       ClipboardExtension,
@@ -433,10 +548,11 @@ export function useBlockEditor({
     content: block.content.text,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
-      const text = editor.getText();
-      saveContent(text);
+      const html = stripOuterPTag(editor.getHTML());
+      saveContent(html);
 
-      // Check for slash command
+      // Check for slash command using plain text
+      const text = editor.getText();
       const { from } = editor.state.selection;
 
       if (slashStartPosRef.current !== null) {
@@ -478,16 +594,26 @@ export function useBlockEditor({
     editorRef.current = editor;
   }, [editor]);
 
+  // Register/unregister editor in the global registry
+  useEffect(() => {
+    if (editor) {
+      registerEditor(block.id, editor);
+      return () => {
+        unregisterEditor(block.id);
+      };
+    }
+  }, [editor, block.id]);
+
   // Sync editor content when block content changes externally (e.g., from merge operation)
   useEffect(() => {
     if (!editor) return;
 
     const blockText = block.content.text;
-    const editorText = editor.getText();
+    const editorHtml = stripOuterPTag(editor.getHTML());
 
     // If block content changed and it's different from what the editor has,
     // this is an external update - sync the editor
-    if (blockText !== lastKnownContentRef.current && blockText !== editorText) {
+    if (blockText !== lastKnownContentRef.current && blockText !== editorHtml) {
       // Cancel any pending save since we're about to overwrite with external content
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);

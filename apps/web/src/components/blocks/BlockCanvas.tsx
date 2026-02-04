@@ -18,7 +18,9 @@ import type { Block } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import BlockWrapper from './BlockWrapper';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
-import { getMarkdownPrefix } from './registry';
+import CrossBlockFormatToolbar from './CrossBlockFormatToolbar';
+import { getMarkdownPrefix, getHtmlTag } from './registry';
+import { htmlToInlineMarkdown } from '@/lib/html-markdown';
 
 interface BlockCanvasProps {
   pageId: string;
@@ -141,13 +143,20 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
 
       if (selectedBlocks.length === 0) return;
 
-      // Build copy text with markdown prefixes
+      // Build copy text with markdown prefixes (convert HTML to inline markdown)
       const copyText = selectedBlocks.map((block) => {
         const prefix = getMarkdownPrefix(block.type);
-        return prefix + block.content.text;
+        return prefix + htmlToInlineMarkdown(block.content.text);
       }).join('\n');
 
+      // Also build HTML version for rich paste
+      const copyHtml = selectedBlocks.map((block) => {
+        const tag = getHtmlTag(block.type);
+        return `<${tag}>${block.content.text}</${tag}>`;
+      }).join('');
+
       event.clipboardData?.setData('text/plain', copyText);
+      event.clipboardData?.setData('text/html', copyHtml);
       event.preventDefault();
     };
 
@@ -282,8 +291,9 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
   return (
     <div
       ref={containerRef}
-      className="min-h-[200px] pb-32"
+      className="min-h-[200px] pb-32 relative"
     >
+      <CrossBlockFormatToolbar containerRef={containerRef} />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

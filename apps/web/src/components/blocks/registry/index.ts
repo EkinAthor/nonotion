@@ -72,6 +72,18 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
   },
 };
 
+/** Get the HTML tag name for a block type (for copy operations) */
+export function getHtmlTag(type: BlockType): string {
+  switch (type) {
+    case 'heading': return 'h1';
+    case 'heading2': return 'h2';
+    case 'heading3': return 'h3';
+    case 'paragraph':
+    default:
+      return 'p';
+  }
+}
+
 export function getBlockDefinition(type: BlockType): BlockDefinition | undefined {
   return blockRegistry[type];
 }

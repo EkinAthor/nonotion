@@ -26,7 +26,8 @@
     },
     "blocks": {
       "types": ["heading", "heading2", "heading3", "paragraph"],
-      "formatting": false,
+      "formatting": true,
+      "formattingFeatures": ["bold", "italic", "underline", "inline-code", "links", "text-color", "background-color"],
       "dragAndDrop": true,
       "slashCommands": true,
       "enterCreatesNewBlock": true,
@@ -159,7 +160,7 @@
       "Toggle",
       "Quote",
       "Code block",
-      "Rich text formatting (bold, italic, etc.)",
+      "Rich text formatting (bold, italic, etc.) - IMPLEMENTED",
       "Block nesting"
     ],
     "collaboration": [

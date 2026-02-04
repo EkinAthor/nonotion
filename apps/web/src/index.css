@@ -39,6 +39,43 @@ body {
   pointer-events: none;
 }
 
+/* Inline code */
+.ProseMirror code {
+  background: rgba(135, 131, 120, 0.15);
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace;
+  font-size: 0.9em;
+  color: #eb5757;
+}
+
+/* Links */
+.ProseMirror a {
+  color: #2383e2;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.ProseMirror a:hover {
+  color: #1a6bc4;
+}
+
+/* Highlight / background color */
+.ProseMirror mark {
+  border-radius: 3px;
+  padding: 0.1em 0;
+}
+
+/* BubbleMenu / Tippy tooltip - allow color picker dropdowns to overflow */
+.tippy-box {
+  overflow: visible !important;
+}
+
+.tippy-content {
+  overflow: visible !important;
+}
+
 /* Selection styles */
 ::selection {
   background: rgba(35, 131, 226, 0.28);

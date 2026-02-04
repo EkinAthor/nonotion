@@ -5,6 +5,7 @@ import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
+import FormatToolbar from '../FormatToolbar';
 
 interface ParagraphEditProps {
   block: Block;
@@ -47,6 +48,7 @@ export default function ParagraphEdit({ block, readOnly = false }: ParagraphEdit
   return (
     <div className="text-base text-notion-text leading-relaxed relative">
       <EditorContent editor={editor} />
+      {editor && !readOnly && <FormatToolbar editor={editor} />}
       {!readOnly && slashMenu.isOpen && (
         <SlashCommandMenu
           query={slashMenu.query}
