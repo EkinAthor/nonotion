@@ -59,10 +59,22 @@ export const blocks = pgTable(
   'blocks',
   {
     id: text('id').primaryKey(), // blk_xxx
-    type: text('type', { enum: ['heading', 'heading2', 'heading3', 'paragraph'] }).notNull(),
+    type: text('type', {
+      enum: [
+        'heading',
+        'heading2',
+        'heading3',
+        'paragraph',
+        'bullet_list',
+        'numbered_list',
+        'checklist',
+        'code_block',
+        'image',
+      ],
+    }).notNull(),
     pageId: text('page_id').notNull(),
     order: integer('order').notNull(),
-    content: jsonb('content').notNull(), // { text: "...", level?: 1 }
+    content: jsonb('content').notNull(), // { text: "...", level?: 1 } or other content types
     version: integer('version').notNull().default(1),
   },
   (table) => [

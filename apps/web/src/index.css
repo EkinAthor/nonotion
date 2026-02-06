@@ -99,3 +99,83 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #b3b3b3;
 }
+
+/* Prism.js syntax highlighting theme (adapted for Notion-like styling) */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #37352f;
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  line-height: 1.5;
+  tab-size: 2;
+  hyphens: none;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #37352f;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #d73a49;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #22863a;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #d63384;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #6f42c1;
+}
+
+.token.function,
+.token.class-name {
+  color: #005cc5;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e36209;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}

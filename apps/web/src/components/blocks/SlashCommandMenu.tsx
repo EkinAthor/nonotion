@@ -143,6 +143,16 @@ function getBlockDescription(option: BlockDefinition): string {
       return 'Small section heading';
     case 'paragraph':
       return 'Plain text';
+    case 'bullet_list':
+      return 'Simple bulleted list';
+    case 'numbered_list':
+      return 'Numbered list';
+    case 'checklist':
+      return 'Track tasks with a to-do list';
+    case 'code_block':
+      return 'Capture code snippet';
+    case 'image':
+      return 'Upload or embed an image';
     default:
       return '';
   }

@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import type { Block } from '@nonotion/shared';
+import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import BlockWrapper from './BlockWrapper';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
@@ -146,13 +147,13 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
       // Build copy text with markdown prefixes (convert HTML to inline markdown)
       const copyText = selectedBlocks.map((block) => {
         const prefix = getMarkdownPrefix(block.type);
-        return prefix + htmlToInlineMarkdown(block.content.text);
+        return prefix + htmlToInlineMarkdown(getBlockText(block.content));
       }).join('\n');
 
       // Also build HTML version for rich paste
       const copyHtml = selectedBlocks.map((block) => {
         const tag = getHtmlTag(block.type);
-        return `<${tag}>${block.content.text}</${tag}>`;
+        return `<${tag}>${getBlockText(block.content)}</${tag}>`;
       }).join('');
 
       event.clipboardData?.setData('text/plain', copyText);

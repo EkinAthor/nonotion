@@ -11,6 +11,7 @@ import TextStyle from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import type { Block, BlockContent, BlockType } from '@nonotion/shared';
+import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import type { PasteBlockData } from '@/contexts/BlockContext';
 import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/registry';
@@ -19,7 +20,7 @@ import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { inlineMarkdownToHtml } from '@/lib/html-markdown';
 
 function parseLineForBlockType(line: string): PasteBlockData {
-  const { type, text } = parseMarkdownLine(line);
+  const { type, text, checked } = parseMarkdownLine(line);
   const definition = getBlockDefinition(type);
 
   // Convert any inline markdown in the text content to HTML
@@ -28,6 +29,10 @@ function parseLineForBlockType(line: string): PasteBlockData {
   // Use the default content structure from the registry, but with our text
   if (definition) {
     const content = { ...definition.defaultContent, text: htmlText };
+    // Handle checklist checked state from markdown
+    if (type === 'checklist' && checked !== undefined) {
+      (content as { text: string; checked: boolean }).checked = checked;
+    }
     return { type, content };
   }
 
@@ -52,6 +57,8 @@ interface UseBlockEditorOptions {
   onFocusNextBlock?: () => void;
   onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
   onDeleteAndMergeToPrevious?: (currentText: string) => Promise<void>;
+  onIndent?: () => Promise<void>;
+  onOutdent?: () => Promise<void>;
 }
 
 interface UseBlockEditorResult {
@@ -72,6 +79,8 @@ export function useBlockEditor({
   onFocusNextBlock,
   onPasteMultipleBlocks,
   onDeleteAndMergeToPrevious,
+  onIndent,
+  onOutdent,
 }: UseBlockEditorOptions): UseBlockEditorResult {
   const { updateBlock } = useBlockStore();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -128,8 +137,10 @@ export function useBlockEditor({
   const pasteCallbackRef = useRef(onPasteMultipleBlocks);
   const changeBlockTypeRef = useRef(onChangeBlockType);
   const mergeCallbackRef = useRef(onDeleteAndMergeToPrevious);
+  const indentCallbackRef = useRef(onIndent);
+  const outdentCallbackRef = useRef(onOutdent);
   // Track the last content we know about to detect external changes
-  const lastKnownContentRef = useRef(block.content.text);
+  const lastKnownContentRef = useRef(getBlockText(block.content));
   // Flag to skip saving during external content sync
   const isSyncingExternalContentRef = useRef(false);
 
@@ -145,6 +156,14 @@ export function useBlockEditor({
   useEffect(() => {
     mergeCallbackRef.current = onDeleteAndMergeToPrevious;
   }, [onDeleteAndMergeToPrevious]);
+
+  useEffect(() => {
+    indentCallbackRef.current = onIndent;
+  }, [onIndent]);
+
+  useEffect(() => {
+    outdentCallbackRef.current = onOutdent;
+  }, [onOutdent]);
 
   const closeSlashMenu = useCallback(() => {
     setSlashMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
@@ -231,7 +250,7 @@ export function useBlockEditor({
                     // Don't insert text into editor - pass it to changeBlockType instead
                     // The editor will be replaced when block type changes
                     if (changeBlockTypeRef.current) {
-                      changeBlockTypeRef.current(firstLineData.type, firstLineData.content.text);
+                      changeBlockTypeRef.current(firstLineData.type, getBlockText(firstLineData.content));
                     }
 
                     event.preventDefault();
@@ -275,7 +294,7 @@ export function useBlockEditor({
                 // Don't insert text into editor - pass it to changeBlockType instead
                 // The editor will be replaced when block type changes
                 if (changeBlockTypeRef.current) {
-                  changeBlockTypeRef.current(firstLineData.type, firstLineData.content.text);
+                  changeBlockTypeRef.current(firstLineData.type, getBlockText(firstLineData.content));
                 }
               } else {
                 // Insert first line as-is at cursor position
@@ -506,6 +525,22 @@ export function useBlockEditor({
           }
           return false;
         },
+        Tab: () => {
+          // Handle indent for list blocks
+          if (indentCallbackRef.current) {
+            indentCallbackRef.current();
+            return true;
+          }
+          return false;
+        },
+        'Shift-Tab': () => {
+          // Handle outdent for list blocks
+          if (outdentCallbackRef.current) {
+            outdentCallbackRef.current();
+            return true;
+          }
+          return false;
+        },
       };
     },
   });
@@ -545,7 +580,7 @@ export function useBlockEditor({
       BlockKeyboardExtension,
       ClipboardExtension,
     ],
-    content: block.content.text,
+    content: getBlockText(block.content),
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       const html = stripOuterPTag(editor.getHTML());
@@ -605,10 +640,10 @@ export function useBlockEditor({
   }, [editor, block.id]);
 
   // Sync editor content when block content changes externally (e.g., from merge operation)
+  const blockText = getBlockText(block.content);
   useEffect(() => {
     if (!editor) return;
 
-    const blockText = block.content.text;
     const editorHtml = stripOuterPTag(editor.getHTML());
 
     // If block content changed and it's different from what the editor has,
@@ -633,7 +668,7 @@ export function useBlockEditor({
 
     // Always keep track of the latest block content
     lastKnownContentRef.current = blockText;
-  }, [editor, block.content.text]);
+  }, [editor, blockText]);
 
   return { editor, slashMenu, closeSlashMenu, selectSlashCommand };
 }

@@ -228,19 +228,55 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       throw new Error(`Block ${id} not found`);
     }
 
+    // Get text and indent from existing content (handle different content structures)
+    const existingContent = existingBlock.content;
+    let existingText = '';
+    let existingIndent: number | undefined;
+    if ('text' in existingContent) {
+      existingText = existingContent.text;
+    } else if ('code' in existingContent) {
+      existingText = existingContent.code;
+    }
+    if ('indent' in existingContent && typeof existingContent.indent === 'number') {
+      existingIndent = existingContent.indent;
+    }
+
     // Use newText if provided, otherwise preserve existing text
-    const text = newText !== undefined ? newText : existingBlock.content.text;
+    const text = newText !== undefined ? newText : existingText;
 
     // Create content for new type
     let content: BlockContent;
-    if (newType === 'heading') {
-      content = { text, level: 1 };
-    } else if (newType === 'heading2') {
-      content = { text, level: 2 };
-    } else if (newType === 'heading3') {
-      content = { text, level: 3 };
-    } else {
-      content = { text };
+    switch (newType) {
+      case 'heading':
+        content = { text, level: 1 };
+        break;
+      case 'heading2':
+        content = { text, level: 2 };
+        break;
+      case 'heading3':
+        content = { text, level: 3 };
+        break;
+      case 'bullet_list':
+      case 'numbered_list':
+        // Preserve indent when converting between list types
+        content = existingIndent !== undefined ? { text, indent: existingIndent } : { text };
+        break;
+      case 'checklist':
+        // Preserve indent when converting between list types
+        content = existingIndent !== undefined
+          ? { text, checked: false, indent: existingIndent }
+          : { text, checked: false };
+        break;
+      case 'code_block':
+        content = { code: text, language: '' };
+        break;
+      case 'image':
+        content = { url: '', alt: '', caption: '' };
+        break;
+      case 'paragraph':
+      default:
+        content = { text };
+        break;
     }
 
     // Update block with new type and content

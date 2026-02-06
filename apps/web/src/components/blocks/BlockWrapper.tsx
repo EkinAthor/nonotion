@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Block, BlockType } from '@nonotion/shared';
+import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
 import { getPlainTextLength } from '@/lib/tiptap/html-utils';
@@ -9,6 +10,11 @@ import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
 import ParagraphEdit from './registry/ParagraphEdit';
+import BulletListEdit from './registry/BulletListEdit';
+import NumberedListEdit from './registry/NumberedListEdit';
+import ChecklistEdit from './registry/ChecklistEdit';
+import CodeBlockEdit from './registry/CodeBlockEdit';
+import ImageEdit from './registry/ImageEdit';
 import BlockContextMenu from './BlockContextMenu';
 
 interface BlockWrapperProps {
@@ -87,11 +93,12 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     if (!prevBlock) return;
 
     // Calculate cursor position: previous block plain text length + 1 (for TipTap position offset)
-    const prevText = prevBlock.content.text || '';
+    const prevText = getBlockText(prevBlock.content);
     const cursorPosition = getPlainTextLength(prevText) + 1;
 
     // If current block has text, merge it to the previous block
-    if (currentText) {
+    // Only merge to text-based blocks
+    if (currentText && 'text' in prevBlock.content) {
       const mergedText = prevText + currentText;
       await updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
     }
@@ -139,6 +146,16 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
         return <Heading3Edit block={block} readOnly={readOnly} />;
       case 'paragraph':
         return <ParagraphEdit block={block} readOnly={readOnly} />;
+      case 'bullet_list':
+        return <BulletListEdit block={block} readOnly={readOnly} />;
+      case 'numbered_list':
+        return <NumberedListEdit block={block} readOnly={readOnly} />;
+      case 'checklist':
+        return <ChecklistEdit block={block} readOnly={readOnly} />;
+      case 'code_block':
+        return <CodeBlockEdit block={block} readOnly={readOnly} />;
+      case 'image':
+        return <ImageEdit block={block} readOnly={readOnly} />;
       default:
         return <div className="text-red-500">Unknown block type: {block.type}</div>;
     }
