@@ -77,7 +77,7 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
       }
       // If empty at root level, convert to paragraph
       if (!currentText.trim()) {
-        await changeBlockType('paragraph');
+        await changeBlockType('paragraph', currentText);
         return;
       }
       await deleteAndMergeToPrevious(currentText);

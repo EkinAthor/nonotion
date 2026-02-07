@@ -91,6 +91,12 @@ export function useBlockEditor({
   });
   const slashStartPosRef = useRef<number | null>(null);
   const slashMenuOpenRef = useRef(false);
+  const blockRef = useRef(block);
+
+  // Keep ref in sync with block prop
+  useEffect(() => {
+    blockRef.current = block;
+  }, [block]);
 
   // Keep ref in sync with state for use in extension closure
   useEffect(() => {
@@ -114,14 +120,15 @@ export function useBlockEditor({
 
       // Debounce save by 500ms
       debounceRef.current = setTimeout(async () => {
+        const currentBlock = blockRef.current;
         const content: BlockContent = headingLevel
-          ? { text, level: headingLevel }
-          : { text };
+          ? { ...currentBlock.content, text, level: headingLevel }
+          : { ...currentBlock.content, text };
 
-        await updateBlock(block.id, { content });
+        await updateBlock(currentBlock.id, { content });
       }, 500);
     },
-    [block.id, headingLevel, updateBlock]
+    [headingLevel, updateBlock]
   );
 
   // Clean up debounce on unmount
@@ -143,6 +150,10 @@ export function useBlockEditor({
   const lastKnownContentRef = useRef(getBlockText(block.content));
   // Flag to skip saving during external content sync
   const isSyncingExternalContentRef = useRef(false);
+  // Refs for callbacks - handling things like preserving position of block indent
+  const createCallbackRef = useRef(onCreateBlockBelow);
+  const focusPrevCallbackRef = useRef(onFocusPreviousBlock);
+  const focusNextCallbackRef = useRef(onFocusNextBlock);
 
   // Keep callback refs in sync
   useEffect(() => {
@@ -165,6 +176,18 @@ export function useBlockEditor({
     outdentCallbackRef.current = onOutdent;
   }, [onOutdent]);
 
+  useEffect(() => {
+    createCallbackRef.current = onCreateBlockBelow;
+  }, [onCreateBlockBelow]);
+
+  useEffect(() => {
+    focusPrevCallbackRef.current = onFocusPreviousBlock;
+  }, [onFocusPreviousBlock]);
+
+  useEffect(() => {
+    focusNextCallbackRef.current = onFocusNextBlock;
+  }, [onFocusNextBlock]);
+
   const closeSlashMenu = useCallback(() => {
     setSlashMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
     slashStartPosRef.current = null;
@@ -186,10 +209,11 @@ export function useBlockEditor({
 
         // Immediately save the cleaned content (without slash) to store
         const cleanedText = stripOuterPTag(currentEditor.getHTML());
+        const currentBlock = blockRef.current;
         const content: BlockContent = headingLevel
-          ? { text: cleanedText, level: headingLevel }
-          : { text: cleanedText };
-        await updateBlock(block.id, { content });
+          ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
+          : { ...currentBlock.content, text: cleanedText };
+        await updateBlock(currentBlock.id, { content });
       }
       closeSlashMenu();
 
@@ -394,7 +418,7 @@ export function useBlockEditor({
             return true;
           }
 
-          if (!onCreateBlockBelow) {
+          if (!createCallbackRef.current) {
             return false;
           }
 
@@ -420,7 +444,7 @@ export function useBlockEditor({
           }
 
           // Call callback to create new block with the HTML content
-          onCreateBlockBelow(htmlAfter);
+          createCallbackRef.current?.(htmlAfter);
           return true;
         },
         'Shift-Enter': () => {
@@ -440,7 +464,7 @@ export function useBlockEditor({
             return false;
           }
 
-          if (!onFocusPreviousBlock) {
+          if (!focusPrevCallbackRef.current) {
             return false;
           }
 
@@ -453,7 +477,7 @@ export function useBlockEditor({
           // Position 1 is start of text, so cursor position - 1 = text index
           const textIndex = from - 1;
           if (firstNewlineIndex === -1 || textIndex <= firstNewlineIndex) {
-            onFocusPreviousBlock();
+            focusPrevCallbackRef?.current();
             return true;
           }
 
@@ -465,7 +489,7 @@ export function useBlockEditor({
             return false;
           }
 
-          if (!onFocusNextBlock) {
+          if (!focusNextCallbackRef.current) {
             return false;
           }
 
@@ -478,7 +502,7 @@ export function useBlockEditor({
           // Position 1 is start of text, so cursor position - 1 = text index
           const textIndex = from - 1;
           if (lastNewlineIndex === -1 || textIndex > lastNewlineIndex) {
-            onFocusNextBlock();
+            focusNextCallbackRef?.current();
             return true;
           }
 

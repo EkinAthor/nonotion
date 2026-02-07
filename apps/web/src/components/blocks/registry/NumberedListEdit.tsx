@@ -103,7 +103,7 @@ export default function NumberedListEdit({ block, readOnly = false }: NumberedLi
       }
       // If empty at root level, convert to paragraph
       if (!currentText.trim()) {
-        await changeBlockType('paragraph');
+        await changeBlockType('paragraph', currentText);
         return;
       }
       await deleteAndMergeToPrevious(currentText);

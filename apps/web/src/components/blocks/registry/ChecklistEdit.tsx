@@ -84,7 +84,7 @@ export default function ChecklistEdit({ block, readOnly = false }: ChecklistEdit
       }
       // If empty at root level, convert to paragraph
       if (!currentText.trim()) {
-        await changeBlockType('paragraph');
+        await changeBlockType('paragraph', currentText);
         return;
       }
       await deleteAndMergeToPrevious(currentText);
