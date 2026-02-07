@@ -32,8 +32,16 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   **Build Command**: `pnpm build --filter @nonotion/api...`
     *   **Output Directory**: `apps/api/dist`
     *   **Install Command**: `pnpm install`
-4.  **Environment Variables**:
-    Add the following variables in the API project settings:
+4.  **Routing Configuration**:
+    Create a file at `apps/api/vercel.json` to handle the Serverless Function routing:
+    ```json
+    {
+      "rewrites": [
+        { "source": "/(.*)", "destination": "src/index.ts" }
+      ]
+    }
+    ```
+5.  **Environment Variables**:
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
     *   `JWT_SECRET`: A secure random string.
