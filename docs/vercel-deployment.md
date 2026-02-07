@@ -28,20 +28,21 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 3.  **Project Settings**:
     *   **Project Name**: `nonotion-api`
     *   **Framework Preset**: `Other`
-    *   **Root Directory**: Keep as `.` (Repository Root) — **CRITICAL** for workspace support.
-    *   **Build Command**: `pnpm build --filter @nonotion/api...`
-    *   **Output Directory**: `apps/api/dist`
+    *   **Root Directory**: `apps/api`
+    *   **Build Command**: `pnpm --filter @nonotion/api... build`
+    *   **Output Directory**: `dist`
     *   **Install Command**: `pnpm install`
 4.  **Routing Configuration**:
-    Create a file at `apps/api/vercel.json` to handle the Serverless Function routing:
+    Ensure the file at `apps/api/vercel.json` exists with this content:
     ```json
     {
       "rewrites": [
-        { "source": "/(.*)", "destination": "src/index.ts" }
+        { "source": "/(.*)", "destination": "dist/index.js" }
       ]
     }
     ```
 5.  **Environment Variables**:
+    Add the following variables in the API project settings:
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
     *   `JWT_SECRET`: A secure random string.
@@ -62,9 +63,9 @@ The Web client is a Vite/React application.
 3.  **Project Settings**:
     *   **Project Name**: `nonotion-web`
     *   **Framework Preset**: `Vite`
-    *   **Root Directory**: Keep as `.` (Repository Root)
-    *   **Build Command**: `pnpm build --filter @nonotion/web...`
-    *   **Output Directory**: `apps/web/dist`
+    *   **Root Directory**: `apps/web`
+    *   **Build Command**: `pnpm --filter @nonotion/web... build`
+    *   **Output Directory**: `dist`
 4.  **Environment Variables**:
     *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app`).
 
@@ -72,9 +73,8 @@ The Web client is a Vite/React application.
 
 ## 4. Troubleshooting
 
-*   **Build Failures (Module not found)**: Ensure **Root Directory** is set to the repository root (not `apps/api`) so Vercel can access the `@nonotion/shared` package in the workspace.
-*   **CORS Issues**: Ensure `CORS_ORIGINS` in the API project exactly matches the URL of your Web project (including protocol, no trailing slash).
-*   **Database Connection**: If the API fails to start, verify the `DATABASE_URL` is correct and Supabase isn't blocking the connection.
+*   **Build Failures (Missing Shared Package)**: Ensure you are using the `pnpm --filter ...` command. Vercel automatically detects the monorepo root and includes necessary workspace files even when the **Root Directory** is set to a subfolder.
+*   **Missing Output Directory**: Double check that the **Root Directory** matches the **Output Directory** path (if Root is `apps/api`, then Output should be `dist`).
 
 ---
 
