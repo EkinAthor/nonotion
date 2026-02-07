@@ -91,6 +91,13 @@ fastify.get('/health', async () => {
 // Start server
 const port = parseInt(process.env.PORT || '3001', 10);
 
+// Export fastify for Vercel
+export default async (req: any, res: any) => {
+  await fastify.ready();
+  fastify.server.emit('request', req, res);
+};
+
+// Start server only if not in serverless environment
 const start = async () => {
   try {
     await fastify.listen({ port, host: '0.0.0.0' });
@@ -101,4 +108,6 @@ const start = async () => {
   }
 };
 
-start();
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  start();
+}
