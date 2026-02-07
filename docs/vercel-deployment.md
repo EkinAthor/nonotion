@@ -26,13 +26,14 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 1.  **Create a New Project** in Vercel.
 2.  **Connect your Repository**.
 3.  **Project Settings**:
-    *   **Project Name**: `nonotion-api` (or similar)
+    *   **Project Name**: `nonotion-api`
     *   **Framework Preset**: `Other`
-    *   **Root Directory**: `apps/api`
-    *   **Build Command**: `pnpm build`
-    *   **Output Directory**: `dist` (if applicable) or leave default.
+    *   **Root Directory**: Keep as `.` (Repository Root) — **CRITICAL** for workspace support.
+    *   **Build Command**: `pnpm build --filter @nonotion/api...`
+    *   **Output Directory**: `apps/api/dist`
+    *   **Install Command**: `pnpm install`
 4.  **Environment Variables**:
-    Add the following variables in Vercel:
+    Add the following variables in the API project settings:
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
     *   `JWT_SECRET`: A secure random string.
@@ -53,7 +54,9 @@ The Web client is a Vite/React application.
 3.  **Project Settings**:
     *   **Project Name**: `nonotion-web`
     *   **Framework Preset**: `Vite`
-    *   **Root Directory**: `apps/web`
+    *   **Root Directory**: Keep as `.` (Repository Root)
+    *   **Build Command**: `pnpm build --filter @nonotion/web...`
+    *   **Output Directory**: `apps/web/dist`
 4.  **Environment Variables**:
     *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app`).
 
@@ -61,9 +64,9 @@ The Web client is a Vite/React application.
 
 ## 4. Troubleshooting
 
+*   **Build Failures (Module not found)**: Ensure **Root Directory** is set to the repository root (not `apps/api`) so Vercel can access the `@nonotion/shared` package in the workspace.
 *   **CORS Issues**: Ensure `CORS_ORIGINS` in the API project exactly matches the URL of your Web project (including protocol, no trailing slash).
 *   **Database Connection**: If the API fails to start, verify the `DATABASE_URL` is correct and Supabase isn't blocking the connection.
-*   **Monorepo Support**: Vercel handles monorepos well. Ensure the "Root Directory" setting is correctly pointed to either `apps/api` or `apps/web` for each respective project.
 
 ---
 

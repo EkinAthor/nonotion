@@ -67,7 +67,7 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
       const oldParent = await getStorage().getPage(existing.parentId);
       if (oldParent) {
         await getStorage().updatePage(existing.parentId, {
-          childIds: oldParent.childIds.filter((cid) => cid !== id),
+          childIds: oldParent.childIds.filter((cid: string) => cid !== id),
           updatedAt: timestamp,
           version: oldParent.version + 1,
         });
@@ -105,7 +105,7 @@ export async function deletePage(id: string): Promise<boolean> {
     const parent = await getStorage().getPage(page.parentId);
     if (parent) {
       await getStorage().updatePage(page.parentId, {
-        childIds: parent.childIds.filter((cid) => cid !== id),
+        childIds: parent.childIds.filter((cid: string) => cid !== id),
         updatedAt: timestamp,
         version: parent.version + 1,
       });

@@ -6,6 +6,7 @@ import type {
   PropertyValue,
   UpdateSchemaInput,
   AddPropertyInput,
+  SelectColor,
 } from '@nonotion/shared';
 import { generatePropertyId, generateOptionId, now } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
@@ -117,7 +118,7 @@ export async function updateSchema(
   // Reorder properties
   if (input.reorderProperties?.length) {
     const orderMap = new Map(
-      input.reorderProperties.map((id, idx) => [id, idx])
+      input.reorderProperties.map((id: string, idx: number) => [id, idx])
     );
     properties = properties.map((p) => ({
       ...p,
@@ -197,7 +198,7 @@ function createPropertyDefinition(
   if (input.type === 'select') {
     // Select properties get default options if none provided
     if (input.options && input.options.length > 0) {
-      prop.options = input.options.map((opt) => ({
+      prop.options = input.options.map((opt: { name: string; color: SelectColor }) => ({
         id: generateOptionId(),
         name: opt.name,
         color: opt.color,
@@ -292,7 +293,7 @@ function applySort(
   const isDesc = direction === 'desc';
 
   // Find property definition to get type
-  const propDef = schema?.properties.find((p) => p.id === propId);
+  const propDef = schema?.properties.find((p: PropertyDefinition) => p.id === propId);
 
   return [...rows].sort((a, b) => {
     let aVal: unknown;
