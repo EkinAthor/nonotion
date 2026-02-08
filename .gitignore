@@ -37,6 +37,9 @@ data/nonotion.db
 !data/pages/.gitkeep
 !data/blocks/.gitkeep
 
+# Issue tracking notes (local only)
+docs/*-issue.md
+
 # Claude Code
 .claude/
 

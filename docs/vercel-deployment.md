@@ -50,17 +50,19 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 
 ## 3. Deploying the Web Client (apps/web)
 
-The Web client is a Vite/React application.
+The Web client is a Vite/React SPA.
 
 1.  **Create another New Project** in Vercel.
 2.  **Connect your Repository**.
 3.  **Project Settings**:
     *   **Project Name**: `nonotion-web`
-    *   **Framework Preset**: `Vite`
+    *   **Framework Preset**: `Other` — do **not** use the "Vite" preset, as it overrides the SPA rewrite rules in `vercel.json`
     *   **Root Directory**: `apps/web`
     *   **Build Command**: `pnpm --filter @nonotion/web... build`
     *   **Output Directory**: `dist`
-4.  **Environment Variables**:
+4.  **SPA Routing**:
+    The repo includes `apps/web/vercel.json` with a rewrite rule that sends all paths to `index.html`, allowing React Router to handle client-side routing.
+5.  **Environment Variables**:
     *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app/api`). Note: the `/api` suffix is required because all routes are registered under `/api/`.
 
 ---
