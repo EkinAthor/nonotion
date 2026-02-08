@@ -20,9 +20,6 @@ await initializeStorage({
   postgresUrl: process.env.DATABASE_URL,
 });
 
-// Migration diagnostics (temporary — exposed via /health)
-const migrationDebug: Record<string, unknown> = { storageType: getStorageType() };
-
 // Run appropriate migrations based on storage type
 if (getStorageType() === 'postgres') {
   // PostgreSQL migrations
@@ -38,30 +35,12 @@ if (getStorageType() === 'postgres') {
     path.resolve(process.cwd(), 'apps', 'api', 'drizzle-pg'),
   ];
   const pgMigrationsFolder = pgCandidates.find(p => fs.existsSync(p)) || pgCandidates[0];
-  const folderExists = fs.existsSync(pgMigrationsFolder);
-  const folderContents = folderExists ? fs.readdirSync(pgMigrationsFolder) : [];
-  const metaExists = fs.existsSync(path.join(pgMigrationsFolder, 'meta', '_journal.json'));
-
-  migrationDebug.cwd = process.cwd();
-  migrationDebug.resolvedPath = pgMigrationsFolder;
-  migrationDebug.folderExists = folderExists;
-  migrationDebug.folderContents = folderContents;
-  migrationDebug.metaExists = metaExists;
-  migrationDebug.candidates = pgCandidates.map(p => ({ path: p, exists: fs.existsSync(p) }));
 
   try {
     await migrate(db, { migrationsFolder: pgMigrationsFolder });
-    migrationDebug.result = 'success';
+    console.log('PostgreSQL migrations complete');
   } catch (error) {
-    migrationDebug.result = 'error';
-    migrationDebug.error = error instanceof Error ? error.message : String(error);
-    migrationDebug.errorStack = error instanceof Error ? error.stack : undefined;
-    // Capture pg-specific error fields
-    const pgErr = error as Record<string, unknown>;
-    migrationDebug.pgCode = pgErr.code;
-    migrationDebug.pgDetail = pgErr.detail;
-    migrationDebug.pgSeverity = pgErr.severity;
-    migrationDebug.pgCause = pgErr.cause instanceof Error ? pgErr.cause.message : pgErr.cause;
+    console.error('PostgreSQL migration error:', error);
   } finally {
     await pool.end();
   }
@@ -115,7 +94,7 @@ await fastify.register(databasesRoutes);
 
 // Health check
 fastify.get('/health', async () => {
-  return { status: 'ok', storageType: getStorageType(), migrationDebug };
+  return { status: 'ok', storageType: getStorageType() };
 });
 
 // Start server

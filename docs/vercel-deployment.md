@@ -14,8 +14,9 @@ This guide covers deploying the Nonotion monorepo to Vercel, connecting it to an
 
 Ensure your Supabase database is ready:
 1.  Go to your Supabase Project Settings > Database.
-2.  Copy the **Connection string** (URI). It should look like:
-    `postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
+2.  Navigate to the **Connection** menu and select connection method "transaction pooler" (Vercel cannot resolve direct IPv6 from Supabase).
+3.  Copy the **Connection string** (URI). It should look like:
+    `postgresql://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@aws-0-us-west-2.pooler.supabase.com:6543/postgres`
 
 ---
 
