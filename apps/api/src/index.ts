@@ -2,7 +2,6 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { pagesRoutes } from './routes/pages.js';
 import { blocksRoutes } from './routes/blocks.js';
 import { authRoutes } from './routes/auth.js';
@@ -10,8 +9,6 @@ import { sharesRoutes } from './routes/shares.js';
 import { usersRoutes } from './routes/users.js';
 import { databasesRoutes } from './routes/databases.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Determine storage type from environment
 const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'json-sqlite';
@@ -31,7 +28,7 @@ if (getStorageType() === 'postgres') {
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool);
-  const pgMigrationsFolder = path.resolve(__dirname, '../drizzle-pg');
+  const pgMigrationsFolder = path.resolve(process.cwd(), 'drizzle-pg');
 
   try {
     await migrate(db, { migrationsFolder: pgMigrationsFolder });
@@ -45,7 +42,7 @@ if (getStorageType() === 'postgres') {
   // SQLite migrations (default)
   const { db } = await import('./db/index.js');
   const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-  const sqliteMigrationsFolder = path.resolve(__dirname, '../drizzle');
+  const sqliteMigrationsFolder = path.resolve(process.cwd(), 'drizzle');
 
   try {
     migrate(db, { migrationsFolder: sqliteMigrationsFolder });
