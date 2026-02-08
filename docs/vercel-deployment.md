@@ -30,14 +30,18 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   **Framework Preset**: `Other`
     *   **Root Directory**: `apps/api`
     *   **Build Command**: `pnpm --filter @nonotion/api... build`
-    *   **Output Directory**: `dist`
+    *   **Output Directory**: _(leave empty)_ — the API is a serverless function, not a static site
     *   **Install Command**: `pnpm install`
 4.  **Routing Configuration**:
     Ensure the file at `apps/api/vercel.json` exists with this content:
     ```json
     {
-      "rewrites": [
-        { "source": "/(.*)", "destination": "dist/index.js" }
+      "version": 2,
+      "builds": [
+        { "src": "dist/index.js", "use": "@vercel/node" }
+      ],
+      "routes": [
+        { "src": "/(.*)", "dest": "dist/index.js" }
       ]
     }
     ```
@@ -67,14 +71,15 @@ The Web client is a Vite/React application.
     *   **Build Command**: `pnpm --filter @nonotion/web... build`
     *   **Output Directory**: `dist`
 4.  **Environment Variables**:
-    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app`).
+    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app/api`). Note: the `/api` suffix is required because all routes are registered under `/api/`.
 
 ---
 
 ## 4. Troubleshooting
 
 *   **Build Failures (Missing Shared Package)**: Ensure you are using the `pnpm --filter ...` command. Vercel automatically detects the monorepo root and includes necessary workspace files even when the **Root Directory** is set to a subfolder.
-*   **Missing Output Directory**: Double check that the **Root Directory** matches the **Output Directory** path (if Root is `apps/api`, then Output should be `dist`).
+*   **Output Directory**: The API project's Output Directory should be left **empty** (it runs as a serverless function). Only the Web project should use `dist` as its Output Directory.
+*   **CORS Errors**: Verify `CORS_ORIGINS` is set on the API project to your Web deployment URL (without a trailing slash). Check that the API function is actually running by hitting the `/health` endpoint.
 
 ---
 
