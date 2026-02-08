@@ -55,6 +55,13 @@ if (getStorageType() === 'postgres') {
   } catch (error) {
     migrationDebug.result = 'error';
     migrationDebug.error = error instanceof Error ? error.message : String(error);
+    migrationDebug.errorStack = error instanceof Error ? error.stack : undefined;
+    // Capture pg-specific error fields
+    const pgErr = error as Record<string, unknown>;
+    migrationDebug.pgCode = pgErr.code;
+    migrationDebug.pgDetail = pgErr.detail;
+    migrationDebug.pgSeverity = pgErr.severity;
+    migrationDebug.pgCause = pgErr.cause instanceof Error ? pgErr.cause.message : pgErr.cause;
   } finally {
     await pool.end();
   }
