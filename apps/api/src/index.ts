@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import fs from 'fs';
 import path from 'path';
 import { pagesRoutes } from './routes/pages.js';
 import { blocksRoutes } from './routes/blocks.js';
@@ -28,7 +29,12 @@ if (getStorageType() === 'postgres') {
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool);
-  const pgMigrationsFolder = path.resolve(process.cwd(), 'drizzle-pg');
+  // process.cwd() is apps/api locally, but the monorepo root on Vercel
+  const pgCandidates = [
+    path.resolve(process.cwd(), 'drizzle-pg'),
+    path.resolve(process.cwd(), 'apps', 'api', 'drizzle-pg'),
+  ];
+  const pgMigrationsFolder = pgCandidates.find(p => fs.existsSync(p)) || pgCandidates[0];
 
   try {
     await migrate(db, { migrationsFolder: pgMigrationsFolder });
@@ -42,7 +48,11 @@ if (getStorageType() === 'postgres') {
   // SQLite migrations (default)
   const { db } = await import('./db/index.js');
   const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-  const sqliteMigrationsFolder = path.resolve(process.cwd(), 'drizzle');
+  const sqliteCandidates = [
+    path.resolve(process.cwd(), 'drizzle'),
+    path.resolve(process.cwd(), 'apps', 'api', 'drizzle'),
+  ];
+  const sqliteMigrationsFolder = sqliteCandidates.find(p => fs.existsSync(p)) || sqliteCandidates[0];
 
   try {
     migrate(db, { migrationsFolder: sqliteMigrationsFolder });
@@ -84,19 +94,7 @@ await fastify.register(databasesRoutes);
 
 // Health check
 fastify.get('/health', async () => {
-  const fs = await import('fs');
-  const cwd = process.cwd();
-  const candidates = [
-    path.resolve(cwd, 'drizzle-pg'),
-    path.resolve(cwd, 'api', 'drizzle-pg'),
-    path.resolve(cwd, '..', 'drizzle-pg'),
-  ];
-  const debug = {
-    cwd,
-    cwdContents: fs.existsSync(cwd) ? fs.readdirSync(cwd) : 'NOT_FOUND',
-    migrationPaths: candidates.map(p => ({ path: p, exists: fs.existsSync(p) })),
-  };
-  return { status: 'ok', storageType: getStorageType(), debug };
+  return { status: 'ok', storageType: getStorageType() };
 });
 
 // Start server
