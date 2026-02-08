@@ -84,7 +84,19 @@ await fastify.register(databasesRoutes);
 
 // Health check
 fastify.get('/health', async () => {
-  return { status: 'ok', storageType: getStorageType() };
+  const fs = await import('fs');
+  const cwd = process.cwd();
+  const candidates = [
+    path.resolve(cwd, 'drizzle-pg'),
+    path.resolve(cwd, 'api', 'drizzle-pg'),
+    path.resolve(cwd, '..', 'drizzle-pg'),
+  ];
+  const debug = {
+    cwd,
+    cwdContents: fs.existsSync(cwd) ? fs.readdirSync(cwd) : 'NOT_FOUND',
+    migrationPaths: candidates.map(p => ({ path: p, exists: fs.existsSync(p) })),
+  };
+  return { status: 'ok', storageType: getStorageType(), debug };
 });
 
 // Start server
