@@ -33,18 +33,7 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   **Output Directory**: _(leave empty)_ — the API is a serverless function, not a static site
     *   **Install Command**: `pnpm install`
 4.  **Routing Configuration**:
-    Ensure the file at `apps/api/vercel.json` exists with this content:
-    ```json
-    {
-      "version": 2,
-      "builds": [
-        { "src": "dist/index.js", "use": "@vercel/node" }
-      ],
-      "routes": [
-        { "src": "/(.*)", "dest": "dist/index.js" }
-      ]
-    }
-    ```
+    The repo includes `apps/api/vercel.json` and `apps/api/api/index.ts` which together route all requests to the Fastify serverless handler. No changes needed — just ensure these files are present.
 5.  **Environment Variables**:
     Add the following variables in the API project settings:
     *   `STORAGE_TYPE`: `postgres`
