@@ -39,8 +39,10 @@ All entities use prefixed IDs for type safety:
 - Blocks: `blk_xxxxxxxxxxxx`
 - Users: `usr_xxxxxxxxxxxx`
 
-### 4. Optimistic Updates
+### 4. Optimistic Updates with Temp ID Mapping
 Zustand stores update UI immediately, then sync with backend. On error, refetch to restore correct state.
+
+Block creation uses client-generated temp IDs (`generateBlockId()`) so new blocks appear instantly. A module-scoped `tempToRealId` map in `blockStore.ts` translates temp IDs to server IDs for API calls. A `pendingCreates` map lets `updateBlock`/`deleteBlock` wait for the create API to finish before making dependent calls. The temp ID remains the canonical key in the store (no React remount).
 
 ### 5. LWW Sync Preparation
 All entities have `version` and `updatedAt` fields for future last-write-wins conflict resolution.
