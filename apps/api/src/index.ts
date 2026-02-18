@@ -10,6 +10,7 @@ import { sharesRoutes } from './routes/shares.js';
 import { usersRoutes } from './routes/users.js';
 import { databasesRoutes } from './routes/databases.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
+import { ensureAdminPasswordReset } from './services/auth-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,9 @@ if (getStorageType() === 'postgres') {
     console.error('SQLite migration error:', error);
   }
 }
+
+// Check for admin password reset via env var
+await ensureAdminPasswordReset();
 
 const fastify = Fastify({
   logger: true,

@@ -129,3 +129,30 @@ export async function adminResetPassword(
 export async function getCurrentUser(userId: string): Promise<User | null> {
   return getUserStorage().getUser(userId);
 }
+
+export async function ensureAdminPasswordReset(): Promise<void> {
+  const newPassword = process.env.RESET_ADMIN_PASSWORD;
+  if (!newPassword) return;
+
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+  let userToReset: User | undefined | null = null;
+
+  if (adminEmail) {
+    userToReset = await getUserStorage().getUserByEmail(adminEmail);
+  }
+
+  if (!userToReset) {
+    // Fallback: find any admin
+    const allUsers = await getUserStorage().getAllUsers();
+    userToReset = allUsers.find(u => u.role === 'admin');
+  }
+
+  if (userToReset) {
+    console.log(`[Auth] Resetting password for admin user: ${userToReset.email}`);
+    // We set mustChangePassword to false because the admin explicitly set this password via env var
+    await adminResetPassword(userToReset.id, newPassword, false);
+    console.log(`[Auth] Password reset successful. Please remove RESET_ADMIN_PASSWORD environment variable to prevent overwriting on next restart.`);
+  } else {
+    console.warn(`[Auth] RESET_ADMIN_PASSWORD is set, but no admin user found to reset.`);
+  }
+}

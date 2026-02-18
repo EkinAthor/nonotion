@@ -153,16 +153,16 @@ export default function UserManagementPage() {
                                 </td>
                                 <td className="py-3 px-4">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin'
-                                            ? 'bg-purple-100 text-purple-800'
-                                            : 'bg-gray-100 text-gray-800'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : 'bg-gray-100 text-gray-800'
                                         }`}>
                                         {user.role}
                                     </span>
                                 </td>
                                 <td className="py-3 px-4">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.approved
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-yellow-100 text-yellow-800'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-yellow-100 text-yellow-800'
                                         }`}>
                                         {user.approved ? 'Approved' : 'Pending'}
                                     </span>
@@ -195,26 +195,31 @@ export default function UserManagementPage() {
                                                 >
                                                     {user.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                                                 </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setResetPasswordUserId(user.id);
-                                                        setNewPassword('');
-                                                        setError(null);
-                                                    }}
-                                                    disabled={actionLoading === user.id}
-                                                    className="text-xs px-2 py-1 border border-notion-border rounded hover:bg-notion-hover text-notion-text disabled:opacity-50"
-                                                >
-                                                    Reset Password
-                                                </button>
-                                                <button
-                                                    onClick={() => setDeleteUserId(user.id)}
-                                                    disabled={actionLoading === user.id}
-                                                    className="text-xs px-2 py-1 border border-red-300 rounded hover:bg-red-50 text-red-600 disabled:opacity-50"
-                                                >
-                                                    Delete
-                                                </button>
                                             </>
                                         )}
+
+                                        <button
+                                            onClick={() => {
+                                                setResetPasswordUserId(user.id);
+                                                setNewPassword('');
+                                                setError(null);
+                                            }}
+                                            disabled={actionLoading === user.id}
+                                            className="text-xs px-2 py-1 border border-notion-border rounded hover:bg-notion-hover text-notion-text disabled:opacity-50"
+                                        >
+                                            Reset Password
+                                        </button>
+
+                                        {user.id !== currentUser?.id && (
+                                            <button
+                                                onClick={() => setDeleteUserId(user.id)}
+                                                disabled={actionLoading === user.id}
+                                                className="text-xs px-2 py-1 border border-red-300 rounded hover:bg-red-50 text-red-600 disabled:opacity-50"
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+
                                         {user.id === currentUser?.id && (
                                             <span className="text-xs text-notion-text-secondary italic"> (You)</span>
                                         )}

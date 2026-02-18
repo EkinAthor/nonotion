@@ -143,12 +143,25 @@ docker compose up -d
 
 ---
 
+## Resetting Admin Password
+
+If you lose access to the admin account, you can reset the password using an environment variable.
+
+1. Stop the application.
+2. Set `RESET_ADMIN_PASSWORD=newpassword123` in your environment (or `.env` file).
+3. Start the application (`pnpm dev` or via Docker).
+4. The password for the admin user (matching `ADMIN_EMAIL` or the first found admin) will be reset on startup.
+5. **IMPORTANT:** Change the password in the app and remove the `RESET_ADMIN_PASSWORD` environment variable after successful login to prevent it from resetting on every restart.
+
+---
+
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `JWT_SECRET` | JWT signing secret (required) | - |
 | `ADMIN_EMAIL` | Email that gets admin role | First user |
+| `RESET_ADMIN_PASSWORD` | Reset admin password on startup | - |
 | `REQUIRE_USER_APPROVAL` | Require admin approval for new users | `true` |
 | `STORAGE_TYPE` | `json-sqlite` or `postgres` | `json-sqlite` |
 | `DATABASE_URL` | PostgreSQL connection URL | - |
