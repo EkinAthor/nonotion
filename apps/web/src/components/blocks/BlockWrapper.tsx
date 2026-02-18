@@ -96,17 +96,14 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     const prevText = getBlockText(prevBlock.content);
     const cursorPosition = getPlainTextLength(prevText) + 1;
 
-    // If current block has text, merge it to the previous block
-    // Only merge to text-based blocks
+    // Fire-and-forget: all three operations execute their optimistic
+    // set() calls synchronously. React batches the resulting re-render.
     if (currentText && 'text' in prevBlock.content) {
       const mergedText = prevText + currentText;
-      await updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
+      updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
     }
 
-    // Delete the current block
-    await deleteBlock(block.id);
-
-    // Focus previous block at the join position
+    deleteBlock(block.id);
     setFocusBlock(prevBlockId, cursorPosition);
   }, [block.id, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
 

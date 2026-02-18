@@ -125,20 +125,36 @@ export function useBlockEditor({
           ? { ...currentBlock.content, text, level: headingLevel }
           : { ...currentBlock.content, text };
 
-        await updateBlock(currentBlock.id, { content });
+        pendingSavesRef.current.add(text);
+        try {
+          await updateBlock(currentBlock.id, { content });
+        } finally {
+          pendingSavesRef.current.delete(text);
+        }
       }, 500);
     },
     [headingLevel, updateBlock]
   );
 
-  // Clean up debounce on unmount
+  // Flush pending save on unmount instead of discarding
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+        // Flush: save immediately instead of discarding
+        const currentBlock = blockRef.current;
+        const currentEditor = editorRef.current;
+        if (currentEditor && !currentEditor.isDestroyed) {
+          const html = stripOuterPTag(currentEditor.getHTML());
+          const content: BlockContent = headingLevel
+            ? { ...currentBlock.content, text: html, level: headingLevel }
+            : { ...currentBlock.content, text: html };
+          // Fire-and-forget — component is unmounting
+          updateBlock(currentBlock.id, { content });
+        }
       }
     };
-  }, []);
+  }, [headingLevel, updateBlock]);
 
   const editorRef = useRef<Editor | null>(null);
   const pasteCallbackRef = useRef(onPasteMultipleBlocks);
@@ -150,6 +166,8 @@ export function useBlockEditor({
   const lastKnownContentRef = useRef(getBlockText(block.content));
   // Flag to skip saving during external content sync
   const isSyncingExternalContentRef = useRef(false);
+  // Track pending saves to prevent false sync triggers from optimistic updates
+  const pendingSavesRef = useRef<Set<string>>(new Set());
   // Refs for callbacks - handling things like preserving position of block indent
   const createCallbackRef = useRef(onCreateBlockBelow);
   const focusPrevCallbackRef = useRef(onFocusPreviousBlock);
@@ -669,6 +687,12 @@ export function useBlockEditor({
     if (!editor) return;
 
     const editorHtml = stripOuterPTag(editor.getHTML());
+
+    // Skip sync if blockText matches a pending save (self-echo from optimistic update)
+    if (pendingSavesRef.current.has(blockText)) {
+      lastKnownContentRef.current = blockText;
+      return;
+    }
 
     // If block content changed and it's different from what the editor has,
     // this is an external update - sync the editor

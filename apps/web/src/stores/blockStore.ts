@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import type { Block, BlockType, BlockContent, CreateBlockInput, UpdateBlockInput } from '@nonotion/shared';
+import { generateBlockId } from '@nonotion/shared';
 import { blocksApi } from '@/api/client';
+
+// Temp ID → real server ID mapping (only needed for API calls)
+const tempToRealId = new Map<string, string>();
+// Temp ID → create promise (for sequencing dependent operations)
+const pendingCreates = new Map<string, Promise<Block>>();
+
+function resolveId(id: string): string {
+  return tempToRealId.get(id) ?? id;
+}
 
 export type FocusPosition = 'start' | 'end' | number | null;
 
@@ -67,14 +77,22 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   createBlock: async (pageId, type, content, order) => {
-    const input: Omit<CreateBlockInput, 'pageId'> = { type, content, order };
-    const block = await blocksApi.create(pageId, input);
+    // 1. Generate temp block immediately
+    const tempId = generateBlockId();
+    const tempBlock: Block = {
+      id: tempId,
+      type,
+      pageId,
+      order: order ?? 0,
+      content,
+      version: 0,
+    };
 
+    // 2. Optimistic update: insert temp block into store
     set((state) => {
       const blocksByPage = new Map(state.blocksByPage);
       const blocks = [...(blocksByPage.get(pageId) || [])];
 
-      // Insert at correct position
       if (order !== undefined) {
         // Shift existing blocks
         blocks.forEach((b, i) => {
@@ -82,76 +100,137 @@ export const useBlockStore = create<BlockState>((set, get) => ({
             blocks[i] = { ...b, order: b.order + 1 };
           }
         });
-        blocks.push(block);
+        blocks.push(tempBlock);
       } else {
-        blocks.push(block);
+        // No order specified — place at end
+        tempBlock.order = blocks.length;
+        blocks.push(tempBlock);
       }
 
       blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
       return { blocksByPage };
     });
 
-    return block;
+    // 3. Fire API call in background
+    const input: Omit<CreateBlockInput, 'pageId'> = { type, content, order };
+    const createPromise = blocksApi.create(pageId, input).then((realBlock) => {
+      // Store temp→real ID mapping
+      tempToRealId.set(tempId, realBlock.id);
+
+      // Update version in store (keep tempId as the canonical store key)
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        const blocks = blocksByPage.get(pageId);
+        if (blocks) {
+          const index = blocks.findIndex((b) => b.id === tempId);
+          if (index !== -1) {
+            const updatedBlocks = [...blocks];
+            updatedBlocks[index] = { ...updatedBlocks[index], version: realBlock.version };
+            blocksByPage.set(pageId, updatedBlocks);
+          }
+        }
+        return { blocksByPage };
+      });
+
+      pendingCreates.delete(tempId);
+      return realBlock;
+    }).catch((error) => {
+      // Remove temp block from store on failure
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        const blocks = blocksByPage.get(pageId);
+        if (blocks) {
+          const filtered = blocks.filter((b) => b.id !== tempId);
+          const reordered = filtered.map((b, i) => ({ ...b, order: i }));
+          blocksByPage.set(pageId, reordered);
+        }
+        return { blocksByPage };
+      });
+      pendingCreates.delete(tempId);
+      console.error('Failed to create block:', error);
+      throw error;
+    });
+
+    pendingCreates.set(tempId, createPromise);
+
+    // 4. Return temp block immediately (callers see it instantly)
+    return tempBlock;
   },
 
   createMultipleBlocks: async (pageId, blocksToCreate, afterOrder) => {
+    // Delegate to optimistic createBlock for each — all appear instantly
     const createdBlocks: Block[] = [];
-
-    // Create blocks sequentially to maintain order
     for (let i = 0; i < blocksToCreate.length; i++) {
       const { type, content } = blocksToCreate[i];
       const order = afterOrder + 1 + i;
-      const input: Omit<CreateBlockInput, 'pageId'> = { type, content, order };
-      const block = await blocksApi.create(pageId, input);
+      const block = await get().createBlock(pageId, type, content, order);
       createdBlocks.push(block);
     }
-
-    // Update state with all new blocks
-    set((state) => {
-      const blocksByPage = new Map(state.blocksByPage);
-      const blocks = [...(blocksByPage.get(pageId) || [])];
-
-      // Shift existing blocks that come after the insertion point
-      const shiftAmount = blocksToCreate.length;
-      blocks.forEach((b, i) => {
-        if (b.order > afterOrder) {
-          blocks[i] = { ...b, order: b.order + shiftAmount };
-        }
-      });
-
-      // Add all new blocks
-      blocks.push(...createdBlocks);
-      blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
-      return { blocksByPage };
-    });
-
     return createdBlocks;
   },
 
   updateBlock: async (id, input) => {
-    const block = await blocksApi.update(id, input);
-
+    // 1. Optimistic update: apply input to local state immediately
+    //    This keeps the store in sync with the editor for operations
+    //    that read from the store (e.g., merge blocks)
+    let targetPageId: string | null = null;
     set((state) => {
       const blocksByPage = new Map(state.blocksByPage);
-      const blocks = blocksByPage.get(block.pageId);
-
-      if (blocks) {
+      for (const [pageId, blocks] of blocksByPage) {
         const index = blocks.findIndex((b) => b.id === id);
         if (index !== -1) {
+          targetPageId = pageId;
           const updatedBlocks = [...blocks];
-          updatedBlocks[index] = block;
-          blocksByPage.set(block.pageId, updatedBlocks);
+          updatedBlocks[index] = { ...blocks[index], ...input };
+          blocksByPage.set(pageId, updatedBlocks);
+          break;
         }
       }
-
       return { blocksByPage };
     });
 
-    return block;
+    try {
+      // Wait for pending create if this block was just created
+      const pending = pendingCreates.get(id);
+      if (pending) await pending;
+
+      // Guard: block may have been deleted while we waited
+      if (!get().getBlockById(id)) return { id, ...input } as Block;
+
+      const realId = resolveId(id);
+      const block = await blocksApi.update(realId, input);
+
+      // 2. On API success: only update metadata (version, updatedAt)
+      //    DO NOT overwrite content — it may have advanced locally
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        for (const [pageId, blocks] of blocksByPage) {
+          const index = blocks.findIndex((b) => b.id === id);
+          if (index !== -1) {
+            const updatedBlocks = [...blocks];
+            updatedBlocks[index] = {
+              ...updatedBlocks[index],
+              version: block.version,
+            };
+            blocksByPage.set(pageId, updatedBlocks);
+            break;
+          }
+        }
+        return { blocksByPage };
+      });
+
+      return block;
+    } catch (error) {
+      // 3. On error: revert by refetching from server
+      if (targetPageId) {
+        await get().fetchBlocks(targetPageId);
+      }
+      throw error;
+    }
   },
 
   deleteBlock: async (id) => {
-    // Find the block to get its pageId
+    // Find the block's pageId before removing
     let pageId: string | null = null;
     for (const [pId, blocks] of get().blocksByPage.entries()) {
       if (blocks.find((b) => b.id === id)) {
@@ -160,8 +239,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       }
     }
 
-    await blocksApi.delete(id);
-
+    // 1. Optimistic removal from store
     if (pageId) {
       set((state) => {
         const blocksByPage = new Map(state.blocksByPage);
@@ -169,7 +247,6 @@ export const useBlockStore = create<BlockState>((set, get) => ({
 
         if (blocks) {
           const filtered = blocks.filter((b) => b.id !== id);
-          // Reorder remaining blocks
           const reordered = filtered.map((b, i) => ({ ...b, order: i }));
           blocksByPage.set(pageId!, reordered);
         }
@@ -177,6 +254,24 @@ export const useBlockStore = create<BlockState>((set, get) => ({
         return { blocksByPage };
       });
     }
+
+    // 2. Fire API delete in background
+    const pending = pendingCreates.get(id);
+    const doDelete = async () => {
+      if (pending) await pending;
+      const realId = resolveId(id);
+      await blocksApi.delete(realId);
+      // Cleanup ID mapping
+      tempToRealId.delete(id);
+    };
+
+    doDelete().catch((error) => {
+      console.error('Failed to delete block:', error);
+      // Revert by refetching
+      if (pageId) {
+        get().fetchBlocks(pageId);
+      }
+    });
   },
 
   reorderBlocks: async (pageId, blockIds) => {
@@ -195,7 +290,9 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     });
 
     try {
-      const blocks = await blocksApi.reorder(pageId, { blockIds });
+      // Resolve temp IDs to real server IDs for the API call
+      const resolvedIds = blockIds.map(resolveId);
+      const blocks = await blocksApi.reorder(pageId, { blockIds: resolvedIds });
       set((state) => {
         const blocksByPage = new Map(state.blocksByPage);
         blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
@@ -279,22 +376,43 @@ export const useBlockStore = create<BlockState>((set, get) => ({
         break;
     }
 
-    // Update block with new type and content
-    const block = await blocksApi.update(id, { type: newType, content });
-
+    // Optimistic update: apply type + content locally first
     set((state) => {
       const blocksByPage = new Map(state.blocksByPage);
-      const blocks = blocksByPage.get(block.pageId);
-
-      if (blocks) {
+      for (const [pageId, blocks] of blocksByPage) {
         const index = blocks.findIndex((b) => b.id === id);
         if (index !== -1) {
           const updatedBlocks = [...blocks];
-          updatedBlocks[index] = block;
-          blocksByPage.set(block.pageId, updatedBlocks);
+          updatedBlocks[index] = { ...blocks[index], type: newType, content };
+          blocksByPage.set(pageId, updatedBlocks);
+          break;
         }
       }
+      return { blocksByPage };
+    });
 
+    // Wait for pending create if needed
+    const pending = pendingCreates.get(id);
+    if (pending) await pending;
+
+    const realId = resolveId(id);
+    const block = await blocksApi.update(realId, { type: newType, content });
+
+    // Update version from server response
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      for (const [pageId, blocks] of blocksByPage) {
+        const index = blocks.findIndex((b) => b.id === id);
+        if (index !== -1) {
+          const updatedBlocks = [...blocks];
+          updatedBlocks[index] = {
+            ...updatedBlocks[index],
+            version: block.version,
+          };
+          blocksByPage.set(pageId, updatedBlocks);
+          break;
+        }
+      }
       return { blocksByPage };
     });
 
@@ -419,7 +537,8 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const firstBlock = selectedBlocks[0];
     const prevBlockId = get().getAdjacentBlockId(firstBlock.id, 'prev');
 
-    await Promise.all(ids.map(id => deleteBlock(id)));
+    // deleteBlock is now optimistic — all removals happen synchronously
+    ids.forEach(id => deleteBlock(id));
 
     clearSelection();
 
