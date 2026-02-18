@@ -1,8 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { pagesRoutes } from './routes/pages.js';
 import { blocksRoutes } from './routes/blocks.js';
 import { authRoutes } from './routes/auth.js';
@@ -11,8 +11,6 @@ import { usersRoutes } from './routes/users.js';
 import { databasesRoutes } from './routes/databases.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Determine storage type from environment
 const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'json-sqlite';
@@ -32,7 +30,12 @@ if (getStorageType() === 'postgres') {
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool);
-  const pgMigrationsFolder = path.resolve(__dirname, '../drizzle-pg');
+  // process.cwd() is apps/api locally, but the monorepo root on Vercel
+  const pgCandidates = [
+    path.resolve(process.cwd(), 'drizzle-pg'),
+    path.resolve(process.cwd(), 'apps', 'api', 'drizzle-pg'),
+  ];
+  const pgMigrationsFolder = pgCandidates.find(p => fs.existsSync(p)) || pgCandidates[0];
 
   try {
     await migrate(db, { migrationsFolder: pgMigrationsFolder });
@@ -46,7 +49,11 @@ if (getStorageType() === 'postgres') {
   // SQLite migrations (default)
   const { db } = await import('./db/index.js');
   const { migrate } = await import('drizzle-orm/better-sqlite3/migrator');
-  const sqliteMigrationsFolder = path.resolve(__dirname, '../drizzle');
+  const sqliteCandidates = [
+    path.resolve(process.cwd(), 'drizzle'),
+    path.resolve(process.cwd(), 'apps', 'api', 'drizzle'),
+  ];
+  const sqliteMigrationsFolder = sqliteCandidates.find(p => fs.existsSync(p)) || sqliteCandidates[0];
 
   try {
     migrate(db, { migrationsFolder: sqliteMigrationsFolder });
@@ -65,13 +72,15 @@ const fastify = Fastify({
 
 // Parse CORS origins from environment variable
 const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim().replace(/\/+$/, ''))
   : ['http://localhost:5173', 'http://localhost:3000'];
 
 // Register CORS
 await fastify.register(cors, {
   origin: corsOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 });
 
 // Register JWT plugin
