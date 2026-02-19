@@ -43,22 +43,39 @@ This guide covers deploying Nonotion using Docker and Docker Compose.
 | `PORT` | `3001` | Internal API port |
 | `API_UPSTREAM` | `api:3001` | API upstream for nginx proxy |
 
-## Deployment Options
-
-### Full Stack (Recommended)
-
-Run both API and Web services together:
-
-```bash
-# From project root
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
+## Deployment Scenarios
+ 
+### 1. Non-Production (SQLite)
+ 
+This is the default configuration in `docker-compose.yml`.
+ 
+1. **Copy `.env.example` to `.env`**.
+2. **Run:**
+   ```bash
+   docker compose up -d
+   ```
+ 
+**Note:** Data is stored in the `nonotion-data` volume. This mode is NOT recommended for production use with heavy load or multiple instances.
+ 
+### 2. Production (External PostgreSQL)
+ 
+For production, you should connect to a managed PostgreSQL database (e.g., Supabase, RDS).
+ 
+1. **Configure `.env`**:
+   ```bash
+   STORAGE_TYPE=postgres
+   DATABASE_URL=postgresql://user:pass@host:5432/db
+   JWT_SECRET=your-secure-secret
+   ```
+ 
+2. **Run:**
+   ```bash
+   docker compose up -d
+   ```
+ 
+### 3. Testing (Local PostgreSQL)
+ 
+See `README.md` for instructions on using `docker-compose.postgres.yml`.
 
 ### API Only
 

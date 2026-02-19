@@ -17,5 +17,15 @@
     "rimraf": "^5.0.5",
     "turbo": "^2.3.0",
     "typescript": "^5.3.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "markdown-it": "^14.1.1",
+      "esbuild": "^0.25.0",
+      "ajv": "^8.18.0",
+      "minimatch": "^10.2.1",
+      "fastify": "^5.7.3",
+      "@fastify/jwt": "^9.0.0"
+    }
   }
 }

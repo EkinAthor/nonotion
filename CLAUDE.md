@@ -4,7 +4,7 @@
 
 Nonotion is a Notion-like workspace application with block-based page editing. It's a pnpm monorepo with a Fastify backend and React frontend.
 
-**Current Phase**: Phase 1 (baseline) - Single user, local JSON storage, H1 + Paragraph blocks only.
+**Current Phase**: Phase 2 - Multi-user, SQLite/PostgreSQL storage, Block editing with Auth.
 
 ## Architecture
 
@@ -164,7 +164,6 @@ pnpm --filter @nonotion/api tsc --noEmit
 ## Future Considerations
 
 These are planned but NOT yet implemented:
-- Authentication (currently auto-logged in as admin)
 - Real-time collaboration (WebSocket)
 - Additional block types (lists, code, images, tables)
 - Database storage (Supabase)

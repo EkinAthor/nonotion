@@ -1,6 +1,8 @@
 # ==============================================================================
 # PostgreSQL for Local Development
 # Start PostgreSQL database for local development with postgres storage backend
+# WARNING: This configuration is for TESTING/DEVELOPMENT ONLY.
+# For production, use a managed PostgreSQL service or a hardened container setup.
 # ==============================================================================
 # Usage:
 #   docker compose -f docker-compose.postgres.yml up -d    # Start PostgreSQL
@@ -21,7 +23,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: nonotion
-      POSTGRES_PASSWORD: nonotion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nonotion} # Change this in production!
       POSTGRES_DB: nonotion
     ports:
       - "5432:5432"

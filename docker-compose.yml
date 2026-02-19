@@ -20,7 +20,7 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
-      - STORAGE_TYPE=${STORAGE_TYPE:-json-sqlite}
+      - STORAGE_TYPE=${STORAGE_TYPE:-sqlite} # sqlite is for non-prod/local only! Use postgres for production.
       - DATABASE_URL=${DATABASE_URL:-}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}

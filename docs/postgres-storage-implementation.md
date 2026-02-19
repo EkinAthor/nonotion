@@ -5,7 +5,7 @@ This document describes the PostgreSQL storage backend implementation for Nonoti
 ## Overview
 
 Nonotion supports two storage backends:
-1. **json-sqlite** (default): JSON files for pages/blocks, SQLite for users/permissions
+1. **sqlite** (default): SQLite for data
 2. **postgres**: PostgreSQL for all data (pages, blocks, users, permissions)
 
 The storage backend is selected via the `STORAGE_TYPE` environment variable.

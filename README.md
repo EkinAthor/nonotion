@@ -57,89 +57,59 @@ pnpm --filter @nonotion/shared build
 
 ---
 
-## Running Locally
-
-### Option 1: Local Storage (Default)
-
-Uses JSON files for pages/blocks and SQLite for users. Simplest setup.
-
-```bash
-pnpm dev
-```
-
-Open http://localhost:5173
-
-### Option 2: PostgreSQL Storage
-
-Uses PostgreSQL for all data. Better for production-like testing.
-
-**1. Start PostgreSQL:**
-
-```bash
-docker compose -f docker-compose.postgres.yml up -d
-```
-
-**2. Run migrations:**
-
-do this only if needed to migrate from previous json sqlite to postgres
-
-```bash
-# Linux/macOS
-DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion \
-  pnpm --filter @nonotion/api db:migrate:pg
-
-# Windows PowerShell
-$env:DATABASE_URL="postgresql://nonotion:nonotion@localhost:5432/nonotion"
-pnpm --filter @nonotion/api db:migrate:pg
-```
-
-**3. Start the application:**
-
-```bash
-# Linux/macOS
-STORAGE_TYPE=postgres \
-DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion \
-  pnpm dev
-
-# Windows PowerShell
-$env:STORAGE_TYPE="postgres"
-$env:DATABASE_URL="postgresql://nonotion:nonotion@localhost:5432/nonotion"
-pnpm dev
-```
-
-Open http://localhost:5173
-
----
-
-## Docker Deployment
-
-Run the full stack in Docker containers.
-(expecting postgres to be running already)
-
-**1. Create environment file:**
-
-```bash
-cp .env.example .env
-# Edit .env and set JWT_SECRET to a secure value
-```
-
-**2. Start services:**
-
-```bash
-docker compose up -d
-```
-
-Open http://localhost (port 80)
-
-**With PostgreSQL storage:**
-
-```bash
-# Set in .env:
-# STORAGE_TYPE=postgres
-# DATABASE_URL=postgresql://your-postgres-host:5432/nonotion
-
-docker compose up -d
-```
+## Deployment & Running
+ 
+### Option 1: Non-Production (SQLite) - Recommended for personal use
+ **NOT for production**. Uses local SQLite database (`nonotion.db`). Easiest to set up.
+ 
+ **Run locally (requires Node.js + pnpm):**
+ ```bash
+ pnpm dev
+ ```
+ Open http://localhost:5173
+ 
+ **Run in Docker:**
+ ```bash
+ docker compose up -d
+ ```
+ Open http://localhost (port 80)
+ 
+ ---
+ 
+### Option 2: Testing (Postgres)
+ **For development/testing only**. Uses a local Postgres Docker container.
+ 
+ 1. Start Postgres:
+ ```bash
+ docker compose -f docker-compose.postgres.yml up -d
+ ```
+ 
+ 2. Run the application:
+ ```bash
+ # Linux/macOS
+ STORAGE_TYPE=postgres \
+ DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion \
+   pnpm dev
+ 
+ # Windows PowerShell
+ $env:STORAGE_TYPE="postgres"; $env:DATABASE_URL="postgresql://nonotion:nonotion@localhost:5432/nonotion"; pnpm dev
+ ```
+ 
+ ---
+ 
+### Option 3: Production (Postgres)
+ **Required for production deployments**. Connects to an external Postgres database (e.g., Supabase, RDS, or a managed service).
+ 
+ 1. Set up your Postgres database.
+ 2. Configure environment variables (in `.env` or your deployment platform):
+    - `STORAGE_TYPE=postgres`
+    - `DATABASE_URL=postgresql://user:pass@host:5432/db`
+    - `JWT_SECRET` (Use a strong random string!)
+ 
+ **Deployment Guides:**
+ - [Docker Deployment](./docs/docker-deployment.md)
+ - [Vercel Deployment](./docs/vercel-deployment.md)
+# IMPORTANT: Change POSTGRES_PASSWORD in docker-compose.yml or use .env in production!
 
 ---
 
@@ -163,7 +133,7 @@ If you lose access to the admin account, you can reset the password using an env
 | `ADMIN_EMAIL` | Email that gets admin role | First user |
 | `RESET_ADMIN_PASSWORD` | Reset admin password on startup | - |
 | `REQUIRE_USER_APPROVAL` | Require admin approval for new users | `true` |
-| `STORAGE_TYPE` | `json-sqlite` or `postgres` | `json-sqlite` |
+| `STORAGE_TYPE` | `sqlite` (default) or `postgres` | `sqlite` |
 | `DATABASE_URL` | PostgreSQL connection URL | - |
 | `PORT` | API server port | `3001` |
 | `CORS_ORIGINS` | Allowed origins (comma-separated) | `localhost:5173,localhost:3000` |
