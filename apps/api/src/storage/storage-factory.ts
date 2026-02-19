@@ -1,8 +1,7 @@
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
-import { JsonFileStorage } from './json-storage.js';
 import { PostgresStorage } from './postgres-storage.js';
 
-export type StorageType = 'json-sqlite' | 'postgres';
+export type StorageType = 'sqlite' | 'json-sqlite' | 'postgres';
 
 export interface StorageConfig {
   type: StorageType;
@@ -29,16 +28,13 @@ export async function initializeStorage(config: StorageConfig): Promise<{
 
     console.log('Using PostgreSQL storage backend');
   } else {
-    // Default: json-sqlite mode
-    const jsonStorage = new JsonFileStorage();
-    await jsonStorage.init();
-    storageInstance = jsonStorage;
+    // Default: sqlite mode (json-sqlite is kept as alias)
+    const { SqliteFullStorage } = await import('./sqlite-full-storage.js');
+    const sqliteStorage = new SqliteFullStorage();
+    storageInstance = sqliteStorage;
+    userStorageInstance = sqliteStorage;
 
-    // Dynamically import SQLite storage to avoid eager loading of better-sqlite3
-    const { userStorage } = await import('./sqlite-storage.js');
-    userStorageInstance = userStorage;
-
-    console.log('Using JSON + SQLite storage backend');
+    console.log('Using SQLite storage backend');
   }
 
   return {
@@ -65,7 +61,7 @@ export function getStorageType(): StorageType {
   if (postgresInstance) {
     return 'postgres';
   }
-  return 'json-sqlite';
+  return 'sqlite';
 }
 
 export async function closeStorage(): Promise<void> {

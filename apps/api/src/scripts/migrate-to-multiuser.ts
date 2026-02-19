@@ -7,9 +7,12 @@
  * Run with: pnpm tsx src/scripts/migrate-to-multiuser.ts
  */
 
-import { storage } from '../storage/json-storage.js';
-import { userStorage } from '../storage/sqlite-storage.js';
+import { SqliteFullStorage } from '../storage/sqlite-full-storage.js';
 import { now } from '@nonotion/shared';
+
+const sqliteStorage = new SqliteFullStorage();
+const storage = sqliteStorage;
+const userStorage = sqliteStorage;
 
 async function migrate() {
   console.log('Starting migration to multi-user support...\n');

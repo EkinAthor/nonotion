@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(), // usr_xxx
@@ -23,7 +23,57 @@ export const permissions = sqliteTable('permissions', {
   primaryKey({ columns: [table.pageId, table.userId] }),
 ]);
 
+// Pages table
+export const pages = sqliteTable('pages', {
+  id: text('id').primaryKey(), // pg_xxx
+  title: text('title').notNull(),
+  type: text('type', { enum: ['document', 'database'] }).notNull().default('document'),
+  ownerId: text('owner_id').notNull(),
+  parentId: text('parent_id'),
+  childIds: text('child_ids').notNull().default('[]'), // JSON-serialized string[]
+  icon: text('icon'),
+  isStarred: integer('is_starred', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  version: integer('version').notNull().default(1),
+  databaseSchema: text('database_schema'), // JSON-serialized DatabaseSchema
+  properties: text('properties'), // JSON-serialized Record<string, PropertyValue>
+}, (table) => [
+  index('idx_pages_owner_id').on(table.ownerId),
+  index('idx_pages_parent_id').on(table.parentId),
+  index('idx_pages_type').on(table.type),
+]);
+
+// Blocks table
+export const blocks = sqliteTable('blocks', {
+  id: text('id').primaryKey(), // blk_xxx
+  type: text('type', {
+    enum: [
+      'heading',
+      'heading2',
+      'heading3',
+      'paragraph',
+      'bullet_list',
+      'numbered_list',
+      'checklist',
+      'code_block',
+      'image',
+    ],
+  }).notNull(),
+  pageId: text('page_id').notNull(),
+  order: integer('order').notNull(),
+  content: text('content').notNull(), // JSON-serialized BlockContent
+  version: integer('version').notNull().default(1),
+}, (table) => [
+  index('idx_blocks_page_id').on(table.pageId),
+  index('idx_blocks_page_order').on(table.pageId, table.order),
+]);
+
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type NewPermissionRow = typeof permissions.$inferInsert;
+export type PageRow = typeof pages.$inferSelect;
+export type NewPageRow = typeof pages.$inferInsert;
+export type BlockRow = typeof blocks.$inferSelect;
+export type NewBlockRow = typeof blocks.$inferInsert;

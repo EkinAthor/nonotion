@@ -13,7 +13,7 @@ import { initializeStorage, getStorageType, type StorageType } from './storage/s
 import { ensureAdminPasswordReset } from './services/auth-service.js';
 
 // Determine storage type from environment
-const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'json-sqlite';
+const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'sqlite';
 
 // Initialize storage first
 await initializeStorage({

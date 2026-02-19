@@ -6,8 +6,8 @@
   },
   "currentFeatures": {
     "storage": {
-      "backends": ["json-sqlite", "postgres"],
-      "default": "json-sqlite",
+      "backends": ["sqlite", "postgres"],
+      "default": "sqlite",
       "supabaseCompatible": true
     },
     "authentication": {
@@ -59,7 +59,7 @@
       "framework": "Fastify",
       "language": "TypeScript",
       "orm": "Drizzle ORM",
-      "storage": ["JSON files", "SQLite", "PostgreSQL"]
+      "storage": ["SQLite", "PostgreSQL"]
     },
     "testing": {
       "e2e": "Playwright"

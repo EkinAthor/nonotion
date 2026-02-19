@@ -1,8 +1,8 @@
 # Nonotion Implementation Progress
 
-## Current Status: Text Formatting Added
+## Current Status: SQLite Storage Consolidation
 
-Last Updated: 2026-02-03
+Last Updated: 2026-02-18
 
 ---
 
@@ -232,6 +232,31 @@ Last Updated: 2026-02-03
 
 ---
 
+## SQLite Storage Consolidation (COMPLETE)
+
+Replaced the split json-sqlite backend (JSON files for pages/blocks + SQLite for users/permissions) with a unified SQLite backend that stores ALL data in a single `nonotion.db` file.
+
+### Changes
+- [x] Add `pages` and `blocks` tables to SQLite schema (`apps/api/src/db/schema.ts`)
+- [x] Generate Drizzle migration (`drizzle/0002_breezy_obadiah_stane.sql`)
+- [x] Create `SqliteFullStorage` class implementing both `StorageAdapter` and `UserStorageAdapter`
+- [x] Update `storage-factory.ts` to use `SqliteFullStorage` for `sqlite` and `json-sqlite` storage types
+- [x] Default `STORAGE_TYPE` changed from `json-sqlite` to `sqlite`
+- [x] Update `migrate-to-multiuser.ts` to use `SqliteFullStorage`
+- [x] Update documentation (prd.json, progress.txt, CLAUDE.md)
+
+### Key New Files
+| File | Purpose |
+|------|---------|
+| `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities |
+
+### Notes
+- `json-sqlite` is kept as an alias for backward compatibility
+- `json-storage.ts` and `sqlite-storage.ts` retained for the JSON->PG migration path
+- JSON serialization used for `childIds`, `content`, `databaseSchema`, `properties` columns
+
+---
+
 ## Phase 2: Multi-User Support (COMPLETE)
 
 ### Phase 2.1: Types & Schemas
@@ -337,8 +362,8 @@ Create `.env` based on `.env.example`:
 JWT_SECRET=your-secure-secret-here
 ADMIN_EMAIL=admin@example.com
 
-# Storage backend: 'json-sqlite' (default) or 'postgres'
-STORAGE_TYPE=json-sqlite
+# Storage backend: 'sqlite' (default) or 'postgres'
+STORAGE_TYPE=sqlite
 
 # PostgreSQL URL (required when STORAGE_TYPE=postgres)
 DATABASE_URL=postgresql://nonotion:nonotion@localhost:5432/nonotion
@@ -362,9 +387,9 @@ pnpm --filter @nonotion/e2e test:e2e:ui
 
 Nonotion supports two storage backends:
 
-1. **json-sqlite** (default):
-   - Pages and blocks stored in JSON files (data/pages/, data/blocks/)
-   - Users and permissions stored in SQLite (data/nonotion.db)
+1. **sqlite** (default):
+   - All data (pages, blocks, users, permissions) stored in SQLite (`data/nonotion.db`)
+   - `json-sqlite` is accepted as an alias for backward compatibility
 
 2. **postgres**:
    - All data stored in PostgreSQL

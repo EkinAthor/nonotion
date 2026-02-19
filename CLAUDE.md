@@ -14,12 +14,12 @@ nonotion/
 ├── apps/api/            # @nonotion/api - Fastify REST API (port 3001)
 ├── apps/web/            # @nonotion/web - React SPA (port 5173)
 ├── e2e/                 # @nonotion/e2e - Playwright tests
-└── data/                # Runtime JSON storage (gitignored)
+└── data/                # Runtime SQLite database (gitignored)
 ```
 
 ### Data Flow
 ```
-React Components → Zustand Stores → API Client → Fastify Routes → Services → JSON Storage
+React Components → Zustand Stores → API Client → Fastify Routes → Services → SQLite/PostgreSQL Storage
 ```
 
 ## Key Patterns
@@ -31,7 +31,7 @@ New block types are added as plugins in `apps/web/src/components/blocks/registry
 - Backend support for the block type in shared schemas
 
 ### 2. Storage Adapter Pattern
-`apps/api/src/storage/storage-adapter.ts` defines the interface. Currently implemented by `JsonFileStorage`. Future: swap to database without changing API layer.
+`apps/api/src/storage/storage-adapter.ts` defines the `StorageAdapter` and `UserStorageAdapter` interfaces. Implemented by `SqliteFullStorage` (default, single `nonotion.db` file) and `PostgresStorage`. The storage factory (`storage-factory.ts`) selects the backend based on `STORAGE_TYPE` env var.
 
 ### 3. Entity IDs
 All entities use prefixed IDs for type safety:
@@ -62,7 +62,7 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 |------|---------|
 | `packages/shared/src/types/block.ts` | Block type definitions - drives the entire block system |
 | `packages/shared/src/schemas/block.ts` | Zod validation for block API requests |
-| `apps/api/src/storage/json-storage.ts` | Storage implementation with caching and atomic writes |
+| `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities (pages, blocks, users, permissions) |
 | `apps/web/src/stores/pageStore.ts` | Page state management with tree operations |
 | `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates |
 | `apps/web/src/components/blocks/BlockCanvas.tsx` | Main editing surface with drag-and-drop |
@@ -143,7 +143,7 @@ curl http://localhost:3001/api/pages/pg_xxx/blocks | jq
 ```
 
 ### Reset Data
-Delete files in `data/pages/` and `data/blocks/`, restart API.
+Delete `data/nonotion.db`, restart API. Migrations will recreate all tables.
 
 ### Check TypeScript Errors
 ```bash
