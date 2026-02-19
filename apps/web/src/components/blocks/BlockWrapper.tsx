@@ -41,7 +41,7 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
   }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
   const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string): Promise<void> => {
-    await changeBlockType(block.id, newType, newText);
+    changeBlockType(block.id, newType, newText);
     // Set focus to this block after type change so the new editor gets focus
     setFocusBlock(block.id);
   }, [block.id, changeBlockType, setFocusBlock]);

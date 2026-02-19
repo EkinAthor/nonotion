@@ -391,32 +391,40 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       return { blocksByPage };
     });
 
-    // Wait for pending create if needed
-    const pending = pendingCreates.get(id);
-    if (pending) await pending;
+    // Fire API call in background (same pattern as deleteBlock)
+    const doUpdate = async () => {
+      const pending = pendingCreates.get(id);
+      if (pending) await pending;
+      const realId = resolveId(id);
+      const block = await blocksApi.update(realId, { type: newType, content });
 
-    const realId = resolveId(id);
-    const block = await blocksApi.update(realId, { type: newType, content });
-
-    // Update version from server response
-    set((state) => {
-      const blocksByPage = new Map(state.blocksByPage);
-      for (const [pageId, blocks] of blocksByPage) {
-        const index = blocks.findIndex((b) => b.id === id);
-        if (index !== -1) {
-          const updatedBlocks = [...blocks];
-          updatedBlocks[index] = {
-            ...updatedBlocks[index],
-            version: block.version,
-          };
-          blocksByPage.set(pageId, updatedBlocks);
-          break;
+      // Update version from server response
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        for (const [pageId, blocks] of blocksByPage) {
+          const index = blocks.findIndex((b) => b.id === id);
+          if (index !== -1) {
+            const updatedBlocks = [...blocks];
+            updatedBlocks[index] = {
+              ...updatedBlocks[index],
+              version: block.version,
+            };
+            blocksByPage.set(pageId, updatedBlocks);
+            break;
+          }
         }
-      }
-      return { blocksByPage };
+        return { blocksByPage };
+      });
+    };
+
+    doUpdate().catch((error) => {
+      console.error('Failed to change block type:', error);
+      const blk = get().getBlockById(id);
+      if (blk) get().fetchBlocks(blk.pageId);
     });
 
-    return block;
+    // Return optimistic block immediately
+    return { ...existingBlock, type: newType, content };
   },
 
   getBlocksForPage: (pageId) => {

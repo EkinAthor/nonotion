@@ -231,12 +231,12 @@ export function useBlockEditor({
         const content: BlockContent = headingLevel
           ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
           : { ...currentBlock.content, text: cleanedText };
-        await updateBlock(currentBlock.id, { content });
+        updateBlock(currentBlock.id, { content });
       }
       closeSlashMenu();
 
       if (onChangeBlockType) {
-        await onChangeBlockType(type);
+        onChangeBlockType(type);
         // Focus is handled by BlockWrapper setting focusBlockId after type change
       }
     },
