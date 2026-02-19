@@ -6,6 +6,7 @@ import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
 import { getPlainTextLength } from '@/lib/tiptap/html-utils';
+import { filesApi } from '@/api/client';
 import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
@@ -106,6 +107,22 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     deleteBlock(block.id);
     setFocusBlock(prevBlockId, cursorPosition);
   }, [block.id, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
+
+  const handlePasteImage = useCallback(async (file: File): Promise<void> => {
+    try {
+      const result = await filesApi.upload(file);
+      const currentBlock = getBlockById(block.id);
+      const currentOrder = currentBlock?.order ?? block.order;
+      const newBlock = await createBlock(pageId, 'image', {
+        url: result.url,
+        alt: file.name,
+        caption: '',
+      }, currentOrder + 1);
+      setFocusBlock(newBlock.id);
+    } catch (error) {
+      console.error('Image paste upload failed:', error);
+    }
+  }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
   const handleKebabClick = useCallback(() => {
     if (kebabButtonRef.current) {
@@ -241,6 +258,7 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
             focusNextBlock: handleFocusNextBlock,
             pasteMultipleBlocks: handlePasteMultipleBlocks,
             deleteAndMergeToPrevious: handleDeleteAndMergeToPrevious,
+            pasteImage: handlePasteImage,
           }}
         >
           {renderBlockContent()}

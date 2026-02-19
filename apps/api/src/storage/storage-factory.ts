@@ -1,4 +1,5 @@
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
+import type { FileStorageAdapter } from './file-storage-adapter.js';
 import { PostgresStorage } from './postgres-storage.js';
 
 export type StorageType = 'sqlite' | 'json-sqlite' | 'postgres';
@@ -10,6 +11,7 @@ export interface StorageConfig {
 
 let storageInstance: StorageAdapter | null = null;
 let userStorageInstance: UserStorageAdapter | null = null;
+let fileStorageInstance: FileStorageAdapter | null = null;
 let postgresInstance: PostgresStorage | null = null;
 
 export async function initializeStorage(config: StorageConfig): Promise<{
@@ -25,6 +27,7 @@ export async function initializeStorage(config: StorageConfig): Promise<{
     postgresInstance = pg;
     storageInstance = pg;
     userStorageInstance = pg;
+    fileStorageInstance = pg;
 
     console.log('Using PostgreSQL storage backend');
   } else {
@@ -33,6 +36,7 @@ export async function initializeStorage(config: StorageConfig): Promise<{
     const sqliteStorage = new SqliteFullStorage();
     storageInstance = sqliteStorage;
     userStorageInstance = sqliteStorage;
+    fileStorageInstance = sqliteStorage;
 
     console.log('Using SQLite storage backend');
   }
@@ -57,6 +61,13 @@ export function getUserStorage(): UserStorageAdapter {
   return userStorageInstance;
 }
 
+export function getFileStorage(): FileStorageAdapter {
+  if (!fileStorageInstance) {
+    throw new Error('File storage not initialized. Call initializeStorage() first.');
+  }
+  return fileStorageInstance;
+}
+
 export function getStorageType(): StorageType {
   if (postgresInstance) {
     return 'postgres';
@@ -71,4 +82,5 @@ export async function closeStorage(): Promise<void> {
   }
   storageInstance = null;
   userStorageInstance = null;
+  fileStorageInstance = null;
 }

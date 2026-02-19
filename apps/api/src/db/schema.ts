@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, blob, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(), // usr_xxx
@@ -69,6 +69,17 @@ export const blocks = sqliteTable('blocks', {
   index('idx_blocks_page_order').on(table.pageId, table.order),
 ]);
 
+// Files table
+export const files = sqliteTable('files', {
+  id: text('id').primaryKey(), // file_xxx
+  filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  data: blob('data', { mode: 'buffer' }).notNull(),
+  uploadedBy: text('uploaded_by').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
@@ -77,3 +88,5 @@ export type PageRow = typeof pages.$inferSelect;
 export type NewPageRow = typeof pages.$inferInsert;
 export type BlockRow = typeof blocks.$inferSelect;
 export type NewBlockRow = typeof blocks.$inferInsert;
+export type FileRow = typeof files.$inferSelect;
+export type NewFileRow = typeof files.$inferInsert;

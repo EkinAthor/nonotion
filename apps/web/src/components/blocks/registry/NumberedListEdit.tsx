@@ -15,7 +15,7 @@ interface NumberedListEditProps {
 }
 
 export default function NumberedListEdit({ block, readOnly = false }: NumberedListEditProps) {
-  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
+  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock, getBlocksForPage, updateBlock } = useBlockStore();
 
   const content = block.content as NumberedListContent;
@@ -110,6 +110,7 @@ export default function NumberedListEdit({ block, readOnly = false }: NumberedLi
     },
     onIndent: handleIndent,
     onOutdent: handleOutdent,
+    onPasteImage: pasteImage,
   });
 
   // Handle focus when this block is the focus target

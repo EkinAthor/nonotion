@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth.js';
 import { sharesRoutes } from './routes/shares.js';
 import { usersRoutes } from './routes/users.js';
 import { databasesRoutes } from './routes/databases.js';
+import { filesRoutes } from './routes/files.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
 
@@ -95,6 +96,7 @@ await fastify.register(pagesRoutes);
 await fastify.register(blocksRoutes);
 await fastify.register(sharesRoutes);
 await fastify.register(databasesRoutes);
+await fastify.register(filesRoutes);
 
 // Health check
 fastify.get('/health', async () => {

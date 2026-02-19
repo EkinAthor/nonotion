@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Block, ImageContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { useBlockContext } from '@/contexts/BlockContext';
+import { filesApi } from '@/api/client';
 
 interface ImageEditProps {
   block: Block;
@@ -15,8 +16,12 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
   const [caption, setCaption] = useState(content.caption || '');
   const [showEditPopover, setShowEditPopover] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const { updateBlock, focusBlockId, setFocusBlock } = useBlockStore();
   const { focusPreviousBlock, focusNextBlock } = useBlockContext();
 
@@ -26,6 +31,44 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
     setAlt(content.alt || '');
     setCaption(content.caption || '');
   }, [content.url, content.alt, content.caption]);
+
+  // Resolve display URL: internal files need auth-fetched blob URLs
+  useEffect(() => {
+    if (!url) {
+      setDisplayUrl(null);
+      return;
+    }
+
+    if (url.startsWith('/api/files/')) {
+      let cancelled = false;
+      filesApi.getImageBlobUrl(url).then((blobUrl) => {
+        if (!cancelled) {
+          // Revoke previous blob URL
+          if (blobUrlRef.current) {
+            URL.revokeObjectURL(blobUrlRef.current);
+          }
+          blobUrlRef.current = blobUrl;
+          setDisplayUrl(blobUrl);
+        }
+      }).catch(() => {
+        if (!cancelled) {
+          setDisplayUrl(null);
+        }
+      });
+      return () => { cancelled = true; };
+    } else {
+      setDisplayUrl(url);
+    }
+  }, [url]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+    };
+  }, []);
 
   // Handle focus
   useEffect(() => {
@@ -49,6 +92,47 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showEditPopover]);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    setIsUploading(true);
+    try {
+      const result = await filesApi.upload(file);
+      setUrl(result.url);
+      await updateBlock(block.id, {
+        content: { url: result.url, alt: file.name, caption },
+      });
+      setAlt(file.name);
+    } catch (error) {
+      console.error('Upload failed:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [block.id, caption, updateBlock]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+    // Reset so the same file can be re-selected
+    e.target.value = '';
+  }, [handleFileUpload]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFileUpload(file);
+          return;
+        }
+      }
+    }
+  }, [handleFileUpload]);
 
   const handleUrlSubmit = useCallback(async () => {
     if (urlInput.trim()) {
@@ -94,10 +178,13 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
     setShowEditPopover(false);
   }, [block.id, updateBlock]);
 
-  // Empty state - URL input
+  // Empty state - upload + URL input
   if (!url) {
     return (
-      <div className="border-2 border-dashed border-gray-300 rounded-md p-8 text-center hover:bg-gray-50 transition-colors">
+      <div
+        className="border-2 border-dashed border-gray-300 rounded-md p-8 text-center hover:bg-gray-50 transition-colors"
+        onPaste={handlePaste}
+      >
         <div className="text-gray-400 mb-3">
           <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -108,16 +195,44 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
             />
           </svg>
         </div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Paste image URL and press Enter"
-          disabled={readOnly}
-          className="w-full max-w-md text-center bg-transparent border-none focus:outline-none text-notion-text placeholder:text-notion-text-secondary"
-        />
+
+        {isUploading ? (
+          <div className="flex items-center justify-center gap-2 text-notion-text-secondary">
+            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span>Uploading...</span>
+          </div>
+        ) : (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={readOnly}
+              className="mb-3 px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            >
+              Upload image
+            </button>
+            <div className="text-xs text-notion-text-secondary mb-2">or paste an image from clipboard</div>
+            <input
+              ref={inputRef}
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Paste image URL and press Enter"
+              disabled={readOnly}
+              className="w-full max-w-md text-center bg-transparent border-none focus:outline-none text-notion-text placeholder:text-notion-text-secondary"
+            />
+          </>
+        )}
       </div>
     );
   }
@@ -126,7 +241,7 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
   return (
     <figure className="my-2 relative group">
       <img
-        src={url}
+        src={displayUrl || ''}
         alt={alt || 'Image'}
         className="max-w-full rounded cursor-pointer"
         onClick={() => !readOnly && setShowEditPopover(true)}

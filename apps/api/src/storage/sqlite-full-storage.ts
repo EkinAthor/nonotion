@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users, permissions, pages, blocks } from '../db/schema.js';
+import { users, permissions, pages, blocks, files } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import type {
   Page,
@@ -13,6 +13,7 @@ import type {
   PageType,
 } from '@nonotion/shared';
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
+import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
 import type { PageRow, BlockRow } from '../db/schema.js';
 
 function rowToUser(row: typeof users.$inferSelect): User {
@@ -74,7 +75,7 @@ function rowToBlock(row: BlockRow): Block {
   };
 }
 
-export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter {
+export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter {
   // ==================== StorageAdapter: Pages ====================
 
   async getAllPages(): Promise<Page[]> {
@@ -332,5 +333,57 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter {
 
   async deleteUserPermissions(userId: string): Promise<void> {
     db.delete(permissions).where(eq(permissions.userId, userId)).run();
+  }
+
+  // ==================== FileStorageAdapter ====================
+
+  async saveFile(file: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    data: Buffer;
+    uploadedBy: string;
+  }): Promise<StoredFile> {
+    const createdAt = new Date().toISOString();
+    db.insert(files).values({
+      id: file.id,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+      data: file.data,
+      uploadedBy: file.uploadedBy,
+      createdAt,
+    }).run();
+    return {
+      id: file.id,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+      uploadedBy: file.uploadedBy,
+      createdAt,
+    };
+  }
+
+  async getFileMeta(id: string): Promise<StoredFile | null> {
+    const rows = db.select({
+      id: files.id,
+      filename: files.filename,
+      mimeType: files.mimeType,
+      size: files.size,
+      uploadedBy: files.uploadedBy,
+      createdAt: files.createdAt,
+    }).from(files).where(eq(files.id, id)).all();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async getFileData(id: string): Promise<Buffer | null> {
+    const rows = db.select({ data: files.data }).from(files).where(eq(files.id, id)).all();
+    return rows.length > 0 ? rows[0].data : null;
+  }
+
+  async deleteFile(id: string): Promise<boolean> {
+    const result = db.delete(files).where(eq(files.id, id)).run();
+    return result.changes > 0;
   }
 }

@@ -7,6 +7,7 @@ import {
   jsonb,
   primaryKey,
   index,
+  customType,
 } from 'drizzle-orm/pg-core';
 
 // Users table
@@ -101,6 +102,24 @@ export const permissions = pgTable(
   ]
 );
 
+// Custom type for bytea columns
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
+// Files table
+export const files = pgTable('files', {
+  id: text('id').primaryKey(), // file_xxx
+  filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  data: bytea('data').notNull(),
+  uploadedBy: text('uploaded_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+});
+
 // Type exports for inference
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
@@ -110,3 +129,5 @@ export type BlockRow = typeof blocks.$inferSelect;
 export type NewBlockRow = typeof blocks.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type NewPermissionRow = typeof permissions.$inferInsert;
+export type FileRow = typeof files.$inferSelect;
+export type NewFileRow = typeof files.$inferInsert;

@@ -20,6 +20,7 @@ import type {
   DatabaseRow,
   UpdateSchemaInput,
   UpdatePropertiesInput,
+  FileUploadResponse,
 } from '@nonotion/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -260,4 +261,51 @@ export const databaseApi = {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
+};
+
+// Files API
+export const filesApi = {
+  upload: async (file: File): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}/files`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as ApiError;
+      throw new Error(error.error?.message || 'Upload failed');
+    }
+
+    const result = await response.json() as ApiResponse<FileUploadResponse>;
+    return result.data;
+  },
+
+  getImageBlobUrl: async (fileUrl: string): Promise<string> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}${fileUrl.replace('/api', '')}`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to load image');
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  },
 };

@@ -13,6 +13,7 @@ import type {
   PageType,
 } from '@nonotion/shared';
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
+import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
 import * as pgSchema from '../db/pg-schema.js';
 
 type PgDatabase = ReturnType<typeof drizzle<typeof pgSchema>>;
@@ -76,7 +77,7 @@ function rowToPermission(row: pgSchema.PermissionRow): PagePermission {
   };
 }
 
-export class PostgresStorage implements StorageAdapter, UserStorageAdapter {
+export class PostgresStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter {
   private db: PgDatabase;
   private pool: Pool;
 
@@ -369,5 +370,68 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter {
 
   async deleteUserPermissions(userId: string): Promise<void> {
     await this.db.delete(pgSchema.permissions).where(eq(pgSchema.permissions.userId, userId));
+  }
+
+  // ==================== FileStorageAdapter ====================
+
+  async saveFile(file: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    data: Buffer;
+    uploadedBy: string;
+  }): Promise<StoredFile> {
+    const createdAt = new Date().toISOString();
+    await this.db.insert(pgSchema.files).values({
+      id: file.id,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+      data: file.data,
+      uploadedBy: file.uploadedBy,
+      createdAt: new Date(createdAt),
+    });
+    return {
+      id: file.id,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+      uploadedBy: file.uploadedBy,
+      createdAt,
+    };
+  }
+
+  async getFileMeta(id: string): Promise<StoredFile | null> {
+    const rows = await this.db
+      .select({
+        id: pgSchema.files.id,
+        filename: pgSchema.files.filename,
+        mimeType: pgSchema.files.mimeType,
+        size: pgSchema.files.size,
+        uploadedBy: pgSchema.files.uploadedBy,
+        createdAt: pgSchema.files.createdAt,
+      })
+      .from(pgSchema.files)
+      .where(eq(pgSchema.files.id, id));
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async getFileData(id: string): Promise<Buffer | null> {
+    const rows = await this.db
+      .select({ data: pgSchema.files.data })
+      .from(pgSchema.files)
+      .where(eq(pgSchema.files.id, id));
+    return rows.length > 0 ? rows[0].data : null;
+  }
+
+  async deleteFile(id: string): Promise<boolean> {
+    const result = await this.db.delete(pgSchema.files).where(eq(pgSchema.files.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 }

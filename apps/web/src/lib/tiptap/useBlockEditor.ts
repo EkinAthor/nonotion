@@ -59,6 +59,7 @@ interface UseBlockEditorOptions {
   onDeleteAndMergeToPrevious?: (currentText: string) => Promise<void>;
   onIndent?: () => Promise<void>;
   onOutdent?: () => Promise<void>;
+  onPasteImage?: (file: File) => Promise<void>;
 }
 
 interface UseBlockEditorResult {
@@ -81,6 +82,7 @@ export function useBlockEditor({
   onDeleteAndMergeToPrevious,
   onIndent,
   onOutdent,
+  onPasteImage,
 }: UseBlockEditorOptions): UseBlockEditorResult {
   const { updateBlock } = useBlockStore();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -162,6 +164,7 @@ export function useBlockEditor({
   const mergeCallbackRef = useRef(onDeleteAndMergeToPrevious);
   const indentCallbackRef = useRef(onIndent);
   const outdentCallbackRef = useRef(onOutdent);
+  const pasteImageCallbackRef = useRef(onPasteImage);
   // Track the last content we know about to detect external changes
   const lastKnownContentRef = useRef(getBlockText(block.content));
   // Flag to skip saving during external content sync
@@ -193,6 +196,10 @@ export function useBlockEditor({
   useEffect(() => {
     outdentCallbackRef.current = onOutdent;
   }, [onOutdent]);
+
+  useEffect(() => {
+    pasteImageCallbackRef.current = onPasteImage;
+  }, [onPasteImage]);
 
   useEffect(() => {
     createCallbackRef.current = onCreateBlockBelow;
@@ -254,6 +261,21 @@ export function useBlockEditor({
             handlePaste: (view, event) => {
               const clipboardData = event.clipboardData;
               if (!clipboardData) return false;
+
+              // Check for image data in clipboard before text handling
+              if (pasteImageCallbackRef.current) {
+                const items = clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                  if (items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                      event.preventDefault();
+                      pasteImageCallbackRef.current(file);
+                      return true;
+                    }
+                  }
+                }
+              }
 
               // Check for HTML content first (from rich text copy)
               const htmlContent = clipboardData.getData('text/html');

@@ -15,7 +15,7 @@ interface BulletListEditProps {
 }
 
 export default function BulletListEdit({ block, readOnly = false }: BulletListEditProps) {
-  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
+  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock, updateBlock } = useBlockStore();
 
   const content = block.content as BulletListContent;
@@ -84,6 +84,7 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
     },
     onIndent: handleIndent,
     onOutdent: handleOutdent,
+    onPasteImage: pasteImage,
   });
 
   // Handle focus when this block is the focus target

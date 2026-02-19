@@ -13,7 +13,7 @@ interface HeadingEditProps {
 }
 
 export default function HeadingEdit({ block, readOnly = false }: HeadingEditProps) {
-  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
+  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
@@ -29,6 +29,7 @@ export default function HeadingEdit({ block, readOnly = false }: HeadingEditProp
     onFocusNextBlock: focusNextBlock,
     onPasteMultipleBlocks: pasteMultipleBlocks,
     onDeleteAndMergeToPrevious: deleteAndMergeToPrevious,
+    onPasteImage: pasteImage,
   });
 
   // Handle focus when this block is the focus target

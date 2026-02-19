@@ -15,7 +15,7 @@ interface ChecklistEditProps {
 }
 
 export default function ChecklistEdit({ block, readOnly = false }: ChecklistEditProps) {
-  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious } = useBlockContext();
+  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock, updateBlock } = useBlockStore();
 
   const content = block.content as ChecklistContent;
@@ -91,6 +91,7 @@ export default function ChecklistEdit({ block, readOnly = false }: ChecklistEdit
     },
     onIndent: handleIndent,
     onOutdent: handleOutdent,
+    onPasteImage: pasteImage,
   });
 
   // Handle focus when this block is the focus target

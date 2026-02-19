@@ -47,3 +47,11 @@ export function isPropertyId(id: string): boolean {
 export function isOptionId(id: string): boolean {
   return id.startsWith('opt_') && id.length === 16;
 }
+
+export function generateFileId(): string {
+  return `file_${generateRandomString(12)}`;
+}
+
+export function isFileId(id: string): boolean {
+  return id.startsWith('file_') && id.length === 17;
+}

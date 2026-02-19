@@ -31,13 +31,14 @@ New block types are added as plugins in `apps/web/src/components/blocks/registry
 - Backend support for the block type in shared schemas
 
 ### 2. Storage Adapter Pattern
-`apps/api/src/storage/storage-adapter.ts` defines the `StorageAdapter` and `UserStorageAdapter` interfaces. Implemented by `SqliteFullStorage` (default, single `nonotion.db` file) and `PostgresStorage`. The storage factory (`storage-factory.ts`) selects the backend based on `STORAGE_TYPE` env var.
+`apps/api/src/storage/storage-adapter.ts` defines the `StorageAdapter` and `UserStorageAdapter` interfaces. `apps/api/src/storage/file-storage-adapter.ts` defines the `FileStorageAdapter` interface for file/image BLOB storage. All three are implemented by `SqliteFullStorage` (default, single `nonotion.db` file) and `PostgresStorage`. The storage factory (`storage-factory.ts`) selects the backend based on `STORAGE_TYPE` env var.
 
 ### 3. Entity IDs
 All entities use prefixed IDs for type safety:
 - Pages: `pg_xxxxxxxxxxxx`
 - Blocks: `blk_xxxxxxxxxxxx`
 - Users: `usr_xxxxxxxxxxxx`
+- Files: `file_xxxxxxxxxxxx`
 
 ### 4. Optimistic Updates
 Zustand stores update UI immediately for mutations, then sync with backend. On error, revert to previous state (surgical snapshot restore, no full refetch).
@@ -58,6 +59,7 @@ All entities have `version` and `updatedAt` fields for future last-write-wins co
 - `createBlockBelow()` - Create new block after current
 - `changeBlockType()` - Change block type (heading/paragraph)
 - `focusPreviousBlock()` / `focusNextBlock()` - Navigate between blocks
+- `pasteImage(file)` - Upload image from clipboard and create image block below
 
 ### 7. Slash Commands
 Typing `/` at the start of an empty block opens a command menu. Shortcuts like `/h1`, `/p` filter and select block types.
@@ -68,7 +70,7 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 |------|---------|
 | `packages/shared/src/types/block.ts` | Block type definitions - drives the entire block system |
 | `packages/shared/src/schemas/block.ts` | Zod validation for block API requests |
-| `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities (pages, blocks, users, permissions) |
+| `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities (pages, blocks, users, permissions, files) |
 | `apps/web/src/stores/pageStore.ts` | Page state with optimistic update/delete |
 | `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates + temp ID mapping |
 | `apps/web/src/stores/databaseStore.ts` | Database state with optimistic row/property updates |
@@ -77,6 +79,10 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 | `apps/web/src/contexts/BlockContext.tsx` | Context for block operations (create, change type, navigate) |
 | `apps/web/src/components/blocks/SlashCommandMenu.tsx` | Slash command popup for changing block types |
 | `apps/web/src/components/blocks/registry/index.ts` | Block type registry with shortcuts |
+| `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface for file BLOB storage |
+| `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
+| `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
+| `apps/web/src/api/client.ts` | API client including `filesApi` for uploads and auth-fetched blob URLs |
 
 ## Commands
 
@@ -172,9 +178,9 @@ pnpm --filter @nonotion/api tsc --noEmit
 
 These are planned but NOT yet implemented:
 - Real-time collaboration (WebSocket)
-- Additional block types (lists, code, images, tables)
+- Additional block types (tables)
+- S3/external file storage backend (currently BLOB in DB)
 - Database storage (Supabase)
-- Rich text formatting (bold, italic, etc.)
 
 When implementing these, check `docs/implementation-plan.md` for architectural guidance.
 

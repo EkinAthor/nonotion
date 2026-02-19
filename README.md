@@ -13,6 +13,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Multi-user authentication with JWT
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties
+- Image upload (file picker + clipboard paste) with BLOB storage
 - Configurable storage (JSON/SQLite or PostgreSQL)
 
 ## Tech Stack
@@ -137,6 +138,7 @@ If you lose access to the admin account, you can reset the password using an env
 | `DATABASE_URL` | PostgreSQL connection URL | - |
 | `PORT` | API server port | `3001` |
 | `CORS_ORIGINS` | Allowed origins (comma-separated) | `localhost:5173,localhost:3000` |
+| `MAX_FILE_SIZE_MB` | Maximum file upload size in MB | `10` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
 
 ---
@@ -201,6 +203,13 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | PATCH | `/api/blocks/:id` | Update block |
 | DELETE | `/api/blocks/:id` | Delete block |
 | PATCH | `/api/pages/:id/blocks/reorder` | Reorder blocks |
+
+### Files
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/files` | Upload file (multipart) |
+| GET | `/api/files/:id` | Get file (binary) |
 
 ### Sharing
 
