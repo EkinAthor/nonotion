@@ -39,10 +39,16 @@ All entities use prefixed IDs for type safety:
 - Blocks: `blk_xxxxxxxxxxxx`
 - Users: `usr_xxxxxxxxxxxx`
 
-### 4. Optimistic Updates with Temp ID Mapping
-Zustand stores update UI immediately, then sync with backend. On error, refetch to restore correct state.
+### 4. Optimistic Updates
+Zustand stores update UI immediately for mutations, then sync with backend. On error, revert to previous state (surgical snapshot restore, no full refetch).
 
-Block creation uses client-generated temp IDs (`generateBlockId()`) so new blocks appear instantly. A module-scoped `tempToRealId` map in `blockStore.ts` translates temp IDs to server IDs for API calls. A `pendingCreates` map lets `updateBlock`/`deleteBlock` wait for the create API to finish before making dependent calls. The temp ID remains the canonical key in the store (no React remount).
+**Block creation** uses client-generated temp IDs (`generateBlockId()`) so new blocks appear instantly. A module-scoped `tempToRealId` map in `blockStore.ts` translates temp IDs to server IDs for API calls. A `pendingCreates` map lets `updateBlock`/`deleteBlock` wait for the create API to finish before making dependent calls. The temp ID remains the canonical key in the store (no React remount).
+
+**Page creation** awaits the server (not optimistic) because pages need real IDs for navigation and permission checks. Components show a loading indicator during creation.
+
+**Page updates** (rename, icon, star) are optimistic: snapshot previous state, apply immediately, fire API in background, revert on error. Same for **page deletion**.
+
+**Database operations**: `updateRowProperties` and `updatePropertyOptions` (rename/delete tags) are optimistic. `updateSchema` with `addProperties` awaits the server (avoids fake property IDs); updates/removals/reorders are optimistic.
 
 ### 5. LWW Sync Preparation
 All entities have `version` and `updatedAt` fields for future last-write-wins conflict resolution.
@@ -63,8 +69,9 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 | `packages/shared/src/types/block.ts` | Block type definitions - drives the entire block system |
 | `packages/shared/src/schemas/block.ts` | Zod validation for block API requests |
 | `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities (pages, blocks, users, permissions) |
-| `apps/web/src/stores/pageStore.ts` | Page state management with tree operations |
-| `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates |
+| `apps/web/src/stores/pageStore.ts` | Page state with optimistic update/delete |
+| `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates + temp ID mapping |
+| `apps/web/src/stores/databaseStore.ts` | Database state with optimistic row/property updates |
 | `apps/web/src/components/blocks/BlockCanvas.tsx` | Main editing surface with drag-and-drop |
 | `apps/web/src/lib/tiptap/useBlockEditor.ts` | Shared TipTap editor hook with auto-save, keyboard handling, slash commands |
 | `apps/web/src/contexts/BlockContext.tsx` | Context for block operations (create, change type, navigate) |

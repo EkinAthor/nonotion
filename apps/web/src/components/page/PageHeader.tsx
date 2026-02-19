@@ -33,10 +33,10 @@ export default function PageHeader({ page, readOnly = false, canShare = false }:
     }
   }, [isEditingTitle]);
 
-  const handleTitleBlur = async () => {
+  const handleTitleBlur = () => {
     setIsEditingTitle(false);
     if (title !== page.title) {
-      await updatePage(page.id, { title: title || 'Untitled' });
+      updatePage(page.id, { title: title || 'Untitled' });
     }
   };
 
@@ -46,9 +46,10 @@ export default function PageHeader({ page, readOnly = false, canShare = false }:
       // Save title first
       setIsEditingTitle(false);
       if (title !== page.title) {
-        await updatePage(page.id, { title: title || 'Untitled' });
+        updatePage(page.id, { title: title || 'Untitled' });
       }
       // Create a new block at the beginning of the page and focus it
+      // (await resolves instantly with temp block)
       const newBlock = await createBlock(page.id, 'paragraph', { text: '' }, 0);
       setFocusBlock(newBlock.id);
     }
@@ -63,18 +64,18 @@ export default function PageHeader({ page, readOnly = false, canShare = false }:
     setShowEmojiPicker(!showEmojiPicker);
   };
 
-  const handleEmojiSelect = async (emoji: string) => {
-    await updatePage(page.id, { icon: emoji });
+  const handleEmojiSelect = (emoji: string) => {
+    updatePage(page.id, { icon: emoji });
     setShowEmojiPicker(false);
   };
 
-  const handleRemoveIcon = async () => {
-    await updatePage(page.id, { icon: null });
+  const handleRemoveIcon = () => {
+    updatePage(page.id, { icon: null });
     setShowEmojiPicker(false);
   };
 
-  const handleToggleStar = async () => {
-    await updatePage(page.id, { isStarred: !page.isStarred });
+  const handleToggleStar = () => {
+    updatePage(page.id, { isStarred: !page.isStarred });
   };
 
   return (

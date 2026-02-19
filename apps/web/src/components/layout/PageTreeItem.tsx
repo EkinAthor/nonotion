@@ -28,19 +28,27 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
     toggleExpanded(node.id);
   };
 
+  const [isCreating, setIsCreating] = useState(false);
+
   const handleAddChild = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const page = await createPage({ title: 'Untitled', parentId: node.id });
-    if (!isExpanded) {
-      toggleExpanded(node.id);
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const page = await createPage({ title: 'Untitled', parentId: node.id });
+      if (!isExpanded) {
+        toggleExpanded(node.id);
+      }
+      navigate(`/page/${page.id}`);
+    } finally {
+      setIsCreating(false);
     }
-    navigate(`/page/${page.id}`);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm(`Delete "${node.title}"?`)) {
-      await deletePage(node.id);
+      deletePage(node.id);
       if (isSelected) {
         navigate('/');
       }
@@ -97,7 +105,8 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
           <div className="flex items-center gap-0.5">
             <button
               onClick={handleAddChild}
-              className="p-0.5 rounded hover:bg-gray-200"
+              disabled={isCreating}
+              className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-50"
               title="Add subpage"
             >
               <svg

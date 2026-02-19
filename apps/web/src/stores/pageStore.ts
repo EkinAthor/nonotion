@@ -13,8 +13,8 @@ interface PageState {
   fetchPages: () => Promise<void>;
   setCurrentPage: (id: string | null) => void;
   createPage: (input: CreatePageInput) => Promise<Page>;
-  updatePage: (id: string, input: UpdatePageInput) => Promise<Page>;
-  deletePage: (id: string) => Promise<void>;
+  updatePage: (id: string, input: UpdatePageInput) => void;
+  deletePage: (id: string) => void;
   toggleExpanded: (id: string) => void;
 
   // Selectors
@@ -67,24 +67,46 @@ export const usePageStore = create<PageState>((set, get) => ({
     return page;
   },
 
-  updatePage: async (id, input) => {
-    const page = await pagesApi.update(id, input);
+  updatePage: (id, input) => {
+    // 1. Snapshot previous page for revert
+    const previousPage = get().pages.get(id);
+    if (!previousPage) return;
+
+    // 2. Optimistic update: merge input immediately
     set((state) => {
       const pages = new Map(state.pages);
-      pages.set(id, page);
+      const existing = pages.get(id);
+      if (existing) {
+        pages.set(id, { ...existing, ...input, updatedAt: new Date().toISOString() });
+      }
       return { pages };
     });
-    return page;
+
+    // 3. Fire API call in background
+    pagesApi.update(id, input).catch((error) => {
+      console.error('Failed to update page:', error);
+      // Revert to previous state
+      set((state) => {
+        const pages = new Map(state.pages);
+        pages.set(id, previousPage);
+        return { pages };
+      });
+    });
   },
 
-  deletePage: async (id) => {
+  deletePage: (id) => {
     const page = get().pages.get(id);
-    await pagesApi.delete(id);
+    if (!page) return;
+
+    // 1. Snapshot for revert
+    const previousPages = new Map(get().pages);
+
+    // 2. Optimistic removal
     set((state) => {
       const pages = new Map(state.pages);
 
       // Remove from parent's childIds
-      if (page?.parentId) {
+      if (page.parentId) {
         const parent = pages.get(page.parentId);
         if (parent) {
           pages.set(page.parentId, {
@@ -108,6 +130,13 @@ export const usePageStore = create<PageState>((set, get) => ({
         pages,
         currentPageId: state.currentPageId === id ? null : state.currentPageId,
       };
+    });
+
+    // 3. Fire API delete in background
+    pagesApi.delete(id).catch((error) => {
+      console.error('Failed to delete page:', error);
+      // Revert by restoring snapshot
+      set({ pages: previousPages });
     });
   },
 

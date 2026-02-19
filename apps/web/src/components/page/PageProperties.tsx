@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Page, PropertyDefinition, PropertyValue } from '@nonotion/shared';
 import { usePageStore } from '@/stores/pageStore';
-import { databaseApi } from '@/api/client';
+import { useDatabaseStore } from '@/stores/databaseStore';
 import CellRenderer from '../database/cells/CellRenderer';
 
 interface PagePropertiesProps {
@@ -11,6 +11,7 @@ interface PagePropertiesProps {
 
 export default function PageProperties({ page, canEdit }: PagePropertiesProps) {
   const { pages, updatePage } = usePageStore();
+  const { updateRowProperties } = useDatabaseStore();
   const [properties, setProperties] = useState<PropertyDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -40,16 +41,16 @@ export default function PageProperties({ page, canEdit }: PagePropertiesProps) {
     return null;
   }
 
-  const handlePropertyChange = async (propertyId: string, value: PropertyValue) => {
+  const handlePropertyChange = (propertyId: string, value: PropertyValue) => {
+    // Optimistic: update via databaseStore (fire-and-forget API)
+    updateRowProperties(page.id, { [propertyId]: value });
+
+    // Also update page in pageStore for local sync
     const newProperties = {
       ...page.properties,
       [propertyId]: value,
     };
-
-    await databaseApi.updateProperties(page.id, { properties: { [propertyId]: value } });
-
-    // Update page in store (for local sync)
-    await updatePage(page.id, { properties: newProperties } as never);
+    updatePage(page.id, { properties: newProperties } as never);
   };
 
   return (

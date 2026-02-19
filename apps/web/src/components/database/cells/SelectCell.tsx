@@ -95,7 +95,7 @@ export default function SelectCell({ value, onChange, options, canEdit, property
     setIsOpen(false);
   };
 
-  const handleCreateTag = async () => {
+  const handleCreateTag = () => {
     const name = newTagName.trim();
     if (!name) return;
 
@@ -105,11 +105,11 @@ export default function SelectCell({ value, onChange, options, canEdit, property
       color: getNextColor(options),
     };
 
-    await updatePropertyOptions(propertyId, [...options, newOption]);
+    updatePropertyOptions(propertyId, [...options, newOption]);
     setNewTagName('');
   };
 
-  const handleRenameTag = async (optionId: string) => {
+  const handleRenameTag = (optionId: string) => {
     const name = editingTagName.trim();
     if (!name) {
       setEditingTagId(null);
@@ -120,16 +120,16 @@ export default function SelectCell({ value, onChange, options, canEdit, property
       opt.id === optionId ? { ...opt, name } : opt
     );
 
-    await updatePropertyOptions(propertyId, updatedOptions);
+    updatePropertyOptions(propertyId, updatedOptions);
     setEditingTagId(null);
   };
 
-  const handleDeleteTag = async (optionId: string) => {
+  const handleDeleteTag = (optionId: string) => {
     const option = options.find((o) => o.id === optionId);
     if (option?.isDefault) return; // Cannot delete default tags
 
     const updatedOptions = options.filter((opt) => opt.id !== optionId);
-    await updatePropertyOptions(propertyId, updatedOptions);
+    updatePropertyOptions(propertyId, updatedOptions);
 
     // If deleted tag was selected, clear selection
     if (value === optionId) {

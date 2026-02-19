@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PropertyDefinition, PropertyValue } from '@nonotion/shared';
 import { useDatabaseStore } from '@/stores/databaseStore';
@@ -12,13 +13,14 @@ export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
   const { rows, schema, activeDatabaseId, updateRowProperties, addRow } = useDatabaseStore();
   const { createPage } = usePageStore();
+  const [isAddingRow, setIsAddingRow] = useState(false);
 
   const properties = schema?.properties
     ? [...schema.properties].sort((a, b) => a.order - b.order)
     : [];
 
-  const handleCellChange = async (rowId: string, propertyId: string, value: PropertyValue) => {
-    await updateRowProperties(rowId, { [propertyId]: value });
+  const handleCellChange = (rowId: string, propertyId: string, value: PropertyValue) => {
+    updateRowProperties(rowId, { [propertyId]: value });
   };
 
   const handleRowClick = (rowId: string) => {
@@ -26,22 +28,25 @@ export default function TableView({ canEdit }: TableViewProps) {
   };
 
   const handleAddRow = async () => {
-    if (!activeDatabaseId) return;
+    if (!activeDatabaseId || isAddingRow) return;
+    setIsAddingRow(true);
+    try {
+      const page = await createPage({
+        title: 'Untitled',
+        parentId: activeDatabaseId,
+      });
 
-    const page = await createPage({
-      title: 'Untitled',
-      parentId: activeDatabaseId,
-    });
-
-    // Add to local state and refetch
-    addRow({
-      id: page.id,
-      title: page.title,
-      icon: page.icon,
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-      properties: {},
-    });
+      addRow({
+        id: page.id,
+        title: page.title,
+        icon: page.icon,
+        createdAt: page.createdAt,
+        updatedAt: page.updatedAt,
+        properties: {},
+      });
+    } finally {
+      setIsAddingRow(false);
+    }
   };
 
   if (properties.length === 0) {
@@ -118,12 +123,20 @@ export default function TableView({ canEdit }: TableViewProps) {
               <td colSpan={properties.length + 1} className="px-2 py-1">
                 <button
                   onClick={handleAddRow}
-                  className="flex items-center gap-1 w-full px-2 py-1 text-sm text-notion-text-secondary hover:bg-notion-hover rounded"
+                  disabled={isAddingRow}
+                  className="flex items-center gap-1 w-full px-2 py-1 text-sm text-notion-text-secondary hover:bg-notion-hover rounded disabled:opacity-50"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  New
+                  {isAddingRow ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  )}
+                  {isAddingRow ? 'Adding...' : 'New'}
                 </button>
               </td>
             </tr>

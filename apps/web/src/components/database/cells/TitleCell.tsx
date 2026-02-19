@@ -27,11 +27,11 @@ export default function TitleCell({ value, onChange, canEdit, rowId }: TitleCell
     }
   }, [isEditing]);
 
-  const handleBlur = async () => {
+  const handleBlur = () => {
     setIsEditing(false);
     if (localValue !== value) {
-      // Update the page title directly
-      await updatePage(rowId, { title: localValue });
+      // Update the page title directly (optimistic, fire-and-forget)
+      updatePage(rowId, { title: localValue });
       // Also update the row in databaseStore
       updateRowTitle(rowId, localValue);
       onChange(localValue);

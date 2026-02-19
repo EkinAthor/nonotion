@@ -19,6 +19,7 @@ const PROPERTY_TYPES: { type: PropertyType; label: string; icon: string }[] = [
 export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
   const { updateSchema, viewConfig, setSort, setFilter, getVisibleProperties } = useDatabaseStore();
   const [showAddProperty, setShowAddProperty] = useState(false);
+  const [isAddingProperty, setIsAddingProperty] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
@@ -47,7 +48,12 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     }
     // multi-select intentionally has no default options
 
-    await updateSchema({ addProperties: [input] });
+    setIsAddingProperty(true);
+    try {
+      await updateSchema({ addProperties: [input] });
+    } finally {
+      setIsAddingProperty(false);
+    }
     setShowAddProperty(false);
   };
 
@@ -192,16 +198,26 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
           {showAddProperty && (
             <div className="absolute right-0 top-full mt-1 bg-white border border-notion-border rounded-md shadow-lg z-10 min-w-[160px]">
               <div className="p-2 text-xs font-medium text-notion-text-secondary uppercase">Property type</div>
-              {PROPERTY_TYPES.map((pt) => (
-                <button
-                  key={pt.type}
-                  onClick={() => handleAddProperty(pt.type)}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-notion-hover"
-                >
-                  <span className="w-5 text-center">{pt.icon}</span>
-                  {pt.label}
-                </button>
-              ))}
+              {isAddingProperty ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-sm text-notion-text-secondary">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Adding...
+                </div>
+              ) : (
+                PROPERTY_TYPES.map((pt) => (
+                  <button
+                    key={pt.type}
+                    onClick={() => handleAddProperty(pt.type)}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-notion-hover"
+                  >
+                    <span className="w-5 text-center">{pt.icon}</span>
+                    {pt.label}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
