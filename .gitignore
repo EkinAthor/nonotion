@@ -29,6 +29,8 @@ pnpm-debug.log*
 coverage/
 playwright-report/
 test-results/
+.playwright-mcp/
+test_imports/
 
 # Data (keep structure, ignore content)
 data/pages/*.json
