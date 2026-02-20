@@ -15,6 +15,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Database pages with table view and properties
 - Image upload (file picker + clipboard paste) with BLOB storage
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
+- Quick search (Ctrl+K) across pages, block content, and database properties
 - Configurable storage (JSON/SQLite or PostgreSQL)
 
 ## Tech Stack
@@ -218,6 +219,12 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/import` | Import Notion export ZIP (multipart) |
+
+### Search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/search?q=...` | Search pages, blocks, and properties |
 
 ### Sharing
 

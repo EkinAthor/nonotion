@@ -15,6 +15,7 @@ export interface StorageAdapter {
   updateBlock(id: string, updates: Partial<Block>): Promise<Block | null>;
   deleteBlock(id: string): Promise<boolean>;
   deleteBlocksByPage(pageId: string): Promise<void>;
+  getBlocksByPages(pageIds: string[]): Promise<Block[]>;
 }
 
 export interface UserStorageAdapter {

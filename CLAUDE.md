@@ -64,7 +64,12 @@ All entities have `version` and `updatedAt` fields for future last-write-wins co
 ### 7. Slash Commands
 Typing `/` at the start of an empty block opens a command menu. Shortcuts like `/h1`, `/p` filter and select block types.
 
-### 8. Notion Import Pipeline
+### 8. Search (Ctrl+K)
+`apps/api/src/services/search-service.ts` implements server-side search across page titles, block content, and database row properties. Results are scored (title-starts-with > title-contains > block-match > property-match, starred bonus), deduplicated by page, and capped at 20. `apps/api/src/routes/search.ts` exposes `GET /api/search?q=...` with auth middleware. `StorageAdapter.getBlocksByPages(pageIds)` fetches blocks in bulk to avoid N+1 queries.
+
+Frontend: `SearchModal.tsx` is a command-palette modal opened via Ctrl+K/Cmd+K (listener in `MainLayout.tsx`) or the sidebar search button. Uses 250ms debounced API calls, keyboard navigation (arrows/enter/escape), and shows recent pages (starred first) when the query is empty. State lives in `uiStore.ts` (`searchOpen`, `toggleSearch`).
+
+### 9. Notion Import Pipeline
 `apps/api/src/services/import/` implements a multi-stage Notion export ZIP import:
 1. **zip-extractor** — Extracts ZIP to temp dir, handles double-zipping (outer ZIP containing inner ZIPs)
 2. **notion-scanner** — Recursively walks export, categorizes files (`.md`, `.csv`, `_all.csv`, images), extracts 32-char hex UIDs from filenames
@@ -101,6 +106,9 @@ Frontend: `ImportDialog.tsx` provides drag-and-drop ZIP upload via sidebar butto
 | `apps/api/src/services/import/entity-creator.ts` | Three-pass entity creation with reference resolution |
 | `apps/api/src/routes/import.ts` | `POST /api/import` multipart endpoint (100MB limit) |
 | `apps/web/src/components/layout/ImportDialog.tsx` | Import dialog with drag-and-drop ZIP upload |
+| `apps/api/src/services/search-service.ts` | Server-side search across pages, blocks, and properties |
+| `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
+| `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
 
 ## Commands
 

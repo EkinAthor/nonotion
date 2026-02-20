@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type {
   Page,
   Block,
@@ -203,6 +203,12 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
 
   async deleteBlocksByPage(pageId: string): Promise<void> {
     await this.db.delete(pgSchema.blocks).where(eq(pgSchema.blocks.pageId, pageId));
+  }
+
+  async getBlocksByPages(pageIds: string[]): Promise<Block[]> {
+    if (pageIds.length === 0) return [];
+    const rows = await this.db.select().from(pgSchema.blocks).where(inArray(pgSchema.blocks.pageId, pageIds));
+    return rows.map(rowToBlock);
   }
 
   // ==================== UserStorageAdapter: Users ====================

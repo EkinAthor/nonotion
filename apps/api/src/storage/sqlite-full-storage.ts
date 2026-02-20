@@ -1,6 +1,6 @@
 import { db } from '../db/index.js';
 import { users, permissions, pages, blocks, files } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type {
   Page,
   Block,
@@ -192,6 +192,12 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
 
   async deleteBlocksByPage(pageId: string): Promise<void> {
     db.delete(blocks).where(eq(blocks.pageId, pageId)).run();
+  }
+
+  async getBlocksByPages(pageIds: string[]): Promise<Block[]> {
+    if (pageIds.length === 0) return [];
+    const rows = db.select().from(blocks).where(inArray(blocks.pageId, pageIds)).all();
+    return rows.map(rowToBlock);
   }
 
   // ==================== UserStorageAdapter: Users ====================

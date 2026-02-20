@@ -211,6 +211,16 @@ export class JsonFileStorage implements StorageAdapter {
       }
     });
   }
+
+  async getBlocksByPages(pageIds: string[]): Promise<Block[]> {
+    await this.init();
+    const result: Block[] = [];
+    for (const pageId of pageIds) {
+      const blocks = this.blocksCache.get(pageId) || [];
+      result.push(...blocks);
+    }
+    return result;
+  }
 }
 
 export const storage = new JsonFileStorage();

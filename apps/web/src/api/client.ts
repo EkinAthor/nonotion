@@ -311,6 +311,23 @@ export const filesApi = {
   },
 };
 
+// Search API
+export interface SearchResult {
+  type: 'page' | 'block' | 'property';
+  pageId: string;
+  pageTitle: string;
+  pageIcon: string | null;
+  pageType: string;
+  matchText: string;
+  blockId?: string;
+  isStarred: boolean;
+}
+
+export const searchApi = {
+  search: (query: string) =>
+    request<SearchResult[]>(`/search?q=${encodeURIComponent(query)}`),
+};
+
 // Import API
 export const importApi = {
   importZip: async (file: File): Promise<ImportResult> => {
