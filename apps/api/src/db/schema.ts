@@ -58,6 +58,7 @@ export const blocks = sqliteTable('blocks', {
       'checklist',
       'code_block',
       'image',
+      'divider',
     ],
   }).notNull(),
   pageId: text('page_id').notNull(),

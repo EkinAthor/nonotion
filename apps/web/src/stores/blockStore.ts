@@ -370,6 +370,9 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       case 'image':
         content = { url: '', alt: '', caption: '' };
         break;
+      case 'divider':
+        content = {} as BlockContent;
+        break;
       case 'paragraph':
       default:
         content = { text };

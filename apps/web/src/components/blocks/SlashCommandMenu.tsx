@@ -153,6 +153,8 @@ function getBlockDescription(option: BlockDefinition): string {
       return 'Capture code snippet';
     case 'image':
       return 'Upload or embed an image';
+    case 'divider':
+      return 'Visual divider line';
     default:
       return '';
   }

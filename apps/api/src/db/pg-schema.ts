@@ -71,6 +71,7 @@ export const blocks = pgTable(
         'checklist',
         'code_block',
         'image',
+        'divider',
       ],
     }).notNull(),
     pageId: text('page_id').notNull(),

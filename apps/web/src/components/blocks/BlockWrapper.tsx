@@ -16,6 +16,7 @@ import NumberedListEdit from './registry/NumberedListEdit';
 import ChecklistEdit from './registry/ChecklistEdit';
 import CodeBlockEdit from './registry/CodeBlockEdit';
 import ImageEdit from './registry/ImageEdit';
+import DividerEdit from './registry/DividerEdit';
 import BlockContextMenu from './BlockContextMenu';
 
 interface BlockWrapperProps {
@@ -43,9 +44,14 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
 
   const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string): Promise<void> => {
     changeBlockType(block.id, newType, newText);
-    // Set focus to this block after type change so the new editor gets focus
-    setFocusBlock(block.id);
-  }, [block.id, changeBlockType, setFocusBlock]);
+    if (newType === 'divider') {
+      // Divider is non-editable — auto-create a paragraph below and focus it
+      handleCreateBlockBelow('');
+    } else {
+      // Set focus to this block after type change so the new editor gets focus
+      setFocusBlock(block.id);
+    }
+  }, [block.id, changeBlockType, setFocusBlock, handleCreateBlockBelow]);
 
   const handleFocusPreviousBlock = useCallback(() => {
     const prevBlockId = getAdjacentBlockId(block.id, 'prev');
@@ -92,6 +98,12 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
 
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
+
+    // If previous block is a divider, delete the divider and keep current block intact
+    if (prevBlock.type === 'divider') {
+      deleteBlock(prevBlockId);
+      return;
+    }
 
     // Calculate cursor position: previous block plain text length + 1 (for TipTap position offset)
     const prevText = getBlockText(prevBlock.content);
@@ -170,6 +182,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
         return <CodeBlockEdit block={block} readOnly={readOnly} />;
       case 'image':
         return <ImageEdit block={block} readOnly={readOnly} />;
+      case 'divider':
+        return <DividerEdit block={block} readOnly={readOnly} />;
       default:
         return <div className="text-red-500">Unknown block type: {block.type}</div>;
     }

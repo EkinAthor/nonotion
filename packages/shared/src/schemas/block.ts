@@ -10,6 +10,7 @@ export const blockTypeSchema = z.enum([
   'checklist',
   'code_block',
   'image',
+  'divider',
 ]);
 
 export const headingContentSchema = z.object({
@@ -58,6 +59,8 @@ export const imageContentSchema = z.object({
   caption: z.string().optional(),
 }).strict();
 
+export const dividerContentSchema = z.object({}).strict();
+
 export const blockContentSchema = z.union([
   checklistContentSchema,
   bulletListContentSchema,
@@ -67,6 +70,7 @@ export const blockContentSchema = z.union([
   heading3ContentSchema,
   codeBlockContentSchema,
   imageContentSchema,
+  dividerContentSchema,
   paragraphContentSchema,
 ]);
 

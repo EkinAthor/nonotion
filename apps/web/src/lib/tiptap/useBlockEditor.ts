@@ -23,6 +23,11 @@ function parseLineForBlockType(line: string): PasteBlockData {
   const { type, text, checked } = parseMarkdownLine(line);
   const definition = getBlockDefinition(type);
 
+  // Divider has empty content — don't spread text into it
+  if (type === 'divider') {
+    return { type: 'divider', content: definition?.defaultContent ?? ({} as BlockContent) };
+  }
+
   // Convert any inline markdown in the text content to HTML
   const htmlText = inlineMarkdownToHtml(text);
 
@@ -650,8 +655,15 @@ export function useBlockEditor({
       const html = stripOuterPTag(editor.getHTML());
       saveContent(html);
 
-      // Check for slash command using plain text
+      // Check for divider auto-conversion (---, ***, ___)
       const text = editor.getText();
+      if (/^(?:---|\*\*\*|___)$/.test(text)) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        changeBlockTypeRef.current?.('divider', '');
+        return;
+      }
+
+      // Check for slash command using plain text
       const { from } = editor.state.selection;
 
       if (slashStartPosRef.current !== null) {

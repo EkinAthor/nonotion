@@ -7,7 +7,8 @@ export type BlockType =
   | 'numbered_list'
   | 'checklist'
   | 'code_block'
-  | 'image';
+  | 'image'
+  | 'divider';
 
 export interface HeadingContent {
   text: string;
@@ -55,6 +56,8 @@ export interface ImageContent {
   caption?: string;
 }
 
+export interface DividerContent {}
+
 export type BlockContent =
   | HeadingContent
   | Heading2Content
@@ -64,7 +67,8 @@ export type BlockContent =
   | NumberedListContent
   | ChecklistContent
   | CodeBlockContent
-  | ImageContent;
+  | ImageContent
+  | DividerContent;
 
 export interface Block {
   id: string; // "blk_xxxxx"

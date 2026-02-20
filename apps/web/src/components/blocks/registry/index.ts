@@ -8,6 +8,7 @@ import NumberedListEdit from './NumberedListEdit';
 import ChecklistEdit from './ChecklistEdit';
 import CodeBlockEdit from './CodeBlockEdit';
 import ImageEdit from './ImageEdit';
+import DividerEdit from './DividerEdit';
 
 export interface MarkdownConfig {
   /** Prefix to add before text when copying (e.g., "# " for h1) */
@@ -127,6 +128,18 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
     EditComponent: ImageEdit,
     defaultContent: { url: '', alt: '', caption: '' },
   },
+  divider: {
+    type: 'divider',
+    label: 'Divider',
+    icon: '---',
+    shortcuts: ['divider', 'hr', 'line', '---'],
+    EditComponent: DividerEdit,
+    defaultContent: {} as BlockContent,
+    markdown: {
+      prefix: '---',
+      pastePattern: /^(?:---+|\*\*\*+|___+)$/,
+    },
+  },
 };
 
 /** Get the HTML tag name for a block type (for copy operations) */
@@ -140,6 +153,7 @@ export function getHtmlTag(type: BlockType): string {
     case 'checklist': return 'li';
     case 'code_block': return 'pre';
     case 'image': return 'img';
+    case 'divider': return 'hr';
     case 'paragraph':
     default:
       return 'p';
@@ -178,6 +192,10 @@ export function parseMarkdownLine(line: string): { type: BlockType; text: string
     if (definition.markdown?.pastePattern) {
       const match = line.match(definition.markdown.pastePattern);
       if (match) {
+        // Divider has no capture group — return empty text
+        if (type === 'divider') {
+          return { type: 'divider', text: '' };
+        }
         return { type: type as BlockType, text: match[1] || '' };
       }
     }
