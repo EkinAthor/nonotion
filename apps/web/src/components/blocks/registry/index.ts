@@ -9,6 +9,7 @@ import ChecklistEdit from './ChecklistEdit';
 import CodeBlockEdit from './CodeBlockEdit';
 import ImageEdit from './ImageEdit';
 import DividerEdit from './DividerEdit';
+import PageLinkEdit from './PageLinkEdit';
 
 export interface MarkdownConfig {
   /** Prefix to add before text when copying (e.g., "# " for h1) */
@@ -140,7 +141,76 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
       pastePattern: /^(?:---+|\*\*\*+|___+)$/,
     },
   },
+  page_link: {
+    type: 'page_link',
+    label: 'Page link',
+    icon: '🔗',
+    shortcuts: ['pagelink', 'link'],
+    EditComponent: PageLinkEdit,
+    defaultContent: { linkedPageId: '' } as BlockContent,
+  },
 };
+
+export interface SlashMenuItem {
+  type: BlockType;
+  action?: string;
+  label: string;
+  description: string;
+  icon: string;
+  shortcuts: string[];
+}
+
+/** Get all slash menu items, including multiple entries for page_link */
+export function getSlashMenuItems(): SlashMenuItem[] {
+  const items: SlashMenuItem[] = [];
+
+  for (const def of Object.values(blockRegistry)) {
+    if (def.type === 'page_link') continue; // handled separately below
+    items.push({
+      type: def.type,
+      label: def.label,
+      description: getSlashItemDescription(def.type),
+      icon: def.icon,
+      shortcuts: def.shortcuts,
+    });
+  }
+
+  // Two page_link entries with different actions
+  items.push({
+    type: 'page_link',
+    action: 'create_subpage',
+    label: 'Page',
+    description: 'Create a sub-page and link to it',
+    icon: '📄',
+    shortcuts: ['page', 'subpage'],
+  });
+  items.push({
+    type: 'page_link',
+    action: 'link_existing',
+    label: 'Page link',
+    description: 'Link to an existing page',
+    icon: '🔗',
+    shortcuts: ['pagelink', 'link', 'page link'],
+  });
+
+  return items;
+}
+
+function getSlashItemDescription(type: BlockType): string {
+  switch (type) {
+    case 'heading': return 'Large section heading';
+    case 'heading2': return 'Medium section heading';
+    case 'heading3': return 'Small section heading';
+    case 'paragraph': return 'Plain text';
+    case 'bullet_list': return 'Simple bulleted list';
+    case 'numbered_list': return 'Numbered list';
+    case 'checklist': return 'Track tasks with a to-do list';
+    case 'code_block': return 'Capture code snippet';
+    case 'image': return 'Upload or embed an image';
+    case 'divider': return 'Visual divider line';
+    default: return '';
+  }
+}
 
 /** Get the HTML tag name for a block type (for copy operations) */
 export function getHtmlTag(type: BlockType): string {
@@ -154,6 +224,7 @@ export function getHtmlTag(type: BlockType): string {
     case 'code_block': return 'pre';
     case 'image': return 'img';
     case 'divider': return 'hr';
+    case 'page_link': return 'a';
     case 'paragraph':
     default:
       return 'p';

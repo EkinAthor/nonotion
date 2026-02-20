@@ -8,7 +8,8 @@ export type BlockType =
   | 'checklist'
   | 'code_block'
   | 'image'
-  | 'divider';
+  | 'divider'
+  | 'page_link';
 
 export interface HeadingContent {
   text: string;
@@ -58,6 +59,10 @@ export interface ImageContent {
 
 export interface DividerContent {}
 
+export interface PageLinkContent {
+  linkedPageId: string;
+}
+
 export type BlockContent =
   | HeadingContent
   | Heading2Content
@@ -68,7 +73,8 @@ export type BlockContent =
   | ChecklistContent
   | CodeBlockContent
   | ImageContent
-  | DividerContent;
+  | DividerContent
+  | PageLinkContent;
 
 export interface Block {
   id: string; // "blk_xxxxx"
@@ -106,6 +112,9 @@ export function getBlockText(content: BlockContent): string {
   }
   if ('url' in content) {
     return content.caption || content.alt || '';
+  }
+  if ('linkedPageId' in content) {
+    return '';
   }
   return '';
 }

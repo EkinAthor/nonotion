@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Block, BlockType } from '@nonotion/shared';
 import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
+import { usePageStore } from '@/stores/pageStore';
 import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
 import { getPlainTextLength } from '@/lib/tiptap/html-utils';
 import { filesApi } from '@/api/client';
@@ -17,6 +19,7 @@ import ChecklistEdit from './registry/ChecklistEdit';
 import CodeBlockEdit from './registry/CodeBlockEdit';
 import ImageEdit from './registry/ImageEdit';
 import DividerEdit from './registry/DividerEdit';
+import PageLinkEdit from './registry/PageLinkEdit';
 import BlockContextMenu from './BlockContextMenu';
 
 interface BlockWrapperProps {
@@ -28,6 +31,8 @@ interface BlockWrapperProps {
 
 export default function BlockWrapper({ block, pageId, isDragging, readOnly = false }: BlockWrapperProps) {
   const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, updateBlock, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
+  const { createPage } = usePageStore();
+  const navigate = useNavigate();
   const [showActions, setShowActions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -42,7 +47,25 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     return newBlock.id;
   }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
-  const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string): Promise<void> => {
+  const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string, action?: string): Promise<void> => {
+    if (newType === 'page_link' && action === 'create_subpage') {
+      // Create a sub-page, link to it, then navigate.
+      // Use a single updateBlock with both type + content to avoid a race
+      // where changeBlockType's background API overwrites the linkedPageId.
+      // Await the updateBlock so the API call completes before we navigate away.
+      const newPage = await createPage({ title: 'Untitled', parentId: pageId });
+      await updateBlock(block.id, { type: 'page_link', content: { linkedPageId: newPage.id } });
+      navigate(`/page/${newPage.id}`);
+      return;
+    }
+
+    if (newType === 'page_link' && action === 'link_existing') {
+      // Switch to page_link type — the component will show the search UI
+      changeBlockType(block.id, 'page_link');
+      setFocusBlock(block.id);
+      return;
+    }
+
     changeBlockType(block.id, newType, newText);
     if (newType === 'divider') {
       // Divider is non-editable — auto-create a paragraph below and focus it
@@ -51,7 +74,7 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
       // Set focus to this block after type change so the new editor gets focus
       setFocusBlock(block.id);
     }
-  }, [block.id, changeBlockType, setFocusBlock, handleCreateBlockBelow]);
+  }, [block.id, pageId, changeBlockType, setFocusBlock, handleCreateBlockBelow, createPage, updateBlock, navigate]);
 
   const handleFocusPreviousBlock = useCallback(() => {
     const prevBlockId = getAdjacentBlockId(block.id, 'prev');
@@ -99,8 +122,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
 
-    // If previous block is a divider, delete the divider and keep current block intact
-    if (prevBlock.type === 'divider') {
+    // If previous block is a divider or page_link, delete it and keep current block intact
+    if (prevBlock.type === 'divider' || prevBlock.type === 'page_link') {
       deleteBlock(prevBlockId);
       return;
     }
@@ -184,6 +207,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
         return <ImageEdit block={block} readOnly={readOnly} />;
       case 'divider':
         return <DividerEdit block={block} readOnly={readOnly} />;
+      case 'page_link':
+        return <PageLinkEdit block={block} readOnly={readOnly} />;
       default:
         return <div className="text-red-500">Unknown block type: {block.type}</div>;
     }

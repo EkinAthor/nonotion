@@ -373,6 +373,9 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       case 'divider':
         content = {} as BlockContent;
         break;
+      case 'page_link':
+        content = { linkedPageId: '' } as BlockContent;
+        break;
       case 'paragraph':
       default:
         content = { text };

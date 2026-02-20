@@ -14,9 +14,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { Block } from '@nonotion/shared';
+import type { Block, PageLinkContent } from '@nonotion/shared';
 import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
+import { usePageStore } from '@/stores/pageStore';
 import BlockWrapper from './BlockWrapper';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
 import CrossBlockFormatToolbar from './CrossBlockFormatToolbar';
@@ -146,12 +147,23 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
 
       // Build copy text with markdown prefixes (convert HTML to inline markdown)
       const copyText = selectedBlocks.map((block) => {
+        if (block.type === 'page_link') {
+          const { linkedPageId } = block.content as PageLinkContent;
+          const page = usePageStore.getState().pages.get(linkedPageId);
+          return page ? page.title : 'Deleted page';
+        }
         const prefix = getMarkdownPrefix(block.type);
         return prefix + htmlToInlineMarkdown(getBlockText(block.content));
       }).join('\n');
 
       // Also build HTML version for rich paste
       const copyHtml = selectedBlocks.map((block) => {
+        if (block.type === 'page_link') {
+          const { linkedPageId } = block.content as PageLinkContent;
+          const page = usePageStore.getState().pages.get(linkedPageId);
+          const title = page ? page.title : 'Deleted page';
+          return `<a href="/page/${linkedPageId}">${title}</a>`;
+        }
         const tag = getHtmlTag(block.type);
         return `<${tag}>${getBlockText(block.content)}</${tag}>`;
       }).join('');

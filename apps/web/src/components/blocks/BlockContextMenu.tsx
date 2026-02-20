@@ -20,9 +20,9 @@ export default function BlockContextMenu({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Get all block types except the current one for "Turn into"
+  // Get all block types except the current one and page_link for "Turn into"
   const allTypes = getAllBlockTypes();
-  const turnIntoOptions = allTypes.filter((opt) => opt.type !== currentBlockType);
+  const turnIntoOptions = allTypes.filter((opt) => opt.type !== currentBlockType && opt.type !== 'page_link');
 
   // Total items: Delete + divider (not selectable) + turn into options
   const selectableItems = 1 + turnIntoOptions.length; // Delete + turn into options

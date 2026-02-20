@@ -11,6 +11,7 @@ export const blockTypeSchema = z.enum([
   'code_block',
   'image',
   'divider',
+  'page_link',
 ]);
 
 export const headingContentSchema = z.object({
@@ -61,6 +62,10 @@ export const imageContentSchema = z.object({
 
 export const dividerContentSchema = z.object({}).strict();
 
+export const pageLinkContentSchema = z.object({
+  linkedPageId: z.string(),
+}).strict();
+
 export const blockContentSchema = z.union([
   checklistContentSchema,
   bulletListContentSchema,
@@ -70,6 +75,7 @@ export const blockContentSchema = z.union([
   heading3ContentSchema,
   codeBlockContentSchema,
   imageContentSchema,
+  pageLinkContentSchema,
   dividerContentSchema,
   paragraphContentSchema,
 ]);

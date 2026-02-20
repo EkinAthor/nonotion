@@ -59,6 +59,7 @@ export const blocks = sqliteTable('blocks', {
       'code_block',
       'image',
       'divider',
+      'page_link',
     ],
   }).notNull(),
   pageId: text('page_id').notNull(),

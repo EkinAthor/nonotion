@@ -57,7 +57,7 @@ interface UseBlockEditorOptions {
   headingLevel?: 1 | 2 | 3;
   readOnly?: boolean;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
-  onChangeBlockType?: (newType: BlockType, newText?: string) => Promise<void>;
+  onChangeBlockType?: (newType: BlockType, newText?: string, action?: string) => Promise<void>;
   onFocusPreviousBlock?: () => void;
   onFocusNextBlock?: () => void;
   onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
@@ -71,7 +71,7 @@ interface UseBlockEditorResult {
   editor: Editor | null;
   slashMenu: SlashMenuState;
   closeSlashMenu: () => void;
-  selectSlashCommand: (type: BlockType) => void;
+  selectSlashCommand: (type: BlockType, action?: string) => void;
 }
 
 export function useBlockEditor({
@@ -224,7 +224,7 @@ export function useBlockEditor({
   }, []);
 
   const selectSlashCommand = useCallback(
-    async (type: BlockType) => {
+    async (type: BlockType, action?: string) => {
       const currentEditor = editorRef.current;
       if (currentEditor && slashStartPosRef.current !== null) {
         // Delete the slash and query text (slash is at position 1, delete from 1 to cursor)
@@ -236,19 +236,25 @@ export function useBlockEditor({
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
         }
+        // Clear the ref so the unmount-flush cleanup doesn't fire a stale save
+        debounceRef.current = undefined;
 
-        // Immediately save the cleaned content (without slash) to store
-        const cleanedText = stripOuterPTag(currentEditor.getHTML());
-        const currentBlock = blockRef.current;
-        const content: BlockContent = headingLevel
-          ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
-          : { ...currentBlock.content, text: cleanedText };
-        updateBlock(currentBlock.id, { content });
+        // Save cleaned content for text-based types only.
+        // page_link content is set entirely by the action handler — saving
+        // paragraph text here would race with it and overwrite linkedPageId.
+        if (type !== 'page_link') {
+          const cleanedText = stripOuterPTag(currentEditor.getHTML());
+          const currentBlock = blockRef.current;
+          const content: BlockContent = headingLevel
+            ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
+            : { ...currentBlock.content, text: cleanedText };
+          updateBlock(currentBlock.id, { content });
+        }
       }
       closeSlashMenu();
 
       if (onChangeBlockType) {
-        onChangeBlockType(type);
+        onChangeBlockType(type, undefined, action);
         // Focus is handled by BlockWrapper setting focusBlockId after type change
       }
     },

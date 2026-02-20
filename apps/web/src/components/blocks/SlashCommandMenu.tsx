@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { BlockType } from '@nonotion/shared';
-import { getAllBlockTypes, type BlockDefinition } from './registry';
+import { getSlashMenuItems } from './registry';
 
 interface SlashCommandMenuProps {
   query: string;
   position: { top: number; left: number };
-  onSelect: (type: BlockType) => void;
+  onSelect: (type: BlockType, action?: string) => void;
   onClose: () => void;
 }
 
@@ -19,7 +19,7 @@ export default function SlashCommandMenu({
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Filter options based on query (matches label, type, or shortcuts)
-  const allOptions = getAllBlockTypes();
+  const allOptions = getSlashMenuItems();
   const queryLower = query.toLowerCase();
   const filteredOptions = query
     ? allOptions.filter(
@@ -53,7 +53,7 @@ export default function SlashCommandMenu({
         case 'Enter':
           e.preventDefault();
           if (filteredOptions[selectedIndex]) {
-            onSelect(filteredOptions[selectedIndex].type);
+            onSelect(filteredOptions[selectedIndex].type, filteredOptions[selectedIndex].action);
           }
           break;
         case 'Escape':
@@ -111,8 +111,8 @@ export default function SlashCommandMenu({
       </div>
       {filteredOptions.map((option, index) => (
         <button
-          key={option.type}
-          onClick={() => onSelect(option.type)}
+          key={option.action ? `${option.type}:${option.action}` : option.type}
+          onClick={() => onSelect(option.type, option.action)}
           className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors ${index === selectedIndex
             ? 'bg-notion-hover'
             : 'hover:bg-notion-hover'
@@ -124,38 +124,11 @@ export default function SlashCommandMenu({
           <div>
             <div className="text-sm text-notion-text">{option.label}</div>
             <div className="text-xs text-notion-text-secondary">
-              {getBlockDescription(option)}
+              {option.description}
             </div>
           </div>
         </button>
       ))}
     </div>
   );
-}
-
-function getBlockDescription(option: BlockDefinition): string {
-  switch (option.type) {
-    case 'heading':
-      return 'Large section heading';
-    case 'heading2':
-      return 'Medium section heading';
-    case 'heading3':
-      return 'Small section heading';
-    case 'paragraph':
-      return 'Plain text';
-    case 'bullet_list':
-      return 'Simple bulleted list';
-    case 'numbered_list':
-      return 'Numbered list';
-    case 'checklist':
-      return 'Track tasks with a to-do list';
-    case 'code_block':
-      return 'Capture code snippet';
-    case 'image':
-      return 'Upload or embed an image';
-    case 'divider':
-      return 'Visual divider line';
-    default:
-      return '';
-  }
 }
