@@ -64,6 +64,19 @@ All entities have `version` and `updatedAt` fields for future last-write-wins co
 ### 7. Slash Commands
 Typing `/` at the start of an empty block opens a command menu. Shortcuts like `/h1`, `/p` filter and select block types.
 
+### 8. Notion Import Pipeline
+`apps/api/src/services/import/` implements a multi-stage Notion export ZIP import:
+1. **zip-extractor** — Extracts ZIP to temp dir, handles double-zipping (outer ZIP containing inner ZIPs)
+2. **notion-scanner** — Recursively walks export, categorizes files (`.md`, `.csv`, `_all.csv`, images), extracts 32-char hex UIDs from filenames
+3. **csv-parser** — Parses CSV with BOM stripping (PapaParse)
+4. **md-parser** — Two-phase: page metadata extraction + body-to-blocks conversion. Converts inline markdown (`**bold**`, `*italic*`, `` `code` ``, `[links](url)`) to HTML for TipTap
+5. **type-inferrer** — Infers database property types from CSV column data (title, text, select, multi_select, date, checkbox, url)
+6. **hierarchy-builder** — Builds tree of pages/databases/row-pages from scanned files
+7. **entity-creator** — Three-pass creation: pages/databases → images → blocks. Resolves `pending:uid` references for page links and database views
+8. **import-service** — Orchestrator with temp directory cleanup in `finally`
+
+Frontend: `ImportDialog.tsx` provides drag-and-drop ZIP upload via sidebar button. API: `POST /api/import` (multipart, 100MB default limit via `MAX_IMPORT_SIZE_MB`).
+
 ## Critical Files
 
 | File | Purpose |
@@ -83,6 +96,11 @@ Typing `/` at the start of an empty block opens a command menu. Shortcuts like `
 | `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
 | `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
 | `apps/web/src/api/client.ts` | API client including `filesApi` for uploads and auth-fetched blob URLs |
+| `apps/api/src/services/import/import-service.ts` | Notion import orchestrator (ZIP → pages/databases/blocks) |
+| `apps/api/src/services/import/md-parser.ts` | Markdown parser with inline formatting → HTML conversion |
+| `apps/api/src/services/import/entity-creator.ts` | Three-pass entity creation with reference resolution |
+| `apps/api/src/routes/import.ts` | `POST /api/import` multipart endpoint (100MB limit) |
+| `apps/web/src/components/layout/ImportDialog.tsx` | Import dialog with drag-and-drop ZIP upload |
 
 ## Commands
 

@@ -14,6 +14,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties
 - Image upload (file picker + clipboard paste) with BLOB storage
+- Notion export import (ZIP upload with pages, databases, images, and inline formatting)
 - Configurable storage (JSON/SQLite or PostgreSQL)
 
 ## Tech Stack
@@ -139,6 +140,7 @@ If you lose access to the admin account, you can reset the password using an env
 | `PORT` | API server port | `3001` |
 | `CORS_ORIGINS` | Allowed origins (comma-separated) | `localhost:5173,localhost:3000` |
 | `MAX_FILE_SIZE_MB` | Maximum file upload size in MB | `10` |
+| `MAX_IMPORT_SIZE_MB` | Maximum Notion import ZIP size in MB | `100` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
 
 ---
@@ -211,6 +213,12 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | POST | `/api/files` | Upload file (multipart) |
 | GET | `/api/files/:id` | Get file (binary) |
 
+### Import
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/import` | Import Notion export ZIP (multipart) |
+
 ### Sharing
 
 | Method | Endpoint | Description |
@@ -221,6 +229,27 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | DELETE | `/api/pages/:id/shares/:userId` | Remove permission |
 
 ---
+
+## Importing from Notion
+
+Nonotion can import your Notion workspace data from a ZIP export:
+
+1. In Notion, go to **Settings & members > Settings > Export all workspace content** (choose **Markdown & CSV** format)
+2. In Nonotion, click **Import from Notion** in the sidebar
+3. Upload the exported ZIP file (drag-and-drop or click to browse)
+
+**What gets imported:**
+- Pages with full hierarchy (nested sub-pages preserved)
+- Databases with inferred column types (text, select, multi-select, date, checkbox, URL)
+- Database rows with property values and option tags
+- Images (uploaded to BLOB storage)
+- Inline formatting (bold, italic, code, links)
+- Block types: headings, paragraphs, bullet/numbered lists, checklists, code blocks, dividers, images, page links, database views
+
+**Limitations:**
+- Person/user columns are imported as multi-select tags (Notion users can't be mapped)
+- Comments and activity history are not imported
+- Maximum ZIP size: 100MB (configurable via `MAX_IMPORT_SIZE_MB`)
 
 ## License
 
