@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePageStore } from '@/stores/pageStore';
-import { useDatabaseStore } from '@/stores/databaseStore';
+import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 
 interface TitleCellProps {
   value: string;
@@ -14,7 +14,7 @@ export default function TitleCell({ value, onChange, canEdit, rowId }: TitleCell
   const [localValue, setLocalValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const { updatePage } = usePageStore();
-  const { updateRowTitle } = useDatabaseStore();
+  const { updateRowTitle } = useDatabaseInstance();
 
   useEffect(() => {
     setLocalValue(value);

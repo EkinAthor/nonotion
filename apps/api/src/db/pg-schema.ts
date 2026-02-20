@@ -73,6 +73,7 @@ export const blocks = pgTable(
         'image',
         'divider',
         'page_link',
+        'database_view',
       ],
     }).notNull(),
     pageId: text('page_id').notNull(),

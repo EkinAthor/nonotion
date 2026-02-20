@@ -9,7 +9,8 @@ export type BlockType =
   | 'code_block'
   | 'image'
   | 'divider'
-  | 'page_link';
+  | 'page_link'
+  | 'database_view';
 
 export interface HeadingContent {
   text: string;
@@ -63,6 +64,10 @@ export interface PageLinkContent {
   linkedPageId: string;
 }
 
+export interface DatabaseViewContent {
+  databaseId: string;
+}
+
 export type BlockContent =
   | HeadingContent
   | Heading2Content
@@ -74,7 +79,8 @@ export type BlockContent =
   | CodeBlockContent
   | ImageContent
   | DividerContent
-  | PageLinkContent;
+  | PageLinkContent
+  | DatabaseViewContent;
 
 export interface Block {
   id: string; // "blk_xxxxx"
@@ -114,6 +120,9 @@ export function getBlockText(content: BlockContent): string {
     return content.caption || content.alt || '';
   }
   if ('linkedPageId' in content) {
+    return '';
+  }
+  if ('databaseId' in content) {
     return '';
   }
   return '';

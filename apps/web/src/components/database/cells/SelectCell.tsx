@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { SelectOption, SelectColor } from '@nonotion/shared';
-import { useDatabaseStore } from '@/stores/databaseStore';
+import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 
 interface SelectCellProps {
   value: string | null;
@@ -45,7 +45,7 @@ export default function SelectCell({ value, onChange, options, canEdit, property
   const newTagInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const updatePropertyOptions = useDatabaseStore((state) => state.updatePropertyOptions);
+  const updatePropertyOptions = useDatabaseInstance((state) => state.updatePropertyOptions);
 
   const selectedOption = options.find((o) => o.id === value);
 

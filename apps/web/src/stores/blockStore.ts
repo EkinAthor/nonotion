@@ -376,6 +376,9 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       case 'page_link':
         content = { linkedPageId: '' } as BlockContent;
         break;
+      case 'database_view':
+        content = { databaseId: '' } as BlockContent;
+        break;
       case 'paragraph':
       default:
         content = { text };

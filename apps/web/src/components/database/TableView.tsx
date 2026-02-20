@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PropertyDefinition, PropertyValue } from '@nonotion/shared';
-import { useDatabaseStore } from '@/stores/databaseStore';
+import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import CellRenderer from './cells/CellRenderer';
 
@@ -11,7 +11,7 @@ interface TableViewProps {
 
 export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
-  const { rows, schema, activeDatabaseId, updateRowProperties, addRow } = useDatabaseStore();
+  const { rows, schema, activeDatabaseId, updateRowProperties, addRow } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const [isAddingRow, setIsAddingRow] = useState(false);
 

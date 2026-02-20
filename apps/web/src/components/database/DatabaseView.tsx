@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Page } from '@nonotion/shared';
-import { useDatabaseStore } from '@/stores/databaseStore';
+import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import TableView from './TableView';
 import DatabaseToolbar from './DatabaseToolbar';
 
@@ -10,7 +10,17 @@ interface DatabaseViewProps {
 }
 
 export default function DatabaseView({ page, canEdit }: DatabaseViewProps) {
-  const { loadDatabase, fetchRows, clearDatabase, isLoading, error } = useDatabaseStore();
+  const storeRef = useRef(createDatabaseInstanceStore());
+
+  return (
+    <DatabaseInstanceProvider store={storeRef.current}>
+      <DatabaseViewInner page={page} canEdit={canEdit} />
+    </DatabaseInstanceProvider>
+  );
+}
+
+function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
+  const { loadDatabase, fetchRows, clearDatabase, isLoading, error } = useDatabaseInstance();
 
   useEffect(() => {
     loadDatabase(page);

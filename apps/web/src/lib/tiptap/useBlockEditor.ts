@@ -242,7 +242,7 @@ export function useBlockEditor({
         // Save cleaned content for text-based types only.
         // page_link content is set entirely by the action handler — saving
         // paragraph text here would race with it and overwrite linkedPageId.
-        if (type !== 'page_link') {
+        if (type !== 'page_link' && type !== 'database_view') {
           const cleanedText = stripOuterPTag(currentEditor.getHTML());
           const currentBlock = blockRef.current;
           const content: BlockContent = headingLevel

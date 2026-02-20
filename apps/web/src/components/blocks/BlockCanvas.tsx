@@ -14,7 +14,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { Block, PageLinkContent } from '@nonotion/shared';
+import type { Block, PageLinkContent, DatabaseViewContent } from '@nonotion/shared';
 import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { usePageStore } from '@/stores/pageStore';
@@ -152,6 +152,11 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
           const page = usePageStore.getState().pages.get(linkedPageId);
           return page ? page.title : 'Deleted page';
         }
+        if (block.type === 'database_view') {
+          const { databaseId } = block.content as DatabaseViewContent;
+          const page = usePageStore.getState().pages.get(databaseId);
+          return `[Database: ${page ? page.title : 'Unknown'}]`;
+        }
         const prefix = getMarkdownPrefix(block.type);
         return prefix + htmlToInlineMarkdown(getBlockText(block.content));
       }).join('\n');
@@ -163,6 +168,11 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
           const page = usePageStore.getState().pages.get(linkedPageId);
           const title = page ? page.title : 'Deleted page';
           return `<a href="/page/${linkedPageId}">${title}</a>`;
+        }
+        if (block.type === 'database_view') {
+          const { databaseId } = block.content as DatabaseViewContent;
+          const page = usePageStore.getState().pages.get(databaseId);
+          return `<div>[Database: ${page ? page.title : 'Unknown'}]</div>`;
         }
         const tag = getHtmlTag(block.type);
         return `<${tag}>${getBlockText(block.content)}</${tag}>`;

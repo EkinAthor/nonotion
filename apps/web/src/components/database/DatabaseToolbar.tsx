@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AddPropertyInput, PropertyType } from '@nonotion/shared';
-import { useDatabaseStore } from '@/stores/databaseStore';
+import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 
 interface DatabaseToolbarProps {
   canEdit: boolean;
@@ -17,7 +17,7 @@ const PROPERTY_TYPES: { type: PropertyType; label: string; icon: string }[] = [
 ];
 
 export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
-  const { updateSchema, viewConfig, setSort, setFilter, getVisibleProperties } = useDatabaseStore();
+  const { updateSchema, viewConfig, setSort, setFilter, getVisibleProperties } = useDatabaseInstance();
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [isAddingProperty, setIsAddingProperty] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);

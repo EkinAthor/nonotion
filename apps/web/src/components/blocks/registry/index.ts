@@ -10,6 +10,7 @@ import CodeBlockEdit from './CodeBlockEdit';
 import ImageEdit from './ImageEdit';
 import DividerEdit from './DividerEdit';
 import PageLinkEdit from './PageLinkEdit';
+import DatabaseViewEdit from './DatabaseViewEdit';
 
 export interface MarkdownConfig {
   /** Prefix to add before text when copying (e.g., "# " for h1) */
@@ -149,6 +150,14 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
     EditComponent: PageLinkEdit,
     defaultContent: { linkedPageId: '' } as BlockContent,
   },
+  database_view: {
+    type: 'database_view',
+    label: 'Database view',
+    icon: '🗃️',
+    shortcuts: ['database', 'db', 'dbview', 'table'],
+    EditComponent: DatabaseViewEdit,
+    defaultContent: { databaseId: '' } as BlockContent,
+  },
 };
 
 export interface SlashMenuItem {
@@ -165,7 +174,7 @@ export function getSlashMenuItems(): SlashMenuItem[] {
   const items: SlashMenuItem[] = [];
 
   for (const def of Object.values(blockRegistry)) {
-    if (def.type === 'page_link') continue; // handled separately below
+    if (def.type === 'page_link' || def.type === 'database_view') continue; // handled separately below
     items.push({
       type: def.type,
       label: def.label,
@@ -193,6 +202,15 @@ export function getSlashMenuItems(): SlashMenuItem[] {
     shortcuts: ['pagelink', 'link', 'page link'],
   });
 
+  // Database view entry
+  items.push({
+    type: 'database_view',
+    label: 'Database view',
+    description: 'Embed an existing database',
+    icon: '🗃️',
+    shortcuts: ['database', 'db', 'dbview', 'table'],
+  });
+
   return items;
 }
 
@@ -208,6 +226,7 @@ function getSlashItemDescription(type: BlockType): string {
     case 'code_block': return 'Capture code snippet';
     case 'image': return 'Upload or embed an image';
     case 'divider': return 'Visual divider line';
+    case 'database_view': return 'Embed an existing database';
     default: return '';
   }
 }
@@ -225,6 +244,7 @@ export function getHtmlTag(type: BlockType): string {
     case 'image': return 'img';
     case 'divider': return 'hr';
     case 'page_link': return 'a';
+    case 'database_view': return 'div';
     case 'paragraph':
     default:
       return 'p';

@@ -20,6 +20,7 @@ import CodeBlockEdit from './registry/CodeBlockEdit';
 import ImageEdit from './registry/ImageEdit';
 import DividerEdit from './registry/DividerEdit';
 import PageLinkEdit from './registry/PageLinkEdit';
+import DatabaseViewEdit from './registry/DatabaseViewEdit';
 import BlockContextMenu from './BlockContextMenu';
 
 interface BlockWrapperProps {
@@ -67,8 +68,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     }
 
     changeBlockType(block.id, newType, newText);
-    if (newType === 'divider') {
-      // Divider is non-editable — auto-create a paragraph below and focus it
+    if (newType === 'divider' || newType === 'database_view') {
+      // Non-text blocks — auto-create a paragraph below and focus it
       handleCreateBlockBelow('');
     } else {
       // Set focus to this block after type change so the new editor gets focus
@@ -122,8 +123,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
 
-    // If previous block is a divider or page_link, delete it and keep current block intact
-    if (prevBlock.type === 'divider' || prevBlock.type === 'page_link') {
+    // If previous block is a divider, page_link, or database_view, delete it and keep current block intact
+    if (prevBlock.type === 'divider' || prevBlock.type === 'page_link' || prevBlock.type === 'database_view') {
       deleteBlock(prevBlockId);
       return;
     }
@@ -209,6 +210,8 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
         return <DividerEdit block={block} readOnly={readOnly} />;
       case 'page_link':
         return <PageLinkEdit block={block} readOnly={readOnly} />;
+      case 'database_view':
+        return <DatabaseViewEdit block={block} readOnly={readOnly} />;
       default:
         return <div className="text-red-500">Unknown block type: {block.type}</div>;
     }
