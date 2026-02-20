@@ -21,6 +21,7 @@ import type {
   UpdateSchemaInput,
   UpdatePropertiesInput,
   FileUploadResponse,
+  ImportResult,
 } from '@nonotion/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -307,5 +308,33 @@ export const filesApi = {
 
     const blob = await response.blob();
     return URL.createObjectURL(blob);
+  },
+};
+
+// Import API
+export const importApi = {
+  importZip: async (file: File): Promise<ImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}/import`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as ApiError;
+      throw new Error(error.error?.message || 'Import failed');
+    }
+
+    const result = await response.json() as ApiResponse<ImportResult>;
+    return result.data;
   },
 };

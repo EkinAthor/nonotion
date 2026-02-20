@@ -5,12 +5,14 @@ import { useUiStore } from '@/stores/uiStore';
 import PageTree from './PageTree';
 import StarredSection from './StarredSection';
 import UserMenu from './UserMenu';
+import ImportDialog from './ImportDialog';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const { createPage, getPageTree, isLoading } = usePageStore();
   const { toggleSidebar } = useUiStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const handleNewPage = async () => {
     if (isCreating) return;
@@ -155,12 +157,37 @@ export default function Sidebar() {
           </svg>
           New database
         </button>
+        <button
+          onClick={() => setIsImportOpen(true)}
+          className="flex items-center w-full px-2 py-1.5 text-sm text-notion-text-secondary hover:bg-notion-hover rounded"
+        >
+          <svg
+            className="w-4 h-4 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+          </svg>
+          Import from Notion
+        </button>
       </div>
 
       {/* User Menu (bottom) */}
       <div className="border-t border-notion-border px-2 py-2">
         <UserMenu />
       </div>
+
+      {/* Import Dialog */}
+      <ImportDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+      />
     </div>
   );
 }
