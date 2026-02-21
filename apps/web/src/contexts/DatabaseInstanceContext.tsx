@@ -22,6 +22,8 @@ interface ViewConfig {
   sort?: SortConfig;
   filters: FilterRule[];
   columnWidths: Record<string, number>;
+  hiddenPropertyIds: string[];
+  propertyOrder: string[];
 }
 
 // localStorage persistence helpers
@@ -70,6 +72,8 @@ export interface DatabaseInstanceState {
   setSort: (sort: SortConfig | undefined) => void;
   setFilters: (filters: FilterRule[]) => void;
   setColumnWidth: (propertyId: string, width: number) => void;
+  togglePropertyVisibility: (propertyId: string) => void;
+  setPropertyOrder: (order: string[]) => void;
 
   // Property options management
   updatePropertyOptions: (propertyId: string, options: SelectOption[]) => void;
@@ -77,7 +81,30 @@ export interface DatabaseInstanceState {
   // Selectors
   getProperty: (propertyId: string) => PropertyDefinition | undefined;
   getVisibleProperties: () => PropertyDefinition[];
+  getAllPropertiesOrdered: () => PropertyDefinition[];
   clearDatabase: () => void;
+}
+
+/** Order properties: title always first, then by view-local order (fallback to schema order). */
+function getOrderedProperties(
+  properties: PropertyDefinition[],
+  propertyOrder: string[],
+): PropertyDefinition[] {
+  const sorted = [...properties];
+  if (propertyOrder.length > 0) {
+    const orderMap = new Map(propertyOrder.map((id, i) => [id, i]));
+    sorted.sort((a, b) => {
+      // Title always first
+      if (a.type === 'title') return -1;
+      if (b.type === 'title') return 1;
+      const aIdx = orderMap.get(a.id) ?? (a.order + propertyOrder.length);
+      const bIdx = orderMap.get(b.id) ?? (b.order + propertyOrder.length);
+      return aIdx - bIdx;
+    });
+  } else {
+    sorted.sort((a, b) => a.order - b.order);
+  }
+  return sorted;
 }
 
 export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<DatabaseInstanceState> {
@@ -88,6 +115,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     sort: savedConfig?.sort,
     filters: savedConfig?.filters ?? [],
     columnWidths: savedConfig?.columnWidths ?? {},
+    hiddenPropertyIds: (savedConfig as Partial<ViewConfig>)?.hiddenPropertyIds ?? [],
+    propertyOrder: (savedConfig as Partial<ViewConfig>)?.propertyOrder ?? [],
   };
 
   function persist(config: ViewConfig): void {
@@ -276,6 +305,23 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       persist(newConfig);
     },
 
+    togglePropertyVisibility: (propertyId) => {
+      const { viewConfig } = get();
+      const hidden = viewConfig.hiddenPropertyIds;
+      const newHidden = hidden.includes(propertyId)
+        ? hidden.filter((id) => id !== propertyId)
+        : [...hidden, propertyId];
+      const newConfig = { ...viewConfig, hiddenPropertyIds: newHidden };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+    },
+
+    setPropertyOrder: (order) => {
+      const newConfig = { ...get().viewConfig, propertyOrder: order };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+    },
+
     updatePropertyOptions: (propertyId, options) => {
       get().updateSchema({
         updateProperties: [{ id: propertyId, options }],
@@ -288,9 +334,18 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     getVisibleProperties: () => {
-      const { schema } = get();
+      const { schema, viewConfig } = get();
       if (!schema) return [];
-      return [...schema.properties].sort((a, b) => a.order - b.order);
+
+      const ordered = getOrderedProperties(schema.properties, viewConfig.propertyOrder);
+      const hiddenSet = new Set(viewConfig.hiddenPropertyIds);
+      return ordered.filter((p) => p.type === 'title' || !hiddenSet.has(p.id));
+    },
+
+    getAllPropertiesOrdered: () => {
+      const { schema, viewConfig } = get();
+      if (!schema) return [];
+      return getOrderedProperties(schema.properties, viewConfig.propertyOrder);
     },
 
     clearDatabase: () => {

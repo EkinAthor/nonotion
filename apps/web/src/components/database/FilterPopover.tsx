@@ -22,8 +22,8 @@ interface FilterPopoverProps {
 }
 
 export default function FilterPopover({ onClose, anchorRef }: FilterPopoverProps) {
-  const { viewConfig, setFilters, getVisibleProperties } = useDatabaseInstance();
-  const properties = getVisibleProperties();
+  const { viewConfig, setFilters, getAllPropertiesOrdered } = useDatabaseInstance();
+  const properties = getAllPropertiesOrdered();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 

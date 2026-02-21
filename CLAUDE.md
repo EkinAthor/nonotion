@@ -64,7 +64,17 @@ All entities have `version` and `updatedAt` fields for future last-write-wins co
 ### 7. Slash Commands
 Typing `/` at the start of an empty block opens a command menu. Shortcuts like `/h1`, `/p` filter and select block types.
 
-### 8. Search (Ctrl+K)
+### 8. Database Properties Management
+`apps/web/src/components/database/PropertiesPanel.tsx` provides a comprehensive properties panel for database views:
+- **Rename**: Inline edit property names (schema-level change, affects all views)
+- **Delete**: Remove properties (schema-level, title protected)
+- **Reorder**: Drag-and-drop via `@dnd-kit/sortable` (view-local, persisted in `ViewConfig.propertyOrder`)
+- **Visibility**: Toggle column visibility per-view (persisted in `ViewConfig.hiddenPropertyIds`). Title cannot be hidden.
+- **Add**: Type picker for new properties (text, select, multi_select, date, checkbox, url, person)
+
+View-local settings (`hiddenPropertyIds`, `propertyOrder`) are stored in localStorage per database instance. Schema changes (rename, delete, add) go through `updateSchema()` and affect all views.
+
+### 9. Search (Ctrl+K)
 `apps/api/src/services/search-service.ts` implements server-side search across page titles, block content, and database row properties. Results are scored (title-starts-with > title-contains > block-match > property-match, starred bonus), deduplicated by page, and capped at 20. `apps/api/src/routes/search.ts` exposes `GET /api/search?q=...` with auth middleware. `StorageAdapter.getBlocksByPages(pageIds)` fetches blocks in bulk to avoid N+1 queries.
 
 Frontend: `SearchModal.tsx` is a command-palette modal opened via Ctrl+K/Cmd+K (listener in `MainLayout.tsx`) or the sidebar search button. Uses 250ms debounced API calls, keyboard navigation (arrows/enter/escape), and shows recent pages (starred first) when the query is empty. State lives in `uiStore.ts` (`searchOpen`, `toggleSearch`).
@@ -108,6 +118,7 @@ Frontend: `ImportDialog.tsx` provides drag-and-drop ZIP upload via sidebar butto
 | `apps/web/src/components/layout/ImportDialog.tsx` | Import dialog with drag-and-drop ZIP upload |
 | `apps/api/src/services/search-service.ts` | Server-side search across pages, blocks, and properties |
 | `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
+| `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add |
 | `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
 
 ## Commands

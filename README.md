@@ -12,7 +12,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Star/unstar pages
 - Multi-user authentication with JWT
 - Page sharing with permission levels (owner/editor/viewer)
-- Database pages with table view and properties
+- Database pages with table view and properties (rename, delete, reorder, hide/show columns per view)
 - Image upload (file picker + clipboard paste) with BLOB storage
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
 - Quick search (Ctrl+K) across pages, block content, and database properties

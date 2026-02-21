@@ -11,13 +11,11 @@ interface TableViewProps {
 
 export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
-  const { rows, schema, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort } = useDatabaseInstance();
+  const { rows, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const [isAddingRow, setIsAddingRow] = useState(false);
 
-  const properties = schema?.properties
-    ? [...schema.properties].sort((a, b) => a.order - b.order)
-    : [];
+  const properties = getVisibleProperties();
 
   const handleCellChange = (rowId: string, propertyId: string, value: PropertyValue) => {
     updateRowProperties(rowId, { [propertyId]: value });
