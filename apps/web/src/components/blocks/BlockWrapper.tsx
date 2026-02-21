@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -167,6 +167,23 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
       setMenuOpen(true);
     }
   }, []);
+
+  // Recalculate menu position on scroll when menu is open
+  useEffect(() => {
+    if (!menuOpen) return;
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    const handleScroll = () => {
+      if (kebabButtonRef.current) {
+        const rect = kebabButtonRef.current.getBoundingClientRect();
+        setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+      }
+    };
+
+    main.addEventListener('scroll', handleScroll, { passive: true });
+    return () => main.removeEventListener('scroll', handleScroll);
+  }, [menuOpen]);
 
   const {
     attributes,

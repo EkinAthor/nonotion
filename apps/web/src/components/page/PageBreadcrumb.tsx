@@ -11,12 +11,27 @@ export default function PageBreadcrumb({ pageId }: PageBreadcrumbProps) {
 
   const breadcrumbs = getBreadcrumbs(pageId);
 
-  if (breadcrumbs.length <= 1) {
+  if (breadcrumbs.length === 0) {
     return null;
   }
 
+  // Single page (root) - show just the page name
+  if (breadcrumbs.length === 1) {
+    const page = breadcrumbs[0];
+    return (
+      <nav className="flex items-center gap-1 text-sm text-notion-text-secondary">
+        <span className="px-1 py-0.5 flex items-center gap-1">
+          <span className="text-xs">{page.icon || '📄'}</span>
+          <span className="truncate max-w-[150px] text-notion-text">
+            {page.title || 'Untitled'}
+          </span>
+        </span>
+      </nav>
+    );
+  }
+
   return (
-    <nav className="flex items-center gap-1 mb-4 text-sm text-notion-text-secondary">
+    <nav className="flex items-center gap-1 text-sm text-notion-text-secondary">
       {breadcrumbs.slice(0, -1).map((page, index) => (
         <span key={page.id} className="flex items-center">
           {index > 0 && (

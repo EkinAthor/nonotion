@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BubbleMenu, type Editor } from '@tiptap/react';
 import { TEXT_COLORS, BG_COLORS, type ColorOption } from '@/lib/formatting-colors';
 
@@ -85,6 +85,21 @@ export default function FormatToolbar({ editor }: FormatToolbarProps) {
   const [showTextColor, setShowTextColor] = useState(false);
   const [showBgColor, setShowBgColor] = useState(false);
 
+  // Force re-render on blur/focus so BubbleMenu re-evaluates shouldShow.
+  // Without this, after a toolbar button click (which uses preventDefault to
+  // keep the selection alive), BubbleMenu doesn't re-check isFocused when the
+  // editor eventually blurs from clicking another block.
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const handler = () => forceUpdate((n) => n + 1);
+    editor.on('blur', handler);
+    editor.on('focus', handler);
+    return () => {
+      editor.off('blur', handler);
+      editor.off('focus', handler);
+    };
+  }, [editor]);
+
   const closeDropdowns = useCallback(() => {
     setShowTextColor(false);
     setShowBgColor(false);
@@ -155,7 +170,9 @@ export default function FormatToolbar({ editor }: FormatToolbarProps) {
           ],
         },
       }}
-      shouldShow={({ state }) => {
+      shouldShow={({ editor: ed, state }) => {
+        // Only show if this editor is focused
+        if (!ed.isFocused) return false;
         const { from, to, empty } = state.selection;
         if (empty) return false;
         // Don't show on node selections or when content is just whitespace

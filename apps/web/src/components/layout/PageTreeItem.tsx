@@ -7,15 +7,20 @@ import PageTree from './PageTree';
 interface PageTreeItemProps {
   node: PageTreeNode;
   depth: number;
+  expandedNodesOverride?: Set<string>;
+  toggleExpandedOverride?: (id: string) => void;
 }
 
-export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
+export default function PageTreeItem({ node, depth, expandedNodesOverride, toggleExpandedOverride }: PageTreeItemProps) {
   const navigate = useNavigate();
   const { currentPageId, toggleExpanded, expandedNodes, createPage, deletePage } =
     usePageStore();
   const [showActions, setShowActions] = useState(false);
 
-  const isExpanded = expandedNodes.has(node.id);
+  const effectiveExpanded = expandedNodesOverride ?? expandedNodes;
+  const effectiveToggle = toggleExpandedOverride ?? toggleExpanded;
+
+  const isExpanded = effectiveExpanded.has(node.id);
   const isSelected = currentPageId === node.id;
   const hasChildren = node.children.length > 0;
 
@@ -25,7 +30,7 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleExpanded(node.id);
+    effectiveToggle(node.id);
   };
 
   const [isCreating, setIsCreating] = useState(false);
@@ -37,7 +42,7 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
     try {
       const page = await createPage({ title: 'Untitled', parentId: node.id });
       if (!isExpanded) {
-        toggleExpanded(node.id);
+        effectiveToggle(node.id);
       }
       navigate(`/page/${page.id}`);
     } finally {
@@ -148,7 +153,12 @@ export default function PageTreeItem({ node, depth }: PageTreeItemProps) {
 
       {/* Children */}
       {isExpanded && hasChildren && (
-        <PageTree nodes={node.children} depth={depth + 1} />
+        <PageTree
+          nodes={node.children}
+          depth={depth + 1}
+          expandedNodesOverride={expandedNodesOverride}
+          toggleExpandedOverride={toggleExpandedOverride}
+        />
       )}
     </div>
   );

@@ -2,10 +2,30 @@ import { create } from 'zustand';
 import type { Page, CreatePageInput, UpdatePageInput, PageTreeNode } from '@nonotion/shared';
 import { pagesApi } from '@/api/client';
 
+const EXPANDED_NODES_KEY = 'nonotion_expanded_nodes';
+const STARRED_EXPANDED_NODES_KEY = 'nonotion_starred_expanded_nodes';
+
+function loadExpandedSet(key: string): Set<string> {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      return new Set(JSON.parse(stored) as string[]);
+    }
+  } catch { /* ignore */ }
+  return new Set();
+}
+
+function saveExpandedSet(key: string, nodes: Set<string>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(Array.from(nodes)));
+  } catch { /* ignore */ }
+}
+
 interface PageState {
   pages: Map<string, Page>;
   currentPageId: string | null;
   expandedNodes: Set<string>;
+  starredExpandedNodes: Set<string>;
   isLoading: boolean;
   error: string | null;
 
@@ -16,6 +36,7 @@ interface PageState {
   updatePage: (id: string, input: UpdatePageInput) => void;
   deletePage: (id: string) => void;
   toggleExpanded: (id: string) => void;
+  toggleStarredExpanded: (id: string) => void;
 
   // Selectors
   getPageTree: () => PageTreeNode[];
@@ -26,7 +47,8 @@ interface PageState {
 export const usePageStore = create<PageState>((set, get) => ({
   pages: new Map(),
   currentPageId: null,
-  expandedNodes: new Set(),
+  expandedNodes: loadExpandedSet(EXPANDED_NODES_KEY),
+  starredExpandedNodes: loadExpandedSet(STARRED_EXPANDED_NODES_KEY),
   isLoading: false,
   error: null,
 
@@ -148,7 +170,21 @@ export const usePageStore = create<PageState>((set, get) => ({
       } else {
         expandedNodes.add(id);
       }
+      saveExpandedSet(EXPANDED_NODES_KEY, expandedNodes);
       return { expandedNodes };
+    });
+  },
+
+  toggleStarredExpanded: (id) => {
+    set((state) => {
+      const starredExpandedNodes = new Set(state.starredExpandedNodes);
+      if (starredExpandedNodes.has(id)) {
+        starredExpandedNodes.delete(id);
+      } else {
+        starredExpandedNodes.add(id);
+      }
+      saveExpandedSet(STARRED_EXPANDED_NODES_KEY, starredExpandedNodes);
+      return { starredExpandedNodes };
     });
   },
 

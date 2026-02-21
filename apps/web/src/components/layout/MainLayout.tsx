@@ -7,7 +7,7 @@ import SearchModal from './SearchModal';
 
 export default function MainLayout() {
   const { fetchPages } = usePageStore();
-  const { sidebarOpen, sidebarWidth, toggleSearch } = useUiStore();
+  const { sidebarOpen, sidebarWidth, toggleSidebar, toggleSearch } = useUiStore();
 
   useEffect(() => {
     fetchPages();
@@ -34,7 +34,18 @@ export default function MainLayout() {
           <Sidebar />
         </div>
       )}
-      <main className="flex-1 overflow-auto bg-notion-bg">
+      <main className="flex-1 overflow-auto bg-notion-bg relative">
+        {!sidebarOpen && (
+          <button
+            onClick={toggleSidebar}
+            className="fixed top-2 left-2 z-30 p-1.5 rounded hover:bg-notion-hover text-notion-text-secondary"
+            title="Open sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
         <Outlet />
       </main>
       <SearchModal />

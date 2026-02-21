@@ -75,7 +75,7 @@ export default function FilterPopover({ onClose, anchorRef }: FilterPopoverProps
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed bg-white border border-notion-border rounded-md shadow-lg z-[100] w-[320px] max-h-[420px] overflow-y-auto"
+      className="fixed bg-white border border-notion-border rounded-md shadow-lg z-[100] w-[320px] max-h-[420px] overflow-y-auto overflow-x-hidden"
       style={{ top: position.top, left: position.left }}
     >
       <div className="p-2 text-xs font-medium text-notion-text-secondary uppercase border-b border-notion-border">

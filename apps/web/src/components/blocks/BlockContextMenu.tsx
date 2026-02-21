@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { BlockType } from '@nonotion/shared';
 import { getAllBlockTypes } from './registry';
 
@@ -19,13 +20,43 @@ export default function BlockContextMenu({
 }: BlockContextMenuProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState(position);
 
   // Get all block types except the current one and page_link for "Turn into"
   const allTypes = getAllBlockTypes();
   const turnIntoOptions = allTypes.filter((opt) => opt.type !== currentBlockType && opt.type !== 'page_link');
 
-  // Total items: Delete + divider (not selectable) + turn into options
-  const selectableItems = 1 + turnIntoOptions.length; // Delete + turn into options
+  // Total items: Delete + turn into options
+  const selectableItems = 1 + turnIntoOptions.length;
+
+  // Compute clamped position
+  const computePosition = useCallback(() => {
+    const menuHeight = menuRef.current?.offsetHeight ?? 300;
+    let top = position.top;
+    const left = Math.min(position.left, window.innerWidth - 200);
+
+    // Flip above if not enough space below
+    if (top + menuHeight > window.innerHeight - 8) {
+      top = position.top - menuHeight - 8;
+    }
+    top = Math.max(8, top);
+
+    setMenuPos({ top, left });
+  }, [position]);
+
+  useLayoutEffect(() => {
+    computePosition();
+  }, [computePosition]);
+
+  // Listen to scroll to reposition
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    const handleScroll = () => computePosition();
+    main.addEventListener('scroll', handleScroll, { passive: true });
+    return () => main.removeEventListener('scroll', handleScroll);
+  }, [computePosition]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -80,11 +111,11 @@ export default function BlockContextMenu({
     };
   }, [onClose]);
 
-  return (
+  const menuContent = (
     <div
       ref={menuRef}
       className="fixed z-50 bg-white rounded-lg shadow-lg border border-notion-border py-1 min-w-[180px]"
-      style={{ top: position.top, left: position.left }}
+      style={{ top: menuPos.top, left: menuPos.left }}
     >
       {/* Delete option */}
       <button
@@ -140,4 +171,6 @@ export default function BlockContextMenu({
       ))}
     </div>
   );
+
+  return createPortal(menuContent, document.body);
 }

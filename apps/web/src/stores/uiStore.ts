@@ -1,5 +1,16 @@
 import { create } from 'zustand';
 
+const SIDEBAR_OPEN_KEY = 'nonotion_sidebar_open';
+
+function loadSidebarOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_OPEN_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
 interface UiState {
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -14,15 +25,20 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  sidebarOpen: true,
+  sidebarOpen: loadSidebarOpen(),
   sidebarWidth: 240,
   searchOpen: false,
 
   toggleSidebar: () => {
-    set((state) => ({ sidebarOpen: !state.sidebarOpen }));
+    set((state) => {
+      const next = !state.sidebarOpen;
+      localStorage.setItem(SIDEBAR_OPEN_KEY, String(next));
+      return { sidebarOpen: next };
+    });
   },
 
   setSidebarOpen: (open) => {
+    localStorage.setItem(SIDEBAR_OPEN_KEY, String(open));
     set({ sidebarOpen: open });
   },
 

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { SelectOption, SelectColor } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 
@@ -36,11 +37,12 @@ function generateOptionId(): string {
 
 export default function MultiSelectCell({ value, onChange, options, canEdit, propertyId }: MultiSelectCellProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
   const [newTagName, setNewTagName] = useState('');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingTagName, setEditingTagName] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const newTagInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,9 +50,14 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
 
   const selectedOptions = options.filter((o) => value.includes(o.id));
 
+  // Click outside handler - works with portal
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
         setEditingTagId(null);
       }
@@ -65,20 +72,45 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
     };
   }, [isOpen]);
 
-  // Calculate dropdown position when opening
-  useEffect(() => {
-    if (isOpen && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const dropdownHeight = 300; // Approximate max height
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
+  // Calculate dropdown position
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dropdownHeight = 300;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
 
-      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-        setDropdownPosition('top');
-      } else {
-        setDropdownPosition('bottom');
-      }
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      left: rect.left,
+      minWidth: Math.max(200, rect.width),
+      zIndex: 50,
+    };
+
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+      style.bottom = window.innerHeight - rect.top + 4;
+    } else {
+      style.top = rect.bottom + 4;
     }
+
+    setDropdownStyle(style);
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen]);
+
+  // Reposition on scroll
+  useEffect(() => {
+    if (!isOpen) return;
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    const handleScroll = () => updatePosition();
+    main.addEventListener('scroll', handleScroll, { passive: true });
+    return () => main.removeEventListener('scroll', handleScroll);
   }, [isOpen]);
 
   // Focus edit input when editing starts
@@ -128,12 +160,11 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
 
   const handleDeleteTag = (optionId: string) => {
     const option = options.find((o) => o.id === optionId);
-    if (option?.isDefault) return; // Cannot delete default tags
+    if (option?.isDefault) return;
 
     const updatedOptions = options.filter((opt) => opt.id !== optionId);
     updatePropertyOptions(propertyId, updatedOptions);
 
-    // Remove deleted tag from selection
     if (value.includes(optionId)) {
       onChange(value.filter((id) => id !== optionId));
     }
@@ -181,10 +212,6 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
     );
   }
 
-  const dropdownClasses = dropdownPosition === 'top'
-    ? 'absolute left-0 bottom-full mb-1 bg-white border border-notion-border rounded-md shadow-lg z-20 min-w-[200px] max-h-[300px] overflow-y-auto'
-    : 'absolute left-0 top-full mt-1 bg-white border border-notion-border rounded-md shadow-lg z-20 min-w-[200px] max-h-[300px] overflow-y-auto';
-
   return (
     <div ref={containerRef} className="relative">
       <div
@@ -201,8 +228,8 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
         )}
       </div>
 
-      {isOpen && (
-        <div className={dropdownClasses}>
+      {isOpen && createPortal(
+        <div ref={dropdownRef} className="bg-white border border-notion-border rounded-md shadow-lg max-h-[300px] overflow-y-auto" style={dropdownStyle}>
           {/* Empty state message */}
           {options.length === 0 && (
             <div className="px-3 py-2 text-sm text-notion-text-secondary">
@@ -330,7 +357,8 @@ export default function MultiSelectCell({ value, onChange, options, canEdit, pro
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
