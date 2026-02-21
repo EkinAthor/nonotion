@@ -92,6 +92,16 @@ Frontend: `SearchModal.tsx` is a command-palette modal opened via Ctrl+K/Cmd+K (
 
 Frontend: `ImportDialog.tsx` provides drag-and-drop ZIP upload via sidebar button. API: `POST /api/import` (multipart, 100MB default limit via `MAX_IMPORT_SIZE_MB`).
 
+### 10. Database Default View Config
+Admins can save the current database view configuration (filters, sort, hidden columns, property order) as a server-side default via `DatabaseToolbar`'s "Save as default" button. The default is stored inside `DatabaseSchema.defaultViewConfig` (no extra tables/endpoints).
+
+- **Save as default**: Extracts current `ViewConfig` (minus `columnWidths`) into a `DefaultViewConfig`, sends via `updateSchema({ defaultViewConfig })`. Optimistic update.
+- **Revert to default**: Replaces local `ViewConfig` with the server default and persists to localStorage.
+- **Seeding**: On `loadDatabase`, if no localStorage config exists for that database, the store seeds `viewConfig` from the server default (without persisting to localStorage, so future server updates are picked up).
+- **Local override**: Once a user changes any view setting (creating a localStorage entry), their local config takes precedence over the server default on subsequent loads.
+
+Types: `SortConfig`, `DefaultViewConfig` in `packages/shared/src/types/database.ts`. Zod: `sortConfigSchema`, `defaultViewConfigSchema` in `packages/shared/src/schemas/database.ts`.
+
 ## Critical Files
 
 | File | Purpose |

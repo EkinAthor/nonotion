@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PropertyDefinition, PropertyValue } from '@nonotion/shared';
+import type { PropertyDefinition, PropertyValue, SortConfig } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import CellRenderer from './cells/CellRenderer';
@@ -154,11 +154,6 @@ export default function TableView({ canEdit }: TableViewProps) {
       )}
     </div>
   );
-}
-
-interface SortConfig {
-  propertyId: string;
-  direction: 'asc' | 'desc';
 }
 
 interface TableHeaderProps {

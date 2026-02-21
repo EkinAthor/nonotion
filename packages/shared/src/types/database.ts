@@ -39,9 +39,24 @@ export interface PropertyDefinition {
   options?: SelectOption[]; // For select/multi_select
 }
 
+// Sort configuration for database views
+export interface SortConfig {
+  propertyId: string;
+  direction: 'asc' | 'desc';
+}
+
+// Default view configuration saved to server
+export interface DefaultViewConfig {
+  sort?: SortConfig;
+  filters: FilterRule[];
+  hiddenPropertyIds: string[];
+  propertyOrder: string[];
+}
+
 // Schema defining a database's structure
 export interface DatabaseSchema {
   properties: PropertyDefinition[];
+  defaultViewConfig?: DefaultViewConfig;
 }
 
 // Value types for each property type
@@ -74,6 +89,7 @@ export interface UpdateSchemaInput {
   updateProperties?: UpdatePropertyInput[];
   removePropertyIds?: string[];
   reorderProperties?: string[]; // array of property ids in new order
+  defaultViewConfig?: DefaultViewConfig | null; // null to clear
 }
 
 export interface UpdatePropertiesInput {

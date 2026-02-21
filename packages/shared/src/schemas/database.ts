@@ -43,9 +43,45 @@ export const propertyDefinitionSchema = z.object({
   options: z.array(selectOptionSchema).optional(),
 });
 
+// Filter operator schema
+export const filterOperatorSchema = z.enum([
+  'eq',
+  'neq',
+  'contains',
+  'empty',
+  'not_empty',
+  'gte',
+  'lte',
+  'in',
+  'all',
+  'any',
+]);
+
+// Filter rule schema
+export const filterRuleSchema = z.object({
+  propertyId: z.string(),
+  operator: filterOperatorSchema,
+  value: z.string().optional(),
+});
+
+// Sort config
+export const sortConfigSchema = z.object({
+  propertyId: z.string(),
+  direction: z.enum(['asc', 'desc']),
+});
+
+// Default view config (server-saved)
+export const defaultViewConfigSchema = z.object({
+  sort: sortConfigSchema.optional(),
+  filters: z.array(filterRuleSchema),
+  hiddenPropertyIds: z.array(z.string()),
+  propertyOrder: z.array(z.string()),
+});
+
 // Database schema
 export const databaseSchemaSchema = z.object({
   properties: z.array(propertyDefinitionSchema),
+  defaultViewConfig: defaultViewConfigSchema.optional(),
 });
 
 // Property value schemas
@@ -126,31 +162,11 @@ export const updateSchemaInputSchema = z.object({
   updateProperties: z.array(updatePropertyInputSchema).optional(),
   removePropertyIds: z.array(z.string().startsWith('prop_')).optional(),
   reorderProperties: z.array(z.string().startsWith('prop_')).optional(),
+  defaultViewConfig: defaultViewConfigSchema.nullable().optional(),
 });
 
 export const updatePropertiesInputSchema = z.object({
   properties: z.record(z.string(), propertyValueSchema),
-});
-
-// Filter operator schema
-export const filterOperatorSchema = z.enum([
-  'eq',
-  'neq',
-  'contains',
-  'empty',
-  'not_empty',
-  'gte',
-  'lte',
-  'in',
-  'all',
-  'any',
-]);
-
-// Filter rule schema
-export const filterRuleSchema = z.object({
-  propertyId: z.string(),
-  operator: filterOperatorSchema,
-  value: z.string().optional(),
 });
 
 // Query params schema
@@ -174,4 +190,6 @@ export type UpdateSchemaInputSchema = z.infer<typeof updateSchemaInputSchema>;
 export type UpdatePropertiesInputSchema = z.infer<typeof updatePropertiesInputSchema>;
 export type FilterOperatorSchema = z.infer<typeof filterOperatorSchema>;
 export type FilterRuleSchema = z.infer<typeof filterRuleSchema>;
+export type SortConfigSchema = z.infer<typeof sortConfigSchema>;
+export type DefaultViewConfigSchema = z.infer<typeof defaultViewConfigSchema>;
 export type DatabaseRowsQuerySchema = z.infer<typeof databaseRowsQuerySchema>;

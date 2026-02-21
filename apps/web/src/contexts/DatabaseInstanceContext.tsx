@@ -10,13 +10,10 @@ import type {
   UpdateSchemaInput,
   SelectOption,
   FilterRule,
+  SortConfig,
+  DefaultViewConfig,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
-
-interface SortConfig {
-  propertyId: string;
-  direction: 'asc' | 'desc';
-}
 
 interface ViewConfig {
   sort?: SortConfig;
@@ -78,10 +75,15 @@ export interface DatabaseInstanceState {
   // Property options management
   updatePropertyOptions: (propertyId: string, options: SelectOption[]) => void;
 
+  // Default view config actions
+  saveAsDefault: () => Promise<void>;
+  revertToDefault: () => void;
+
   // Selectors
   getProperty: (propertyId: string) => PropertyDefinition | undefined;
   getVisibleProperties: () => PropertyDefinition[];
   getAllPropertiesOrdered: () => PropertyDefinition[];
+  hasDefaultConfig: () => boolean;
   clearDatabase: () => void;
 }
 
@@ -110,6 +112,7 @@ function getOrderedProperties(
 export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<DatabaseInstanceState> {
   // Load saved config from localStorage if key provided
   const savedConfig = persistenceKey ? loadViewConfig(persistenceKey) : null;
+  const hadLocalConfig = savedConfig !== null;
 
   const initialViewConfig: ViewConfig = {
     sort: savedConfig?.sort,
@@ -146,13 +149,29 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         return;
       }
 
-      set({
+      const updates: Partial<DatabaseInstanceState> = {
         activeDatabaseId: page.id,
         schema: page.databaseSchema,
         rows: [],
         total: 0,
         error: null,
-      });
+      };
+
+      // Seed view config from server default if user has no local override
+      if (!hadLocalConfig && page.databaseSchema.defaultViewConfig) {
+        const def = page.databaseSchema.defaultViewConfig;
+        updates.viewConfig = {
+          sort: def.sort,
+          filters: def.filters,
+          columnWidths: {},
+          hiddenPropertyIds: def.hiddenPropertyIds,
+          propertyOrder: def.propertyOrder,
+        };
+        // Do NOT persist to localStorage — ensures users without
+        // customization always get the latest server default on reload
+      }
+
+      set(updates);
     },
 
     fetchRows: async (options = {}) => {
@@ -328,6 +347,49 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       });
     },
 
+    saveAsDefault: async () => {
+      const { activeDatabaseId, schema, viewConfig } = get();
+      if (!activeDatabaseId || !schema) return;
+
+      const defaultViewConfig: DefaultViewConfig = {
+        sort: viewConfig.sort,
+        filters: viewConfig.filters,
+        hiddenPropertyIds: viewConfig.hiddenPropertyIds,
+        propertyOrder: viewConfig.propertyOrder,
+      };
+
+      // Optimistic update
+      const previousSchema = schema;
+      set({ schema: { ...schema, defaultViewConfig } });
+
+      try {
+        const page = await databaseApi.updateSchema(activeDatabaseId, { defaultViewConfig });
+        if (page?.databaseSchema) {
+          set({ schema: page.databaseSchema });
+        }
+      } catch (error) {
+        console.error('Failed to save default view config:', error);
+        set({ schema: previousSchema, error: (error as Error).message });
+      }
+    },
+
+    revertToDefault: () => {
+      const { schema } = get();
+      if (!schema?.defaultViewConfig) return;
+
+      const def = schema.defaultViewConfig;
+      const newConfig: ViewConfig = {
+        sort: def.sort,
+        filters: def.filters,
+        columnWidths: {},
+        hiddenPropertyIds: def.hiddenPropertyIds,
+        propertyOrder: def.propertyOrder,
+      };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+      get().fetchRows();
+    },
+
     getProperty: (propertyId) => {
       const { schema } = get();
       return schema?.properties.find((p) => p.id === propertyId);
@@ -346,6 +408,10 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const { schema, viewConfig } = get();
       if (!schema) return [];
       return getOrderedProperties(schema.properties, viewConfig.propertyOrder);
+    },
+
+    hasDefaultConfig: () => {
+      return !!get().schema?.defaultViewConfig;
     },
 
     clearDatabase: () => {

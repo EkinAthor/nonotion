@@ -127,9 +127,15 @@ export async function updateSchema(
     properties.sort((a, b) => a.order - b.order);
   }
 
+  // Handle defaultViewConfig: carry forward existing, replace if provided, clear if null
+  let defaultViewConfig = schema.defaultViewConfig;
+  if (input.defaultViewConfig !== undefined) {
+    defaultViewConfig = input.defaultViewConfig ?? undefined;
+  }
+
   const timestamp = now();
   return getStorage().updatePage(databaseId, {
-    databaseSchema: { properties },
+    databaseSchema: { properties, ...(defaultViewConfig && { defaultViewConfig }) },
     updatedAt: timestamp,
     version: database.version + 1,
   });
