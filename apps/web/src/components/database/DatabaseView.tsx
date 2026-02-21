@@ -10,7 +10,7 @@ interface DatabaseViewProps {
 }
 
 export default function DatabaseView({ page, canEdit }: DatabaseViewProps) {
-  const storeRef = useRef(createDatabaseInstanceStore());
+  const storeRef = useRef(createDatabaseInstanceStore(page.id));
 
   return (
     <DatabaseInstanceProvider store={storeRef.current}>

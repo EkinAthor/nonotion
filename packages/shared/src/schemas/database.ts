@@ -132,6 +132,27 @@ export const updatePropertiesInputSchema = z.object({
   properties: z.record(z.string(), propertyValueSchema),
 });
 
+// Filter operator schema
+export const filterOperatorSchema = z.enum([
+  'eq',
+  'neq',
+  'contains',
+  'empty',
+  'not_empty',
+  'gte',
+  'lte',
+  'in',
+  'all',
+  'any',
+]);
+
+// Filter rule schema
+export const filterRuleSchema = z.object({
+  propertyId: z.string(),
+  operator: filterOperatorSchema,
+  value: z.string().optional(),
+});
+
 // Query params schema
 export const databaseRowsQuerySchema = z.object({
   sort: z.string().optional(),
@@ -151,4 +172,6 @@ export type AddPropertyInputSchema = z.infer<typeof addPropertyInputSchema>;
 export type UpdatePropertyInputSchema = z.infer<typeof updatePropertyInputSchema>;
 export type UpdateSchemaInputSchema = z.infer<typeof updateSchemaInputSchema>;
 export type UpdatePropertiesInputSchema = z.infer<typeof updatePropertiesInputSchema>;
+export type FilterOperatorSchema = z.infer<typeof filterOperatorSchema>;
+export type FilterRuleSchema = z.infer<typeof filterRuleSchema>;
 export type DatabaseRowsQuerySchema = z.infer<typeof databaseRowsQuerySchema>;

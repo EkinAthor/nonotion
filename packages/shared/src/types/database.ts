@@ -80,10 +80,30 @@ export interface UpdatePropertiesInput {
   properties: Record<string, PropertyValue>;
 }
 
+// Filter operators for database queries
+export type FilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'contains'
+  | 'empty'
+  | 'not_empty'
+  | 'gte'
+  | 'lte'
+  | 'in'
+  | 'all'
+  | 'any';
+
+// A single filter rule applied to a property
+export interface FilterRule {
+  propertyId: string;
+  operator: FilterOperator;
+  value?: string;
+}
+
 // Query parameters for database rows
 export interface DatabaseRowsQuery {
   sort?: string; // "propertyId:asc|desc"
-  filter?: string; // "propertyId:operator:value"
+  filter?: string; // "propertyId:operator:value" or pipe-separated for multiple
   limit?: number;
   offset?: number;
 }

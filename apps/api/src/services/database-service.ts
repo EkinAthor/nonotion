@@ -224,8 +224,20 @@ function applyFilter(
   filterStr: string,
   _schema?: DatabaseSchema
 ): Page[] {
+  // Support multiple filters separated by pipe: "propId:op:val|propId:op:val"
+  const segments = filterStr.split('|').filter(Boolean);
+  if (segments.length === 0) return rows;
+
+  // Apply all segments as AND
+  let result = rows;
+  for (const segment of segments) {
+    result = applySingleFilter(result, segment);
+  }
+  return result;
+}
+
+function applySingleFilter(rows: Page[], filterStr: string): Page[] {
   // Format: "propertyId:operator:value"
-  // Operators: eq, neq, contains, empty, not_empty
   const [propId, operator, ...valueParts] = filterStr.split(':');
   const value = valueParts.join(':');
 
@@ -274,6 +286,50 @@ function applyFilter(
           return propValue.value.toLowerCase().includes(value.toLowerCase());
         }
         return false;
+
+      case 'gte':
+        if (!propValue) return false;
+        if (typeof propValue.value === 'string') {
+          return propValue.value >= value;
+        }
+        return false;
+
+      case 'lte':
+        if (!propValue) return false;
+        if (typeof propValue.value === 'string') {
+          return propValue.value <= value;
+        }
+        return false;
+
+      case 'in': {
+        // value is one of comma-separated IDs (for select, person)
+        if (!propValue) return false;
+        const ids = value.split(',');
+        if (typeof propValue.value === 'string') {
+          return ids.includes(propValue.value);
+        }
+        return false;
+      }
+
+      case 'all': {
+        // multi_select AND — row must contain ALL listed IDs
+        if (!propValue) return false;
+        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+          const ids = value.split(',');
+          return ids.every((id) => propValue.value.includes(id));
+        }
+        return false;
+      }
+
+      case 'any': {
+        // multi_select OR — row must contain ANY listed ID
+        if (!propValue) return false;
+        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+          const ids = value.split(',');
+          return ids.some((id) => propValue.value.includes(id));
+        }
+        return false;
+      }
 
       default:
         return true;

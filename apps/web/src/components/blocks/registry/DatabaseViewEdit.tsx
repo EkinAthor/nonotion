@@ -176,7 +176,7 @@ function InlineDatabaseDisplay({ block, readOnly }: DatabaseViewEditProps) {
   const { focusBlockId, setFocusBlock, deleteBlock } = useBlockStore();
   const { pages } = usePageStore();
   const { focusPreviousBlock, focusNextBlock } = useBlockContext();
-  const storeRef = useRef(createDatabaseInstanceStore());
+  const storeRef = useRef(createDatabaseInstanceStore(block.id));
 
   const databasePage = pages.get(content.databaseId);
   const isDeleted = !databasePage;

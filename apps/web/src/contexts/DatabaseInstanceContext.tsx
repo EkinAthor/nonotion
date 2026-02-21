@@ -9,6 +9,7 @@ import type {
   PropertyValue,
   UpdateSchemaInput,
   SelectOption,
+  FilterRule,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
 
@@ -17,16 +18,31 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-interface FilterConfig {
-  propertyId: string;
-  operator: 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty';
-  value?: string;
-}
-
 interface ViewConfig {
   sort?: SortConfig;
-  filter?: FilterConfig;
+  filters: FilterRule[];
   columnWidths: Record<string, number>;
+}
+
+// localStorage persistence helpers
+const STORAGE_PREFIX = 'nonotion_dbview_';
+
+function loadViewConfig(key: string): Partial<ViewConfig> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    if (!raw) return null;
+    return JSON.parse(raw) as Partial<ViewConfig>;
+  } catch {
+    return null;
+  }
+}
+
+function saveViewConfig(key: string, config: ViewConfig): void {
+  try {
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(config));
+  } catch {
+    // Ignore storage errors (quota, etc.)
+  }
 }
 
 export interface DatabaseInstanceState {
@@ -52,7 +68,7 @@ export interface DatabaseInstanceState {
 
   // View config actions
   setSort: (sort: SortConfig | undefined) => void;
-  setFilter: (filter: FilterConfig | undefined) => void;
+  setFilters: (filters: FilterRule[]) => void;
   setColumnWidth: (propertyId: string, width: number) => void;
 
   // Property options management
@@ -64,7 +80,22 @@ export interface DatabaseInstanceState {
   clearDatabase: () => void;
 }
 
-export function createDatabaseInstanceStore(): StoreApi<DatabaseInstanceState> {
+export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<DatabaseInstanceState> {
+  // Load saved config from localStorage if key provided
+  const savedConfig = persistenceKey ? loadViewConfig(persistenceKey) : null;
+
+  const initialViewConfig: ViewConfig = {
+    sort: savedConfig?.sort,
+    filters: savedConfig?.filters ?? [],
+    columnWidths: savedConfig?.columnWidths ?? {},
+  };
+
+  function persist(config: ViewConfig): void {
+    if (persistenceKey) {
+      saveViewConfig(persistenceKey, config);
+    }
+  }
+
   return createStore<DatabaseInstanceState>((set, get) => ({
     activeDatabaseId: null,
     schema: null,
@@ -72,9 +103,7 @@ export function createDatabaseInstanceStore(): StoreApi<DatabaseInstanceState> {
     total: 0,
     isLoading: false,
     error: null,
-    viewConfig: {
-      columnWidths: {},
-    },
+    viewConfig: initialViewConfig,
 
     loadDatabase: (page) => {
       if (page.type !== 'database' || !page.databaseSchema) {
@@ -111,9 +140,10 @@ export function createDatabaseInstanceStore(): StoreApi<DatabaseInstanceState> {
           sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
         }
 
-        if (!filter && viewConfig.filter) {
-          const f = viewConfig.filter;
-          filter = `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`;
+        if (!filter && viewConfig.filters.length > 0) {
+          filter = viewConfig.filters
+            .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
+            .join('|');
         }
 
         const result = await databaseApi.getRows(activeDatabaseId, { sort, filter });
@@ -221,29 +251,29 @@ export function createDatabaseInstanceStore(): StoreApi<DatabaseInstanceState> {
     },
 
     setSort: (sort) => {
-      set((state) => ({
-        viewConfig: { ...state.viewConfig, sort },
-      }));
+      const newConfig = { ...get().viewConfig, sort };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
       get().fetchRows();
     },
 
-    setFilter: (filter) => {
-      set((state) => ({
-        viewConfig: { ...state.viewConfig, filter },
-      }));
+    setFilters: (filters) => {
+      const newConfig = { ...get().viewConfig, filters };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
       get().fetchRows();
     },
 
     setColumnWidth: (propertyId, width) => {
-      set((state) => ({
-        viewConfig: {
-          ...state.viewConfig,
-          columnWidths: {
-            ...state.viewConfig.columnWidths,
-            [propertyId]: width,
-          },
+      const newConfig = {
+        ...get().viewConfig,
+        columnWidths: {
+          ...get().viewConfig.columnWidths,
+          [propertyId]: width,
         },
-      }));
+      };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
     },
 
     updatePropertyOptions: (propertyId, options) => {
@@ -271,7 +301,8 @@ export function createDatabaseInstanceStore(): StoreApi<DatabaseInstanceState> {
         total: 0,
         isLoading: false,
         error: null,
-        viewConfig: { columnWidths: {} },
+        // Keep viewConfig intact — it's loaded from localStorage on store creation
+        // and the store is scoped to the component instance via useRef
       });
     },
   }));
