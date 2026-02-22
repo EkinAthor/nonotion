@@ -112,6 +112,18 @@ Types: `SortConfig`, `DefaultViewConfig` in `packages/shared/src/types/database.
 
 Types: `GoogleLoginInput`, `AuthMode`, `AuthConfigResponse` in `packages/shared/src/types/user.ts`. Zod: `googleLoginInputSchema` in `packages/shared/src/schemas/user.ts`.
 
+### 12. Demo Mode
+`VITE_DEMO_MODE=true` at build time swaps the API client from `real-client.ts` (HTTP fetch) to `demo-client.ts` (localStorage). The conditional re-export in `client.ts` means **no stores or components import the client directly** — only the API boundary is swapped.
+
+- **`client.ts`**: Exports `IS_DEMO_MODE` flag and conditionally re-exports all API namespaces from either `real-client` or `demo-client`
+- **`demo-storage.ts`**: Synchronous localStorage CRUD with `nonotion_demo_` key prefix
+- **`demo-data.ts`**: Seed content — book database (10 rows, 9 properties), formatting showcase (all block types), getting started page. Uses stable IDs (`pg_demo_*`, `blk_demo_*`)
+- **`demo-client.ts`**: Full mock implementations of `authApi`, `pagesApi`, `blocksApi`, `databaseApi`, `filesApi`, `searchApi`, `importApi`, `usersApi`, `sharesApi`. Includes client-side `applyFilter`/`applySort` ported from `database-service.ts`
+- **`demo-init.ts`**: Called in `main.tsx` before render — seeds demo data if not already seeded, writes auth store to localStorage
+- **UI adjustments**: `AuthGuard` and `AuthConfigProvider` skip auth checks, `DemoBanner` shows at top, import button disabled, "Save as default" hidden, user menu shows "Demo Mode" label instead of sign-out
+
+Disabled features: file upload, Notion import, sharing, user management, "Save as default" view config.
+
 ## Critical Files
 
 | File | Purpose |
@@ -130,7 +142,12 @@ Types: `GoogleLoginInput`, `AuthMode`, `AuthConfigResponse` in `packages/shared/
 | `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface for file BLOB storage |
 | `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
 | `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
-| `apps/web/src/api/client.ts` | API client including `filesApi` for uploads and auth-fetched blob URLs |
+| `apps/web/src/api/client.ts` | Conditional re-export hub (`IS_DEMO_MODE` switches between real and demo client) |
+| `apps/web/src/api/real-client.ts` | Real API client with fetch-based HTTP requests |
+| `apps/web/src/api/demo-client.ts` | Mock API client backed by localStorage (demo mode) |
+| `apps/web/src/api/demo-storage.ts` | Low-level localStorage CRUD layer for demo mode |
+| `apps/web/src/api/demo-data.ts` | Hardcoded demo seed content (book database, formatting showcase) |
+| `apps/web/src/api/demo-init.ts` | One-time demo mode initialization (seed data + auth store) |
 | `apps/api/src/services/import/import-service.ts` | Notion import orchestrator (ZIP → pages/databases/blocks) |
 | `apps/api/src/services/import/md-parser.ts` | Markdown parser with inline formatting → HTML conversion |
 | `apps/api/src/services/import/entity-creator.ts` | Three-pass entity creation with reference resolution |
@@ -144,6 +161,7 @@ Types: `GoogleLoginInput`, `AuthMode`, `AuthConfigResponse` in `packages/shared/
 | `apps/api/src/routes/auth.ts` | Auth routes including `GET /auth/config`, `POST /auth/google` |
 | `apps/web/src/components/auth/AuthConfigProvider.tsx` | Fetches auth config, wraps app in GoogleOAuthProvider |
 | `apps/web/src/components/auth/GoogleLoginButton.tsx` | Google Sign-In button component |
+| `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |
 
 ## Commands
 
@@ -158,6 +176,7 @@ pnpm --filter @nonotion/web dev       # Web only
 # Build
 pnpm --filter @nonotion/shared build  # Must build first!
 pnpm build                            # Build all
+VITE_DEMO_MODE=true pnpm --filter @nonotion/web build  # Demo mode (no backend)
 
 # Test
 pnpm --filter @nonotion/e2e test:e2e  # Run Playwright tests

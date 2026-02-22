@@ -18,6 +18,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Configurable storage (JSON/SQLite or PostgreSQL)
+- Demo mode for static hosting without a backend (all data in localStorage)
 
 ## Tech Stack
 
@@ -129,6 +130,26 @@ If you lose access to the admin account, you can reset the password using an env
 
 ---
 
+## Demo Mode
+
+Demo mode lets the app run entirely in the browser without a backend. Useful for hosting a static demo site where users can try the app immediately — no login, no server, all data in localStorage.
+
+```bash
+# Build for demo mode
+VITE_DEMO_MODE=true pnpm --filter @nonotion/web build
+
+# Serve the static build
+npx serve apps/web/dist
+```
+
+**What works in demo mode:** Page/block CRUD, database filtering/sorting, search (Ctrl+K), drag-and-drop, slash commands, all block types.
+
+**What's disabled:** File upload, Notion import, user management, sharing, "Save as default" view config.
+
+Demo data is seeded on first load: a book database with 10 rows, a formatting showcase page, and a getting started page. Changes persist in localStorage across page refreshes but not across browsers or devices.
+
+---
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -146,6 +167,7 @@ If you lose access to the admin account, you can reset the password using an env
 | `MAX_FILE_SIZE_MB` | Maximum file upload size in MB | `10` |
 | `MAX_IMPORT_SIZE_MB` | Maximum Notion import ZIP size in MB | `100` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
+| `VITE_DEMO_MODE` | Enable demo mode (frontend-only, no backend) | `false` |
 
 ---
 
