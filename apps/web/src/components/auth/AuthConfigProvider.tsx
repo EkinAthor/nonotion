@@ -1,12 +1,20 @@
 import { useEffect, type ReactNode } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { useAuthStore } from '@/stores/authStore';
+import { IS_DEMO_MODE } from '@/api/client';
 
 interface AuthConfigProviderProps {
   children: ReactNode;
 }
 
 export default function AuthConfigProvider({ children }: AuthConfigProviderProps) {
+  if (IS_DEMO_MODE) {
+    return <>{children}</>;
+  }
+  return <AuthConfigProviderInner>{children}</AuthConfigProviderInner>;
+}
+
+function AuthConfigProviderInner({ children }: AuthConfigProviderProps) {
   const { fetchAuthConfig, authConfig, authConfigLoading } = useAuthStore();
 
   useEffect(() => {

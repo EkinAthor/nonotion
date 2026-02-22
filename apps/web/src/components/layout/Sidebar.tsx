@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
+import { IS_DEMO_MODE } from '@/api/client';
 import PageTree from './PageTree';
 import StarredSection from './StarredSection';
 import UserMenu from './UserMenu';
@@ -184,8 +185,10 @@ export default function Sidebar() {
           New database
         </button>
         <button
-          onClick={() => setIsImportOpen(true)}
-          className="flex items-center w-full px-2 py-1.5 text-sm text-notion-text-secondary hover:bg-notion-hover rounded"
+          onClick={() => !IS_DEMO_MODE && setIsImportOpen(true)}
+          disabled={IS_DEMO_MODE}
+          className={`flex items-center w-full px-2 py-1.5 text-sm text-notion-text-secondary rounded ${IS_DEMO_MODE ? 'opacity-50 cursor-not-allowed' : 'hover:bg-notion-hover'}`}
+          title={IS_DEMO_MODE ? 'Import is not available in demo mode' : 'Import from Notion'}
         >
           <svg
             className="w-4 h-4 mr-2"

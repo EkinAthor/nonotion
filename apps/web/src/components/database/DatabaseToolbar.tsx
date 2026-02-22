@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
+import { IS_DEMO_MODE } from '@/api/client';
 import FilterPopover, { getFilterSummary } from './FilterPopover';
 import PropertiesPanel from './PropertiesPanel';
 
@@ -71,7 +72,7 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
         )}
 
         {/* Save as default */}
-        {canEdit && (
+        {canEdit && !IS_DEMO_MODE && (
           <button
             onClick={async () => {
               setIsSaving(true);

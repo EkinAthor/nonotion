@@ -1,6 +1,7 @@
 import { useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { IS_DEMO_MODE } from '@/api/client';
 import ChangePasswordModal from './ChangePasswordModal';
 import PendingApprovalPage from './PendingApprovalPage';
 
@@ -9,6 +10,13 @@ interface AuthGuardProps {
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
+  if (IS_DEMO_MODE) {
+    return <>{children}</>;
+  }
+  return <AuthGuardInner>{children}</AuthGuardInner>;
+}
+
+function AuthGuardInner({ children }: AuthGuardProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, mustChangePassword, pendingApproval, fetchCurrentUser, isLoading } = useAuthStore();

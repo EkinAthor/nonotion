@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
+import { IS_DEMO_MODE } from '@/api/client';
 import Sidebar from './Sidebar';
 import SearchModal from './SearchModal';
+import DemoBanner from './DemoBanner';
 
 export default function MainLayout() {
   const { fetchPages } = usePageStore();
@@ -25,7 +27,9 @@ export default function MainLayout() {
   }, [toggleSearch]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
+    <div className="flex flex-col h-screen w-screen overflow-hidden">
+      {IS_DEMO_MODE && <DemoBanner />}
+      <div className="flex flex-1 overflow-hidden">
       {sidebarOpen && (
         <div
           style={{ width: sidebarWidth }}
@@ -49,6 +53,7 @@ export default function MainLayout() {
         <Outlet />
       </main>
       <SearchModal />
+      </div>
     </div>
   );
 }
