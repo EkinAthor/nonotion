@@ -3,11 +3,26 @@ import {
   registerInputSchema,
   loginInputSchema,
   changePasswordInputSchema,
+  googleLoginInputSchema,
 } from '@nonotion/shared';
 import * as authService from '../services/auth-service.js';
 import { authMiddleware } from '../middleware/auth.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
+  // Get auth config (public, no auth needed)
+  fastify.get('/api/auth/config', async (_request, reply) => {
+    const enabledModes = authService.getEnabledAuthModes();
+    const googleClientId = process.env.GOOGLE_CLIENT_ID || null;
+
+    return reply.send({
+      success: true,
+      data: {
+        enabledModes,
+        googleClientId: enabledModes.includes('google') ? googleClientId : null,
+      },
+    });
+  });
+
   // Register new user
   fastify.post('/api/auth/register', async (request, reply) => {
     try {
@@ -37,6 +52,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(409).send({
           success: false,
           error: { code: 'USER_EXISTS', message },
+        });
+      }
+      if (message.includes('not enabled')) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'AUTH_MODE_DISABLED', message },
         });
       }
       return reply.status(500).send({
@@ -71,9 +92,53 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
+      if (message.includes('not enabled') || message.includes('Google login')) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'AUTH_MODE_DISABLED', message },
+        });
+      }
       return reply.status(401).send({
         success: false,
         error: { code: 'INVALID_CREDENTIALS', message },
+      });
+    }
+  });
+
+  // Google login
+  fastify.post('/api/auth/google', async (request, reply) => {
+    try {
+      const parsed = googleLoginInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+        });
+      }
+
+      const user = await authService.googleLogin(parsed.data.credential);
+      const publicUser = authService.toPublicUser(user);
+      const token = fastify.jwt.sign({ userId: user.id, role: user.role });
+
+      return reply.send({
+        success: true,
+        data: {
+          user: publicUser,
+          token,
+          mustChangePassword: false,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google login failed';
+      if (message.includes('not enabled') || message.includes('not configured')) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'AUTH_MODE_DISABLED', message },
+        });
+      }
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'GOOGLE_AUTH_FAILED', message },
       });
     }
   });
@@ -130,6 +195,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(401).send({
           success: false,
           error: { code: 'INVALID_PASSWORD', message },
+        });
+      }
+      if (message.includes('Google login')) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'GOOGLE_ONLY_ACCOUNT', message },
         });
       }
       return reply.status(500).send({

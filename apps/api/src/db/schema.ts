@@ -6,6 +6,7 @@ export const users = sqliteTable('users', {
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
   avatarUrl: text('avatar_url'),
+  googleId: text('google_id'),
   role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
   mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
   approved: integer('approved', { mode: 'boolean' }).notNull().default(true),

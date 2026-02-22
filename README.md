@@ -10,7 +10,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Slash commands for block type changes
 - Auto-save with debounce
 - Star/unstar pages
-- Multi-user authentication with JWT
+- Multi-user authentication with JWT (email/password + Google OAuth)
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties (rename, delete, reorder, hide/show columns per view)
 - Save/revert default database view config (filters, sort, hidden columns, property order) for all users
@@ -137,6 +137,8 @@ If you lose access to the admin account, you can reset the password using an env
 | `ADMIN_EMAIL` | Email that gets admin role | First user |
 | `RESET_ADMIN_PASSWORD` | Reset admin password on startup | - |
 | `REQUIRE_USER_APPROVAL` | Require admin approval for new users | `true` |
+| `AUTH_MODES` | Authentication methods: `db`, `google`, or `db,google` | `db` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID (required when AUTH_MODES includes `google`) | - |
 | `STORAGE_TYPE` | `sqlite` (default) or `postgres` | `sqlite` |
 | `DATABASE_URL` | PostgreSQL connection URL | - |
 | `PORT` | API server port | `3001` |
@@ -183,8 +185,10 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/auth/config` | Get auth config (public) |
 | POST | `/api/auth/register` | Register new user |
-| POST | `/api/auth/login` | Login |
+| POST | `/api/auth/login` | Login (email/password) |
+| POST | `/api/auth/google` | Login with Google ID token |
 | GET | `/api/auth/me` | Get current user |
 | POST | `/api/auth/change-password` | Change password |
 
@@ -258,6 +262,20 @@ Nonotion can import your Notion workspace data from a ZIP export:
 - Person/user columns are imported as multi-select tags (Notion users can't be mapped)
 - Comments and activity history are not imported
 - Maximum ZIP size: 100MB (configurable via `MAX_IMPORT_SIZE_MB`)
+
+## Google OAuth Setup
+
+To enable Google login:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) > **APIs & Services** > **Credentials**
+2. Create an **OAuth 2.0 Client ID** (application type: Web application)
+3. Under **Authorized JavaScript origins**, add:
+   - `http://localhost:5173` (development)
+   - Your production domain (e.g., `https://nonotion.example.com`)
+4. Copy the **Client ID** and set it as `GOOGLE_CLIENT_ID` in your environment
+5. Set `AUTH_MODES=db,google` (or `AUTH_MODES=google` for Google-only)
+
+When both modes are enabled, the login page shows a Google button and an email/password form. Users signing in with Google are auto-linked if their email matches an existing account.
 
 ## License
 

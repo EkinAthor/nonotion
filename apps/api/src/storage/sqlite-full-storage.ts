@@ -23,6 +23,7 @@ function rowToUser(row: typeof users.$inferSelect): User {
     name: row.name,
     passwordHash: row.passwordHash,
     avatarUrl: row.avatarUrl,
+    googleId: row.googleId ?? null,
     role: row.role as UserRole,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
@@ -217,6 +218,11 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
     return rows.length > 0 ? rowToUser(rows[0]) : null;
   }
 
+  async getUserByGoogleId(googleId: string): Promise<User | null> {
+    const rows = db.select().from(users).where(eq(users.googleId, googleId)).all();
+    return rows.length > 0 ? rowToUser(rows[0]) : null;
+  }
+
   async createUser(user: User): Promise<User> {
     db.insert(users).values({
       id: user.id,
@@ -224,6 +230,7 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
       name: user.name,
       passwordHash: user.passwordHash,
       avatarUrl: user.avatarUrl,
+      googleId: user.googleId,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
@@ -245,6 +252,7 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
     if (updates.role !== undefined) updateData.role = updates.role;
     if (updates.mustChangePassword !== undefined) updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;
+    if (updates.googleId !== undefined) updateData.googleId = updates.googleId;
     if (updates.updatedAt !== undefined) updateData.updatedAt = updates.updatedAt;
 
     if (Object.keys(updateData).length > 0) {

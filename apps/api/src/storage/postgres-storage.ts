@@ -25,6 +25,7 @@ function rowToUser(row: pgSchema.UserRow): User {
     name: row.name,
     passwordHash: row.passwordHash,
     avatarUrl: row.avatarUrl,
+    googleId: row.googleId ?? null,
     role: row.role as UserRole,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
@@ -231,6 +232,14 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
     return rows.length > 0 ? rowToUser(rows[0]) : null;
   }
 
+  async getUserByGoogleId(googleId: string): Promise<User | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.users)
+      .where(eq(pgSchema.users.googleId, googleId));
+    return rows.length > 0 ? rowToUser(rows[0]) : null;
+  }
+
   async createUser(user: User): Promise<User> {
     await this.db.insert(pgSchema.users).values({
       id: user.id,
@@ -238,6 +247,7 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       name: user.name,
       passwordHash: user.passwordHash,
       avatarUrl: user.avatarUrl,
+      googleId: user.googleId,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
@@ -260,6 +270,7 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
     if (updates.mustChangePassword !== undefined)
       updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;
+    if (updates.googleId !== undefined) updateData.googleId = updates.googleId;
     if (updates.updatedAt !== undefined) updateData.updatedAt = new Date(updates.updatedAt);
 
     if (Object.keys(updateData).length > 0) {

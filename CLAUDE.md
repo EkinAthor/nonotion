@@ -102,6 +102,16 @@ Admins can save the current database view configuration (filters, sort, hidden c
 
 Types: `SortConfig`, `DefaultViewConfig` in `packages/shared/src/types/database.ts`. Zod: `sortConfigSchema`, `defaultViewConfigSchema` in `packages/shared/src/schemas/database.ts`.
 
+### 11. Google OAuth Login
+`AUTH_MODES` env var controls which authentication methods are available: `db` (email/password, default), `google`, or `db,google`. The frontend fetches auth config from `GET /api/auth/config` (public, no auth) to determine which login UI to render.
+
+- **Backend**: `google-auth-library` verifies Google ID tokens. `POST /api/auth/google` accepts a credential, verifies it, and issues a JWT via existing `@fastify/jwt`. Auto-links if Google email matches an existing user. New Google users get `passwordHash: ''`.
+- **Frontend**: `@react-oauth/google` renders the Sign-In button. `AuthConfigProvider` wraps the app in `GoogleOAuthProvider` when Google is enabled. `GoogleLoginButton` handles the credential flow.
+- **Admin**: Google-only users display a "Google" badge in the admin panel. "Reset Password" becomes "Set Password" (sets a password, enabling dual login).
+- **Env vars**: `AUTH_MODES` (default: `db`), `GOOGLE_CLIENT_ID` (required when `AUTH_MODES` includes `google`).
+
+Types: `GoogleLoginInput`, `AuthMode`, `AuthConfigResponse` in `packages/shared/src/types/user.ts`. Zod: `googleLoginInputSchema` in `packages/shared/src/schemas/user.ts`.
+
 ## Critical Files
 
 | File | Purpose |
@@ -130,6 +140,10 @@ Types: `SortConfig`, `DefaultViewConfig` in `packages/shared/src/types/database.
 | `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
 | `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add |
 | `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
+| `apps/api/src/services/auth-service.ts` | Auth service with email/password + Google login, auth mode helpers |
+| `apps/api/src/routes/auth.ts` | Auth routes including `GET /auth/config`, `POST /auth/google` |
+| `apps/web/src/components/auth/AuthConfigProvider.tsx` | Fetches auth config, wraps app in GoogleOAuthProvider |
+| `apps/web/src/components/auth/GoogleLoginButton.tsx` | Google Sign-In button component |
 
 ## Commands
 

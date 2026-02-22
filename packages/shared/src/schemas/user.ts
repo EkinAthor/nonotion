@@ -8,6 +8,7 @@ export const userSchema = z.object({
   name: z.string().min(1).max(100),
   passwordHash: z.string(),
   avatarUrl: z.string().url().nullable(),
+  googleId: z.string().nullable(),
   role: userRoleSchema,
   mustChangePassword: z.boolean(),
   approved: z.boolean(),
@@ -20,6 +21,7 @@ export const publicUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
   avatarUrl: z.string().url().nullable(),
+  googleId: z.string().nullable(),
   role: userRoleSchema,
   approved: z.boolean(),
   createdAt: z.string().datetime(),
@@ -71,3 +73,9 @@ export const approveUserInputSchema = z.object({
 });
 
 export type ApproveUserInputSchema = z.infer<typeof approveUserInputSchema>;
+
+export const googleLoginInputSchema = z.object({
+  credential: z.string().min(1, 'Google credential is required'),
+});
+
+export type GoogleLoginInputSchema = z.infer<typeof googleLoginInputSchema>;

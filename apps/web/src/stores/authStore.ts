@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { PublicUser } from '@nonotion/shared';
+import type { PublicUser, AuthConfigResponse } from '@nonotion/shared';
 import { authApi } from '@/api/client';
 
 interface AuthState {
@@ -10,10 +10,14 @@ interface AuthState {
   mustChangePassword: boolean;
   pendingApproval: boolean;
   error: string | null;
+  authConfig: AuthConfigResponse | null;
+  authConfigLoading: boolean;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
+  googleLogin: (credential: string) => Promise<void>;
+  fetchAuthConfig: () => Promise<void>;
   logout: () => void;
   fetchCurrentUser: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -23,6 +27,8 @@ interface AuthState {
   isAuthenticated: () => boolean;
   isAdmin: () => boolean;
   isPendingApproval: () => boolean;
+  isGoogleEnabled: () => boolean;
+  isDbEnabled: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -34,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
       mustChangePassword: false,
       pendingApproval: false,
       error: null,
+      authConfig: null,
+      authConfigLoading: false,
 
       login: async (email, password) => {
         set({ isLoading: true, error: null });
@@ -72,6 +80,40 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
           throw error;
+        }
+      },
+
+      googleLogin: async (credential) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await authApi.googleLogin({ credential });
+          set({
+            user: response.user,
+            token: response.token,
+            mustChangePassword: false,
+            pendingApproval: !response.user.approved,
+            isLoading: false,
+          });
+        } catch (error) {
+          set({
+            error: (error as Error).message,
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      fetchAuthConfig: async () => {
+        set({ authConfigLoading: true });
+        try {
+          const config = await authApi.getConfig();
+          set({ authConfig: config, authConfigLoading: false });
+        } catch {
+          // Fallback to db-only if config fetch fails
+          set({
+            authConfig: { enabledModes: ['db'], googleClientId: null },
+            authConfigLoading: false,
+          });
         }
       },
 
@@ -132,6 +174,10 @@ export const useAuthStore = create<AuthState>()(
       isAdmin: () => get().user?.role === 'admin',
 
       isPendingApproval: () => get().pendingApproval,
+
+      isGoogleEnabled: () => get().authConfig?.enabledModes.includes('google') ?? false,
+
+      isDbEnabled: () => get().authConfig?.enabledModes.includes('db') ?? true,
     }),
     {
       name: 'nonotion-auth',
@@ -140,6 +186,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         mustChangePassword: state.mustChangePassword,
         pendingApproval: state.pendingApproval,
+        authConfig: state.authConfig,
       }),
     }
   )

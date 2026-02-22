@@ -15,6 +15,13 @@
       "when": 1771531801067,
       "tag": "0001_broken_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771717218547,
+      "tag": "0002_bright_changeling",
+      "breakpoints": true
     }
   ]
 }

@@ -1,15 +1,19 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register, isLoading, error, clearError } = useAuthStore();
+  const { register, isLoading, error, clearError, isGoogleEnabled, isDbEnabled } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const googleEnabled = isGoogleEnabled();
+  const dbEnabled = isDbEnabled();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,6 +38,10 @@ export default function RegisterPage() {
     }
   };
 
+  const handleGoogleSuccess = () => {
+    navigate('/', { replace: true });
+  };
+
   const displayError = localError || error;
 
   return (
@@ -44,92 +52,122 @@ export default function RegisterPage() {
           <p className="text-notion-text-secondary mt-2">Get started with Nonotion</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {displayError && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-              {displayError}
+        {displayError && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200 mb-4">
+            {displayError}
+          </div>
+        )}
+
+        {googleEnabled && (
+          <div className="mb-4">
+            <GoogleLoginButton onSuccess={handleGoogleSuccess} />
+          </div>
+        )}
+
+        {googleEnabled && dbEnabled && (
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-notion-border" />
             </div>
-          )}
-
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-notion-text mb-1">
-              Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-              className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Your name"
-            />
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-notion-bg text-notion-text-secondary">or</span>
+            </div>
           </div>
+        )}
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-notion-text mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="you@example.com"
-            />
-          </div>
+        {dbEnabled && (
+          <>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-notion-text mb-1">
+                  Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                  className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Your name"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-notion-text mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="At least 8 characters"
-            />
-          </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-notion-text mb-1">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="you@example.com"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-notion-text mb-1">
-              Confirm password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Repeat your password"
-            />
-          </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-notion-text mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="At least 8 characters"
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Creating account...' : 'Create account'}
-          </button>
-        </form>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-notion-text mb-1">
+                  Confirm password
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 border border-notion-border rounded-md bg-white text-notion-text focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Repeat your password"
+                />
+              </div>
 
-        <p className="mt-6 text-center text-sm text-notion-text-secondary">
-          Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:underline">
-            Sign in
-          </Link>
-        </p>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Creating account...' : 'Create account'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-notion-text-secondary">
+              Already have an account?{' '}
+              <Link to="/login" className="text-blue-600 hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </>
+        )}
+
+        {!dbEnabled && (
+          <p className="mt-6 text-center text-sm text-notion-text-secondary">
+            Already have an account?{' '}
+            <Link to="/login" className="text-blue-600 hover:underline">
+              Sign in
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

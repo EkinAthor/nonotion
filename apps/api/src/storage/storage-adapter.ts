@@ -23,6 +23,7 @@ export interface UserStorageAdapter {
   getAllUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | null>;
   getUserByEmail(email: string): Promise<User | null>;
+  getUserByGoogleId(googleId: string): Promise<User | null>;
   createUser(user: User): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;

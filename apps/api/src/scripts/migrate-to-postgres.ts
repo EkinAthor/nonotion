@@ -72,6 +72,7 @@ function loadSqliteUsers(sqliteDb: ReturnType<typeof drizzleSqlite>): User[] {
     name: row.name,
     passwordHash: row.passwordHash,
     avatarUrl: row.avatarUrl,
+    googleId: row.googleId ?? null,
     role: row.role as UserRole,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,

@@ -6,6 +6,7 @@ export interface User {
   name: string;
   passwordHash: string; // bcrypt hash (never expose to client)
   avatarUrl: string | null;
+  googleId: string | null;
   role: UserRole;
   mustChangePassword: boolean;
   approved: boolean; // Whether admin has approved user access
@@ -19,6 +20,7 @@ export interface PublicUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  googleId: string | null;
   role: UserRole;
   approved: boolean;
   createdAt: string;
@@ -65,4 +67,15 @@ export interface AuthResponse {
 
 export interface UpdateUserRoleInput {
   role: UserRole;
+}
+
+export interface GoogleLoginInput {
+  credential: string;
+}
+
+export type AuthMode = 'db' | 'google';
+
+export interface AuthConfigResponse {
+  enabledModes: AuthMode[];
+  googleClientId: string | null;
 }

@@ -22,6 +22,8 @@ import type {
   UpdatePropertiesInput,
   FileUploadResponse,
   ImportResult,
+  GoogleLoginInput,
+  AuthConfigResponse,
 } from '@nonotion/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -107,6 +109,16 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  googleLogin: (input: GoogleLoginInput) =>
+    request<AuthResponse>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      skipAuth: true,
+    }),
+
+  getConfig: () =>
+    request<AuthConfigResponse>('/auth/config', { skipAuth: true }),
 };
 
 // Users API

@@ -19,6 +19,7 @@ export const users = pgTable(
     name: text('name').notNull(),
     passwordHash: text('password_hash').notNull(),
     avatarUrl: text('avatar_url'),
+    googleId: text('google_id'),
     role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
     mustChangePassword: boolean('must_change_password').notNull().default(false),
     approved: boolean('approved').notNull().default(true),
