@@ -39,9 +39,12 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     Add the following variables in the API project settings:
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
-    *   `JWT_SECRET`: A secure random string.
+    *   `JWT_SECRET`: A secure random string (32+ characters). **Required** — the API will refuse to start without it.
     *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://nonotion-web.vercel.app`).
     *   `ADMIN_EMAIL`: Your initial admin email.
+
+> [!NOTE]
+> Vercel sets `NODE_ENV=production` automatically for all deployments. The API requires `JWT_SECRET` in production and will throw a startup error if it is missing.
 
 > [!NOTE]
 > The API automatically runs Drizzle migrations on startup when `STORAGE_TYPE=postgres` is set.

@@ -88,9 +88,12 @@ await fastify.register(cors, {
 });
 
 // Register JWT plugin
-await fastify.register(jwt, {
-  secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
-});
+const jwtSecret = process.env.JWT_SECRET || (
+  process.env.NODE_ENV === 'production'
+    ? (() => { throw new Error('JWT_SECRET environment variable is required in production'); })()
+    : 'dev-secret-change-in-production'
+);
+await fastify.register(jwt, { secret: jwtSecret });
 
 // Register routes
 await fastify.register(authRoutes);
