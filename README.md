@@ -11,6 +11,7 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Auto-save with debounce
 - Star/unstar pages
 - Multi-user authentication with JWT (email/password + Google OAuth)
+- Owner account with workspace-wide access to all pages
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties (rename, delete, reorder, hide/show columns per view)
 - Save/revert default database view config (filters, sort, hidden columns, property order) for all users
@@ -253,6 +254,17 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 |--------|----------|-------------|
 | GET | `/api/search?q=...` | Search pages, blocks, and properties |
 
+### Users (admin only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users` | List all users |
+| PATCH | `/api/users/:id/role` | Update user role |
+| PATCH | `/api/users/:id/owner` | Grant/revoke owner status |
+| PATCH | `/api/users/:id/approve` | Approve/revoke user |
+| POST | `/api/users/:id/reset-password` | Reset user password |
+| DELETE | `/api/users/:id` | Delete user |
+
 ### Sharing
 
 | Method | Endpoint | Description |
@@ -298,6 +310,20 @@ To enable Google login:
 5. Set `AUTH_MODES=db,google` (or `AUTH_MODES=google` for Google-only)
 
 When both modes are enabled, the login page shows a Google button and an email/password form. Users signing in with Google are auto-linked if their email matches an existing account.
+
+## User Roles
+
+Nonotion has three access levels:
+
+| Role | Description |
+|------|-------------|
+| **User** | Standard access — can only see pages explicitly shared with them |
+| **Admin** | Can manage users (approve, change roles, reset passwords) but only sees shared pages |
+| **Owner** | Admin + full access to all pages/databases in the workspace |
+
+**How the first owner is created:** The first user to register automatically becomes an admin and owner. On upgrade from a previous version, the oldest admin is automatically promoted to owner via database migration.
+
+**Owner management:** Owners can grant or revoke owner status for other admins via the admin panel. At least one owner must always exist. An owner must be an admin — granting owner status auto-promotes to admin; demoting an admin to user is blocked while they are an owner.
 
 ## License
 

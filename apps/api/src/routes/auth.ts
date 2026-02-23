@@ -36,7 +36,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const user = await authService.register(parsed.data);
       const publicUser = authService.toPublicUser(user);
-      const token = fastify.jwt.sign({ userId: user.id, role: user.role });
+      const token = fastify.jwt.sign({ userId: user.id, role: user.role, isOwner: user.isOwner });
 
       return reply.status(201).send({
         success: true,
@@ -80,7 +80,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const user = await authService.login(parsed.data);
       const publicUser = authService.toPublicUser(user);
-      const token = fastify.jwt.sign({ userId: user.id, role: user.role });
+      const token = fastify.jwt.sign({ userId: user.id, role: user.role, isOwner: user.isOwner });
 
       return reply.send({
         success: true,
@@ -118,7 +118,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const user = await authService.googleLogin(parsed.data.credential);
       const publicUser = authService.toPublicUser(user);
-      const token = fastify.jwt.sign({ userId: user.id, role: user.role });
+      const token = fastify.jwt.sign({ userId: user.id, role: user.role, isOwner: user.isOwner });
 
       return reply.send({
         success: true,

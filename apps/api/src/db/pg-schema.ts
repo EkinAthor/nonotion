@@ -21,6 +21,7 @@ export const users = pgTable(
     avatarUrl: text('avatar_url'),
     googleId: text('google_id'),
     role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
+    isOwner: boolean('is_owner').notNull().default(false),
     mustChangePassword: boolean('must_change_password').notNull().default(false),
     approved: boolean('approved').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),

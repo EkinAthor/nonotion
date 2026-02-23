@@ -10,6 +10,7 @@ export const userSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   googleId: z.string().nullable(),
   role: userRoleSchema,
+  isOwner: z.boolean(),
   mustChangePassword: z.boolean(),
   approved: z.boolean(),
   createdAt: z.string().datetime(),
@@ -23,6 +24,7 @@ export const publicUserSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   googleId: z.string().nullable(),
   role: userRoleSchema,
+  isOwner: z.boolean(),
   approved: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -67,6 +69,12 @@ export const updateUserRoleInputSchema = z.object({
 });
 
 export type UpdateUserRoleInputSchema = z.infer<typeof updateUserRoleInputSchema>;
+
+export const updateOwnerInputSchema = z.object({
+  isOwner: z.boolean(),
+});
+
+export type UpdateOwnerInputSchema = z.infer<typeof updateOwnerInputSchema>;
 
 export const approveUserInputSchema = z.object({
   approved: z.boolean(),

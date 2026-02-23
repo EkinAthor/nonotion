@@ -4,7 +4,7 @@ import type { PublicUser } from '@nonotion/shared';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function UserManagementPage() {
-    const { user: currentUser } = useAuthStore();
+    const { user: currentUser, isOwner: currentUserIsOwner } = useAuthStore();
     const [users, setUsers] = useState<PublicUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +97,18 @@ export default function UserManagementPage() {
         }
     }
 
+    async function toggleOwner(user: PublicUser) {
+        try {
+            setActionLoading(user.id);
+            const updated = await usersApi.updateOwner(user.id, !user.isOwner);
+            setUsers(users.map(u => u.id === user.id ? updated : u));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to update owner status');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -158,12 +170,18 @@ export default function UserManagementPage() {
                                     {user.email}
                                 </td>
                                 <td className="py-3 px-4">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin'
-                                        ? 'bg-purple-100 text-purple-800'
-                                        : 'bg-gray-100 text-gray-800'
-                                        }`}>
-                                        {user.role}
-                                    </span>
+                                    {user.isOwner ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                            Owner
+                                        </span>
+                                    ) : (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin'
+                                            ? 'bg-purple-100 text-purple-800'
+                                            : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                            {user.role}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="py-3 px-4">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.approved
@@ -196,11 +214,24 @@ export default function UserManagementPage() {
                                                 )}
                                                 <button
                                                     onClick={() => toggleAdmin(user)}
-                                                    disabled={actionLoading === user.id}
+                                                    disabled={actionLoading === user.id || user.isOwner}
                                                     className="text-xs px-2 py-1 border border-notion-border rounded hover:bg-notion-hover text-notion-text disabled:opacity-50"
+                                                    title={user.isOwner ? 'Remove owner status first' : undefined}
                                                 >
                                                     {user.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                                                 </button>
+                                                {currentUserIsOwner() && user.role === 'admin' && (
+                                                    <button
+                                                        onClick={() => toggleOwner(user)}
+                                                        disabled={actionLoading === user.id}
+                                                        className={`text-xs px-2 py-1 border rounded disabled:opacity-50 ${user.isOwner
+                                                            ? 'border-amber-300 hover:bg-amber-50 text-amber-600'
+                                                            : 'border-amber-300 hover:bg-amber-50 text-amber-600'
+                                                            }`}
+                                                    >
+                                                        {user.isOwner ? 'Remove Owner' : 'Make Owner'}
+                                                    </button>
+                                                )}
                                             </>
                                         )}
 
@@ -220,8 +251,9 @@ export default function UserManagementPage() {
                                         {user.id !== currentUser?.id && (
                                             <button
                                                 onClick={() => setDeleteUserId(user.id)}
-                                                disabled={actionLoading === user.id}
+                                                disabled={actionLoading === user.id || user.isOwner}
                                                 className="text-xs px-2 py-1 border border-red-300 rounded hover:bg-red-50 text-red-600 disabled:opacity-50"
+                                                title={user.isOwner ? 'Cannot delete an owner' : undefined}
                                             >
                                                 Delete
                                             </button>

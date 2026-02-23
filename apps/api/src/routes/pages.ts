@@ -13,13 +13,13 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // GET /api/pages - List all pages user has access to
   fastify.get('/api/pages', async (request, reply) => {
-    const pages = await permissionService.getUserAccessiblePages(request.userId!);
+    const pages = await permissionService.getUserAccessiblePages(request.userId!, { isWorkspaceOwner: request.isOwner });
     return reply.send({ data: pages, success: true });
   });
 
   // GET /api/pages/:id - Get page by ID
   fastify.get<{ Params: { id: string } }>('/api/pages/:id', async (request, reply) => {
-    const canRead = await permissionService.canRead(request.params.id, request.userId!);
+    const canRead = await permissionService.canRead(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canRead) {
       return reply.status(404).send({
         error: { code: 'NOT_FOUND', message: 'Page not found' },
@@ -39,6 +39,10 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // GET /api/pages/:id/permission - Get user's permission level for a page
   fastify.get<{ Params: { id: string } }>('/api/pages/:id/permission', async (request, reply) => {
+    // Workspace owners have full access to all pages
+    if (request.isOwner === true) {
+      return reply.send({ data: { level: 'owner' }, success: true });
+    }
     const permission = await permissionService.getEffectivePermission(request.params.id, request.userId!);
     if (!permission) {
       return reply.status(404).send({
@@ -61,7 +65,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
     // If creating under a parent, check permission
     if (parsed.data.parentId) {
-      const canEdit = await permissionService.canEdit(parsed.data.parentId, request.userId!);
+      const canEdit = await permissionService.canEdit(parsed.data.parentId, request.userId!, { isWorkspaceOwner: request.isOwner });
       if (!canEdit) {
         return reply.status(403).send({
           error: { code: 'FORBIDDEN', message: 'You do not have permission to create pages under this parent' },
@@ -85,7 +89,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // PATCH /api/pages/:id - Update page
   fastify.patch<{ Params: { id: string } }>('/api/pages/:id', async (request, reply) => {
-    const canEdit = await permissionService.canEdit(request.params.id, request.userId!);
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },
@@ -113,7 +117,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // DELETE /api/pages/:id - Delete page
   fastify.delete<{ Params: { id: string } }>('/api/pages/:id', async (request, reply) => {
-    const canDelete = await permissionService.canDelete(request.params.id, request.userId!);
+    const canDelete = await permissionService.canDelete(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canDelete) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to delete this page' },
@@ -136,7 +140,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // PATCH /api/pages/:id/schema - Update database schema
   fastify.patch<{ Params: { id: string } }>('/api/pages/:id/schema', async (request, reply) => {
-    const canEdit = await permissionService.canEdit(request.params.id, request.userId!);
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this database' },
@@ -164,7 +168,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // PATCH /api/pages/:id/properties - Update row property values
   fastify.patch<{ Params: { id: string } }>('/api/pages/:id/properties', async (request, reply) => {
-    const canEdit = await permissionService.canEdit(request.params.id, request.userId!);
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },

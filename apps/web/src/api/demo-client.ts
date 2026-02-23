@@ -102,6 +102,8 @@ export const usersApi = {
   delete: (_id: string): Promise<void> => Promise.resolve(),
   approve: (_id: string, _approved: boolean): Promise<PublicUser> =>
     Promise.resolve({ ...DEMO_USER }),
+  updateOwner: (_id: string, _isOwner: boolean): Promise<PublicUser> =>
+    Promise.resolve({ ...DEMO_USER }),
 };
 
 // ============ SHARES API ============

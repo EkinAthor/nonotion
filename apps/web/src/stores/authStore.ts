@@ -26,6 +26,7 @@ interface AuthState {
   // Selectors
   isAuthenticated: () => boolean;
   isAdmin: () => boolean;
+  isOwner: () => boolean;
   isPendingApproval: () => boolean;
   isGoogleEnabled: () => boolean;
   isDbEnabled: () => boolean;
@@ -172,6 +173,8 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: () => !!get().token && !!get().user,
 
       isAdmin: () => get().user?.role === 'admin',
+
+      isOwner: () => get().user?.isOwner === true,
 
       isPendingApproval: () => get().pendingApproval,
 

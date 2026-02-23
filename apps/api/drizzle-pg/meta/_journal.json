@@ -22,6 +22,13 @@
       "when": 1771717218547,
       "tag": "0002_bright_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771868991272,
+      "tag": "0003_shiny_whizzer",
+      "breakpoints": true
     }
   ]
 }

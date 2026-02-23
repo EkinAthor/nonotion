@@ -37,6 +37,7 @@ export function toPublicUser(user: User): PublicUser {
     avatarUrl: user.avatarUrl,
     googleId: user.googleId,
     role: user.role,
+    isOwner: user.isOwner,
     approved: user.approved,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -68,6 +69,13 @@ export async function register(input: RegisterInput): Promise<User> {
   // Hash password
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
+  // If becoming admin, check if any owners exist — if none, this user becomes owner
+  let isOwner = false;
+  if (isAdmin) {
+    const allUsers = await getUserStorage().getAllUsers();
+    isOwner = !allUsers.some(u => u.isOwner);
+  }
+
   const timestamp = now();
   const user: User = {
     id: generateUserId(),
@@ -77,6 +85,7 @@ export async function register(input: RegisterInput): Promise<User> {
     avatarUrl: null,
     googleId: null,
     role: isAdmin ? 'admin' : 'user',
+    isOwner,
     mustChangePassword: false,
     approved,
     createdAt: timestamp,
@@ -163,6 +172,13 @@ export async function googleLogin(credential: string): Promise<User> {
   const autoApprove = process.env.REQUIRE_USER_APPROVAL === 'false';
   const approved = isAdmin || autoApprove;
 
+  // If becoming admin, check if any owners exist — if none, this user becomes owner
+  let isOwner = false;
+  if (isAdmin) {
+    const allUsers = await getUserStorage().getAllUsers();
+    isOwner = !allUsers.some(u => u.isOwner);
+  }
+
   const timestamp = now();
   const user: User = {
     id: generateUserId(),
@@ -172,6 +188,7 @@ export async function googleLogin(credential: string): Promise<User> {
     avatarUrl: picture || null,
     googleId,
     role: isAdmin ? 'admin' : 'user',
+    isOwner,
     mustChangePassword: false,
     approved,
     createdAt: timestamp,

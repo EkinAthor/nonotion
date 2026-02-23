@@ -13,6 +13,7 @@ function rowToUser(row: typeof users.$inferSelect): User {
     avatarUrl: row.avatarUrl,
     googleId: row.googleId ?? null,
     role: row.role as UserRole,
+    isOwner: row.isOwner,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
     createdAt: row.createdAt,
@@ -61,6 +62,7 @@ class SqliteStorage implements UserStorageAdapter {
       avatarUrl: user.avatarUrl,
       googleId: user.googleId,
       role: user.role,
+      isOwner: user.isOwner,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
       createdAt: user.createdAt,
@@ -79,6 +81,7 @@ class SqliteStorage implements UserStorageAdapter {
     if (updates.passwordHash !== undefined) updateData.passwordHash = updates.passwordHash;
     if (updates.avatarUrl !== undefined) updateData.avatarUrl = updates.avatarUrl;
     if (updates.role !== undefined) updateData.role = updates.role;
+    if (updates.isOwner !== undefined) updateData.isOwner = updates.isOwner;
     if (updates.mustChangePassword !== undefined) updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;
     if (updates.googleId !== undefined) updateData.googleId = updates.googleId;

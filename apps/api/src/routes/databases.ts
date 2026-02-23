@@ -15,7 +15,7 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
     Params: { id: string };
     Querystring: { sort?: string; filter?: string; limit?: string; offset?: string };
   }>('/api/databases/:id/rows', async (request, reply) => {
-    const canRead = await permissionService.canRead(request.params.id, request.userId!);
+    const canRead = await permissionService.canRead(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canRead) {
       return reply.status(404).send({
         error: { code: 'NOT_FOUND', message: 'Database not found' },

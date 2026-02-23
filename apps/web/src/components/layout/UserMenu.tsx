@@ -5,7 +5,7 @@ import { IS_DEMO_MODE } from '@/api/client';
 
 export default function UserMenu() {
   const navigate = useNavigate();
-  const { user, logout, isAdmin } = useAuthStore();
+  const { user, logout, isAdmin, isOwner } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -58,12 +58,16 @@ export default function UserMenu() {
           {user.name}
         </span>
 
-        {/* Admin badge */}
-        {isAdmin() && (
+        {/* Role badge */}
+        {isOwner() ? (
+          <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+            Owner
+          </span>
+        ) : isAdmin() ? (
           <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
             Admin
           </span>
-        )}
+        ) : null}
 
         {/* Chevron */}
         <svg

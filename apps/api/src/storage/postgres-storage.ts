@@ -27,6 +27,7 @@ function rowToUser(row: pgSchema.UserRow): User {
     avatarUrl: row.avatarUrl,
     googleId: row.googleId ?? null,
     role: row.role as UserRole,
+    isOwner: row.isOwner,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
     createdAt: row.createdAt.toISOString(),
@@ -249,6 +250,7 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       avatarUrl: user.avatarUrl,
       googleId: user.googleId,
       role: user.role,
+      isOwner: user.isOwner,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
       createdAt: new Date(user.createdAt),
@@ -267,6 +269,7 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
     if (updates.passwordHash !== undefined) updateData.passwordHash = updates.passwordHash;
     if (updates.avatarUrl !== undefined) updateData.avatarUrl = updates.avatarUrl;
     if (updates.role !== undefined) updateData.role = updates.role;
+    if (updates.isOwner !== undefined) updateData.isOwner = updates.isOwner;
     if (updates.mustChangePassword !== undefined)
       updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;

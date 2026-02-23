@@ -4,7 +4,7 @@
 
 Nonotion is a Notion-like workspace application with block-based page editing. It's a pnpm monorepo with a Fastify backend and React frontend.
 
-**Current Phase**: Phase 2 - Multi-user, SQLite/PostgreSQL storage, Block editing with Auth.
+**Current Phase**: Phase 2 - Multi-user, SQLite/PostgreSQL storage, Block editing with Auth. User roles: `admin` (manage users), `user` (standard access), plus `isOwner` flag (admin with workspace-wide access to all pages).
 
 ## Architecture
 
@@ -124,6 +124,17 @@ Types: `GoogleLoginInput`, `AuthMode`, `AuthConfigResponse` in `packages/shared/
 
 Disabled features: file upload, Notion import, sharing, user management, "Save as default" view config.
 
+### 13. Owner Account
+`isOwner: boolean` field on User — an owner is an admin with access to **all** workspace pages/databases, bypassing page-level permission checks.
+
+- **Data model**: `isOwner` boolean on `User`/`PublicUser`. Invariant: `isOwner: true` requires `role: 'admin'`. All existing `role === 'admin'` checks continue working for owners.
+- **First owner**: The first admin registered automatically becomes owner. On migration, the oldest existing admin is promoted.
+- **Multiple owners**: Supported. Owners can grant/revoke owner status via `PATCH /api/users/:id/owner`. At least one owner must always exist.
+- **Permission bypass**: `PermissionOptions.isWorkspaceOwner` short-circuits `canRead`, `canEdit`, `canShare`, `canDelete` to return `true`. `getUserAccessiblePages` returns all pages for owners.
+- **JWT**: `isOwner` is included in JWT payload. Old JWTs without `isOwner` are treated as `false` (`=== true` checks).
+- **Protection**: Cannot demote owner to `user` role (must remove owner first). Cannot delete an owner (must remove owner first). Cannot remove the last owner.
+- **Frontend**: Amber "Owner" badge in UserMenu and admin panel. "Make Owner"/"Remove Owner" buttons visible only to owners for admin users.
+
 ## Critical Files
 
 | File | Purpose |
@@ -162,6 +173,7 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 | `apps/web/src/components/auth/AuthConfigProvider.tsx` | Fetches auth config, wraps app in GoogleOAuthProvider |
 | `apps/web/src/components/auth/GoogleLoginButton.tsx` | Google Sign-In button component |
 | `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |
+| `apps/api/src/routes/users.ts` | User management routes including `PATCH /api/users/:id/owner` |
 
 ## Commands
 

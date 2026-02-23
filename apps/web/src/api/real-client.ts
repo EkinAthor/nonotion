@@ -152,6 +152,12 @@ export const usersApi = {
       method: 'PATCH',
       body: JSON.stringify({ approved }),
     }),
+
+  updateOwner: (id: string, isOwner: boolean) =>
+    request<PublicUser>(`/users/${id}/owner`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isOwner }),
+    }),
 };
 
 // Shares API

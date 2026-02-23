@@ -12,7 +12,7 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
 
   // GET /api/pages/:pageId/blocks - Get blocks for page
   fastify.get<{ Params: { pageId: string } }>('/api/pages/:pageId/blocks', async (request, reply) => {
-    const canRead = await permissionService.canRead(request.params.pageId, request.userId!);
+    const canRead = await permissionService.canRead(request.params.pageId, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canRead) {
       return reply.status(404).send({
         error: { code: 'NOT_FOUND', message: 'Page not found' },
@@ -26,7 +26,7 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
 
   // POST /api/pages/:pageId/blocks - Create block
   fastify.post<{ Params: { pageId: string } }>('/api/pages/:pageId/blocks', async (request, reply) => {
-    const canEdit = await permissionService.canEdit(request.params.pageId, request.userId!);
+    const canEdit = await permissionService.canEdit(request.params.pageId, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },
@@ -58,7 +58,7 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const canEdit = await permissionService.canEdit(existingBlock.pageId, request.userId!);
+    const canEdit = await permissionService.canEdit(existingBlock.pageId, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },
@@ -95,7 +95,7 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const canEdit = await permissionService.canEdit(existingBlock.pageId, request.userId!);
+    const canEdit = await permissionService.canEdit(existingBlock.pageId, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },
@@ -115,7 +115,7 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
 
   // PATCH /api/pages/:pageId/blocks/reorder - Reorder blocks
   fastify.patch<{ Params: { pageId: string } }>('/api/pages/:pageId/blocks/reorder', async (request, reply) => {
-    const canEdit = await permissionService.canEdit(request.params.pageId, request.userId!);
+    const canEdit = await permissionService.canEdit(request.params.pageId, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canEdit) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'You do not have permission to edit this page' },

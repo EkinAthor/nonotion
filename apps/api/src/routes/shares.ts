@@ -12,7 +12,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // GET /api/pages/:id/shares - List shares for a page (owner only)
   fastify.get<{ Params: { id: string } }>('/api/pages/:id/shares', async (request, reply) => {
-    const canShare = await permissionService.canShare(request.params.id, request.userId!);
+    const canShare = await permissionService.canShare(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canShare) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'Only the page owner can view shares' },
@@ -38,7 +38,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
 
   // POST /api/pages/:id/shares - Add share (owner only)
   fastify.post<{ Params: { id: string } }>('/api/pages/:id/shares', async (request, reply) => {
-    const canShare = await permissionService.canShare(request.params.id, request.userId!);
+    const canShare = await permissionService.canShare(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canShare) {
       return reply.status(403).send({
         error: { code: 'FORBIDDEN', message: 'Only the page owner can share pages' },
@@ -98,7 +98,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.patch<{ Params: { id: string; userId: string } }>(
     '/api/pages/:id/shares/:userId',
     async (request, reply) => {
-      const canShare = await permissionService.canShare(request.params.id, request.userId!);
+      const canShare = await permissionService.canShare(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
       if (!canShare) {
         return reply.status(403).send({
           error: { code: 'FORBIDDEN', message: 'Only the page owner can update shares' },
@@ -143,7 +143,7 @@ export async function sharesRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete<{ Params: { id: string; userId: string } }>(
     '/api/pages/:id/shares/:userId',
     async (request, reply) => {
-      const canShare = await permissionService.canShare(request.params.id, request.userId!);
+      const canShare = await permissionService.canShare(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
       if (!canShare) {
         return reply.status(403).send({
           error: { code: 'FORBIDDEN', message: 'Only the page owner can remove shares' },

@@ -8,6 +8,7 @@ export interface User {
   avatarUrl: string | null;
   googleId: string | null;
   role: UserRole;
+  isOwner: boolean;
   mustChangePassword: boolean;
   approved: boolean; // Whether admin has approved user access
   createdAt: string; // ISO 8601
@@ -22,6 +23,7 @@ export interface PublicUser {
   avatarUrl: string | null;
   googleId: string | null;
   role: UserRole;
+  isOwner: boolean;
   approved: boolean;
   createdAt: string;
   updatedAt: string;
@@ -67,6 +69,10 @@ export interface AuthResponse {
 
 export interface UpdateUserRoleInput {
   role: UserRole;
+}
+
+export interface UpdateOwnerInput {
+  isOwner: boolean;
 }
 
 export interface GoogleLoginInput {

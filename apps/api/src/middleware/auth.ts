@@ -5,21 +5,23 @@ declare module 'fastify' {
   interface FastifyRequest {
     userId?: string;
     userRole?: 'admin' | 'user';
+    isOwner?: boolean;
   }
 }
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { userId: string; role: 'admin' | 'user' };
-    user: { userId: string; role: 'admin' | 'user' };
+    payload: { userId: string; role: 'admin' | 'user'; isOwner: boolean };
+    user: { userId: string; role: 'admin' | 'user'; isOwner: boolean };
   }
 }
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user' }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean }>();
     request.userId = decoded.userId;
     request.userRole = decoded.role;
+    request.isOwner = decoded.isOwner === true;
   } catch {
     reply.status(401).send({
       success: false,
@@ -30,13 +32,15 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 
 export async function optionalAuthMiddleware(request: FastifyRequest): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user' }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean }>();
     request.userId = decoded.userId;
     request.userRole = decoded.role;
+    request.isOwner = decoded.isOwner === true;
   } catch {
     // No token or invalid token - that's fine, just continue without auth
     request.userId = undefined;
     request.userRole = undefined;
+    request.isOwner = undefined;
   }
 }
 

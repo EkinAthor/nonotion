@@ -1,7 +1,7 @@
 import type { Page, PropertyValue } from '@nonotion/shared';
 import { getBlockText } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
-import { getUserAccessiblePages } from './permission-service.js';
+import { getUserAccessiblePages, type PermissionOptions } from './permission-service.js';
 
 export interface SearchResult {
   type: 'page' | 'block' | 'property';
@@ -39,9 +39,9 @@ function getPropertyText(value: PropertyValue): string {
   }
 }
 
-export async function search(query: string, userId: string): Promise<SearchResult[]> {
+export async function search(query: string, userId: string, options?: PermissionOptions): Promise<SearchResult[]> {
   const lowerQuery = query.toLowerCase();
-  const accessiblePages = await getUserAccessiblePages(userId);
+  const accessiblePages = await getUserAccessiblePages(userId, options);
   const pageMap = new Map<string, Page>(accessiblePages.map(p => [p.id, p]));
   const pageIds = Array.from(pageMap.keys());
 

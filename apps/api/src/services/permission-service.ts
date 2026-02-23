@@ -21,22 +21,30 @@ export async function getEffectivePermission(
   return null;
 }
 
-export async function canRead(pageId: string, userId: string): Promise<boolean> {
+export interface PermissionOptions {
+  isWorkspaceOwner?: boolean;
+}
+
+export async function canRead(pageId: string, userId: string, options?: PermissionOptions): Promise<boolean> {
+  if (options?.isWorkspaceOwner === true) return true;
   const permission = await getEffectivePermission(pageId, userId);
   return permission !== null; // viewer, editor, or owner can read
 }
 
-export async function canEdit(pageId: string, userId: string): Promise<boolean> {
+export async function canEdit(pageId: string, userId: string, options?: PermissionOptions): Promise<boolean> {
+  if (options?.isWorkspaceOwner === true) return true;
   const permission = await getEffectivePermission(pageId, userId);
   return permission === 'editor' || permission === 'full_access' || permission === 'owner';
 }
 
-export async function canShare(pageId: string, userId: string): Promise<boolean> {
+export async function canShare(pageId: string, userId: string, options?: PermissionOptions): Promise<boolean> {
+  if (options?.isWorkspaceOwner === true) return true;
   const permission = await getEffectivePermission(pageId, userId);
   return permission === 'full_access' || permission === 'owner';
 }
 
-export async function canDelete(pageId: string, userId: string): Promise<boolean> {
+export async function canDelete(pageId: string, userId: string, options?: PermissionOptions): Promise<boolean> {
+  if (options?.isWorkspaceOwner === true) return true;
   const permission = await getEffectivePermission(pageId, userId);
   return permission === 'owner';
 }
@@ -166,7 +174,12 @@ export async function deletePagePermissions(pageId: string): Promise<void> {
   return getUserStorage().deletePagePermissions(pageId);
 }
 
-export async function getUserAccessiblePages(userId: string): Promise<Page[]> {
+export async function getUserAccessiblePages(userId: string, options?: PermissionOptions): Promise<Page[]> {
+  // Workspace owners can access all pages
+  if (options?.isWorkspaceOwner === true) {
+    return getStorage().getAllPages();
+  }
+
   // Get all permissions for this user
   const permissions = await getUserStorage().getUserPermissions(userId);
   const pageIds = new Set(permissions.map((p) => p.pageId));

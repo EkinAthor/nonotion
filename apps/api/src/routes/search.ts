@@ -16,7 +16,7 @@ export async function searchRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const results = await searchService.search(q.trim(), request.userId!);
+    const results = await searchService.search(q.trim(), request.userId!, { isWorkspaceOwner: request.isOwner });
     return reply.send({ data: results, success: true });
   });
 }

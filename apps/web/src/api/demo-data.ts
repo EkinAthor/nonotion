@@ -14,6 +14,7 @@ export const DEMO_USER = {
   name: 'Demo User',
   email: 'demo@nonotion.app',
   role: 'admin' as const,
+  isOwner: true,
   avatarUrl: null,
   googleId: null,
   approved: true,
