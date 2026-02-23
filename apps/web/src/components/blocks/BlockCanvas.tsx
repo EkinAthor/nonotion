@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -311,6 +311,15 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
     }
   };
 
+  // Stable items reference — only recomputes when block IDs or their order change.
+  // Prevents dnd-kit from applying a spurious "transform 0ms linear" transition
+  // on every render, which causes white cursor rendering on Chromium/Windows.
+  const sortableItems = useMemo(
+    () => blocks.map((b) => b.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blocks.map((b) => b.id).join(',')]
+  );
+
   return (
     <div
       ref={containerRef}
@@ -324,7 +333,7 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={blocks.map((b) => b.id)}
+          items={sortableItems}
           strategy={verticalListSortingStrategy}
         >
           {blocks.map((block) => (

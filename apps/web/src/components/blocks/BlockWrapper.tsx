@@ -193,11 +193,23 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     transition,
   } = useSortable({ id: block.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  // Build inline style only when dnd-kit actually needs it (dragging/animating).
+  // Applying transform, transition, or opacity as inline styles on every block —
+  // even benign values like "opacity: 1" — promotes elements to GPU compositing
+  // layers on Chromium/Windows, causing cursor: text and cursor: grab to render
+  // white/invisible. By returning undefined when idle, blocks get no inline style
+  // attribute and no spurious GPU layers are created.
+  const transformString = CSS.Transform.toString(transform);
+  const hasActiveTransform = transformString != null;
+  const needsTransition = transition != null && transition !== 'transform 0ms linear';
+  const style: React.CSSProperties | undefined =
+    hasActiveTransform || isDragging
+      ? {
+          transform: transformString ?? undefined,
+          transition: needsTransition ? transition : undefined,
+          opacity: isDragging ? 0.5 : undefined,
+        }
+      : undefined;
 
   const handleDelete = async () => {
     await deleteBlock(block.id);
@@ -249,7 +261,7 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
       {/* Action buttons (hidden in readOnly mode) */}
       {!readOnly && (
         <div
-          className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 transition-opacity ${showActions || menuOpen ? 'opacity-100' : 'opacity-0'
+          className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 ${showActions || menuOpen ? 'visible' : 'invisible'
             }`}
         >
           {/* Drag handle */}
