@@ -24,7 +24,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Register new user
-  fastify.post('/api/auth/register', async (request, reply) => {
+  fastify.post('/api/auth/register', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.auth.max, timeWindow: fastify.rateLimitConfig.auth.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     try {
       const parsed = registerInputSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -68,7 +74,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Login
-  fastify.post('/api/auth/login', async (request, reply) => {
+  fastify.post('/api/auth/login', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.auth.max, timeWindow: fastify.rateLimitConfig.auth.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     try {
       const parsed = loginInputSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -106,7 +118,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Google login
-  fastify.post('/api/auth/google', async (request, reply) => {
+  fastify.post('/api/auth/google', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.auth.max, timeWindow: fastify.rateLimitConfig.auth.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     try {
       const parsed = googleLoginInputSchema.safeParse(request.body);
       if (!parsed.success) {

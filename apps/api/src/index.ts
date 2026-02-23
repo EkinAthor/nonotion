@@ -15,6 +15,7 @@ import { importRoutes } from './routes/import.js';
 import { searchRoutes } from './routes/search.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
+import { registerRateLimit } from './config/rate-limit.js';
 
 // Determine storage type from environment
 const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'sqlite';
@@ -85,6 +86,7 @@ await fastify.register(cors, {
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
+  exposedHeaders: ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'],
 });
 
 // Register JWT plugin
@@ -94,6 +96,9 @@ const jwtSecret = process.env.JWT_SECRET || (
     : 'dev-secret-change-in-production'
 );
 await fastify.register(jwt, { secret: jwtSecret });
+
+// Register rate limiting (after JWT, before routes)
+await registerRateLimit(fastify);
 
 // Register routes
 await fastify.register(authRoutes);
@@ -106,8 +111,8 @@ await fastify.register(filesRoutes);
 await fastify.register(importRoutes);
 await fastify.register(searchRoutes);
 
-// Health check
-fastify.get('/health', async () => {
+// Health check (exempt from rate limiting)
+fastify.get('/health', { config: { rateLimit: false } }, async () => {
   return { status: 'ok', storageType: getStorageType() };
 });
 

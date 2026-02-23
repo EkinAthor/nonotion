@@ -169,6 +169,17 @@ Demo data is seeded on first load: a book database with 10 rows, a formatting sh
 | `MAX_IMPORT_SIZE_MB` | Maximum Notion import ZIP size in MB | `100` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
 | `VITE_DEMO_MODE` | Enable demo mode (frontend-only, no backend) | `false` |
+| `RATE_LIMIT_ENABLED` | Enable/disable rate limiting (auto-disabled on Vercel) | `true` |
+| `RATE_LIMIT_GLOBAL_MAX` | Global: max requests per window per IP | `100` |
+| `RATE_LIMIT_GLOBAL_WINDOW_MINUTES` | Global: window duration in minutes | `1` |
+| `RATE_LIMIT_AUTH_MAX` | Auth endpoints: max attempts per window | `10` |
+| `RATE_LIMIT_AUTH_WINDOW_MINUTES` | Auth: window duration in minutes | `15` |
+| `RATE_LIMIT_UPLOAD_MAX` | File upload: max requests per window | `10` |
+| `RATE_LIMIT_UPLOAD_WINDOW_MINUTES` | Upload: window duration in minutes | `1` |
+| `RATE_LIMIT_IMPORT_MAX` | Import: max requests per window | `3` |
+| `RATE_LIMIT_IMPORT_WINDOW_MINUTES` | Import: window duration in minutes | `1` |
+| `RATE_LIMIT_SEARCH_MAX` | Search: max requests per window | `30` |
+| `RATE_LIMIT_SEARCH_WINDOW_MINUTES` | Search: window duration in minutes | `1` |
 
 ---
 
@@ -310,6 +321,23 @@ To enable Google login:
 5. Set `AUTH_MODES=db,google` (or `AUTH_MODES=google` for Google-only)
 
 When both modes are enabled, the login page shows a Google button and an email/password form. Users signing in with Google are auto-linked if their email matches an existing account.
+
+## Rate Limiting
+
+The API includes built-in rate limiting powered by `@fastify/rate-limit`. It is enabled by default with sensible limits:
+
+| Endpoint | Max Requests | Window |
+|----------|-------------|--------|
+| All routes (global) | 100 | 1 min |
+| Login / Register / Google auth | 10 | 15 min |
+| File upload | 10 | 1 min |
+| Notion import | 3 | 1 min |
+| Search | 30 | 1 min |
+| Health check | exempt | — |
+
+All limits are configurable via environment variables (see table above). Set `RATE_LIMIT_ENABLED=false` to disable rate limiting entirely.
+
+Rate limiting uses an in-memory store keyed by client IP. It is automatically disabled on Vercel serverless deployments (where in-memory state doesn't persist between invocations) — use Vercel Firewall / WAF rules for rate limiting in that environment.
 
 ## User Roles
 

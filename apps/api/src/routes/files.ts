@@ -20,7 +20,13 @@ export async function filesRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', approvedUserMiddleware);
 
   // POST /api/files - Upload a file
-  fastify.post('/api/files', async (request, reply) => {
+  fastify.post('/api/files', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.upload.max, timeWindow: fastify.rateLimitConfig.upload.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     const data = await request.file();
     if (!data) {
       return reply.status(400).send({

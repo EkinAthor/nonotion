@@ -7,7 +7,13 @@ export async function searchRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', mustChangePasswordMiddleware);
   fastify.addHook('preHandler', approvedUserMiddleware);
 
-  fastify.get<{ Querystring: { q?: string } }>('/api/search', async (request, reply) => {
+  fastify.get<{ Querystring: { q?: string } }>('/api/search', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.search.max, timeWindow: fastify.rateLimitConfig.search.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     const q = request.query.q;
     if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return reply.status(400).send({

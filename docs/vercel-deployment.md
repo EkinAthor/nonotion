@@ -49,6 +49,9 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 > [!NOTE]
 > The API automatically runs Drizzle migrations on startup when `STORAGE_TYPE=postgres` is set.
 
+> [!NOTE]
+> **Rate Limiting:** The built-in rate limiting is automatically disabled on Vercel because it uses an in-memory store that doesn't persist between serverless invocations. For production rate limiting on Vercel, configure [Vercel Firewall / WAF rules](https://vercel.com/docs/security/firewall) to set IP-based rate limits at the edge.
+
 ---
 
 ## 3. Deploying the Web Client (apps/web)

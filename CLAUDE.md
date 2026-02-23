@@ -135,6 +135,20 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 - **Protection**: Cannot demote owner to `user` role (must remove owner first). Cannot delete an owner (must remove owner first). Cannot remove the last owner.
 - **Frontend**: Amber "Owner" badge in UserMenu and admin panel. "Make Owner"/"Remove Owner" buttons visible only to owners for admin users.
 
+### 14. Rate Limiting
+`@fastify/rate-limit` provides IP-based rate limiting with tiered per-route overrides. Config lives in `apps/api/src/config/rate-limit.ts`.
+
+- **Global safety net**: 100 req / 1 min (all routes). Health check is exempt (`config: { rateLimit: false }`).
+- **Auth tier** (login, register, google): 10 req / 15 min — prevents credential brute-force.
+- **Upload tier** (POST /api/files): 10 req / 1 min — prevents storage exhaustion.
+- **Import tier** (POST /api/import): 3 req / 1 min — heavy operation.
+- **Search tier** (GET /api/search): 30 req / 1 min — expensive DB queries.
+- **Env config**: All limits tunable via `RATE_LIMIT_*` env vars. `RATE_LIMIT_ENABLED=false` disables entirely.
+- **Vercel auto-skip**: Detected via `VERCEL` env var — in-memory store is useless in serverless. Use Vercel Firewall instead.
+- **Error format**: Returns `{ success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message } }` matching existing API error format.
+- **CORS**: `exposedHeaders` includes `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, `retry-after`.
+- **Per-route config**: Routes use `config.rateLimit` option with values from `fastify.rateLimitConfig` (decorated on boot). When disabled, routes set `config: { rateLimit: false }` for zero overhead.
+
 ## Critical Files
 
 | File | Purpose |
@@ -174,6 +188,7 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 | `apps/web/src/components/auth/GoogleLoginButton.tsx` | Google Sign-In button component |
 | `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |
 | `apps/api/src/routes/users.ts` | User management routes including `PATCH /api/users/:id/owner` |
+| `apps/api/src/config/rate-limit.ts` | Rate limiting config, Fastify type augmentation, registration helper |
 
 ## Commands
 

@@ -20,7 +20,13 @@ export async function importRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', approvedUserMiddleware);
 
   // POST /api/import - Import a Notion export ZIP
-  fastify.post('/api/import', async (request, reply) => {
+  fastify.post('/api/import', {
+    config: {
+      rateLimit: fastify.rateLimitEnabled
+        ? { max: fastify.rateLimitConfig.import.max, timeWindow: fastify.rateLimitConfig.import.timeWindow }
+        : false,
+    },
+  }, async (request, reply) => {
     const data = await request.file();
     if (!data) {
       return reply.status(400).send({
