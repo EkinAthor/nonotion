@@ -6,6 +6,7 @@ import { usePageStore } from '@/stores/pageStore';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import TableView from '@/components/database/TableView';
+import KanbanView from '@/components/database/KanbanView';
 import DatabaseToolbar from '@/components/database/DatabaseToolbar';
 
 interface DatabaseViewEditProps {
@@ -302,7 +303,7 @@ function InlineDatabaseDisplay({ block, readOnly }: DatabaseViewEditProps) {
 }
 
 function InlineDatabaseContent({ readOnly }: { readOnly: boolean }) {
-  const { isLoading, error } = useDatabaseInstance();
+  const { isLoading, error, viewConfig } = useDatabaseInstance();
   const canEdit = !readOnly;
 
   if (error) {
@@ -320,6 +321,8 @@ function InlineDatabaseContent({ readOnly }: { readOnly: boolean }) {
         <div className="flex items-center justify-center py-8 text-notion-text-secondary">
           Loading...
         </div>
+      ) : viewConfig.viewType === 'kanban' ? (
+        <KanbanView canEdit={canEdit} />
       ) : (
         <TableView canEdit={canEdit} />
       )}

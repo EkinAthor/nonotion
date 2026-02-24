@@ -45,12 +45,23 @@ export interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
+// View type for database display
+export type DatabaseViewType = 'table' | 'kanban';
+
+// Kanban-specific configuration
+export interface KanbanConfig {
+  groupByPropertyId: string;
+  hiddenOptionIds: string[];
+}
+
 // Default view configuration saved to server
 export interface DefaultViewConfig {
   sort?: SortConfig;
   filters: FilterRule[];
   hiddenPropertyIds: string[];
   propertyOrder: string[];
+  viewType?: DatabaseViewType;
+  kanban?: KanbanConfig;
 }
 
 // Schema defining a database's structure

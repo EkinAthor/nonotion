@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Page } from '@nonotion/shared';
 import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import TableView from './TableView';
+import KanbanView from './KanbanView';
 import DatabaseToolbar from './DatabaseToolbar';
 
 interface DatabaseViewProps {
@@ -20,7 +21,7 @@ export default function DatabaseView({ page, canEdit }: DatabaseViewProps) {
 }
 
 function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
-  const { loadDatabase, fetchRows, clearDatabase, isLoading, error } = useDatabaseInstance();
+  const { loadDatabase, fetchRows, clearDatabase, isLoading, error, viewConfig } = useDatabaseInstance();
 
   useEffect(() => {
     loadDatabase(page);
@@ -54,6 +55,8 @@ function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
         <div className="flex items-center justify-center py-8 text-notion-text-secondary">
           Loading...
         </div>
+      ) : viewConfig.viewType === 'kanban' ? (
+        <KanbanView canEdit={canEdit} />
       ) : (
         <TableView canEdit={canEdit} />
       )}

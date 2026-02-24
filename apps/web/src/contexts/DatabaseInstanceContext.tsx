@@ -12,15 +12,19 @@ import type {
   FilterRule,
   SortConfig,
   DefaultViewConfig,
+  DatabaseViewType,
+  KanbanConfig,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
 
 interface ViewConfig {
+  viewType: DatabaseViewType;
   sort?: SortConfig;
   filters: FilterRule[];
   columnWidths: Record<string, number>;
   hiddenPropertyIds: string[];
   propertyOrder: string[];
+  kanban?: KanbanConfig;
 }
 
 // localStorage persistence helpers
@@ -72,6 +76,13 @@ export interface DatabaseInstanceState {
   togglePropertyVisibility: (propertyId: string) => void;
   setPropertyOrder: (order: string[]) => void;
 
+  // Kanban actions
+  setViewType: (viewType: DatabaseViewType) => void;
+  setKanbanGroupBy: (propertyId: string) => void;
+  toggleKanbanColumnVisibility: (optionId: string) => void;
+  moveCardToColumn: (rowId: string, targetOptionId: string | null) => void;
+  getSelectProperties: () => PropertyDefinition[];
+
   // Property options management
   updatePropertyOptions: (propertyId: string, options: SelectOption[]) => void;
 
@@ -115,11 +126,13 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
   const hadLocalConfig = savedConfig !== null;
 
   const initialViewConfig: ViewConfig = {
+    viewType: (savedConfig as Partial<ViewConfig>)?.viewType ?? 'table',
     sort: savedConfig?.sort,
     filters: savedConfig?.filters ?? [],
     columnWidths: savedConfig?.columnWidths ?? {},
     hiddenPropertyIds: (savedConfig as Partial<ViewConfig>)?.hiddenPropertyIds ?? [],
     propertyOrder: (savedConfig as Partial<ViewConfig>)?.propertyOrder ?? [],
+    kanban: (savedConfig as Partial<ViewConfig>)?.kanban,
   };
 
   function persist(config: ViewConfig): void {
@@ -161,11 +174,13 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       if (!hadLocalConfig && page.databaseSchema.defaultViewConfig) {
         const def = page.databaseSchema.defaultViewConfig;
         updates.viewConfig = {
+          viewType: def.viewType ?? 'table',
           sort: def.sort,
           filters: def.filters,
           columnWidths: {},
           hiddenPropertyIds: def.hiddenPropertyIds,
           propertyOrder: def.propertyOrder,
+          kanban: def.kanban,
         };
         // Do NOT persist to localStorage — ensures users without
         // customization always get the latest server default on reload
@@ -341,6 +356,65 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       persist(newConfig);
     },
 
+    setViewType: (viewType) => {
+      const { viewConfig, schema } = get();
+      let kanban = viewConfig.kanban;
+
+      // When switching to kanban, auto-select first select property if no config
+      if (viewType === 'kanban' && !kanban && schema) {
+        const selectProp = schema.properties.find((p) => p.type === 'select');
+        if (selectProp) {
+          kanban = { groupByPropertyId: selectProp.id, hiddenOptionIds: [] };
+        }
+      }
+
+      const newConfig = { ...viewConfig, viewType, kanban };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+    },
+
+    setKanbanGroupBy: (propertyId) => {
+      const { viewConfig } = get();
+      const kanban: KanbanConfig = { groupByPropertyId: propertyId, hiddenOptionIds: [] };
+      const newConfig = { ...viewConfig, kanban };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+    },
+
+    toggleKanbanColumnVisibility: (optionId) => {
+      const { viewConfig } = get();
+      const kanban = viewConfig.kanban;
+      if (!kanban) return;
+
+      const hidden = kanban.hiddenOptionIds;
+      const newHidden = hidden.includes(optionId)
+        ? hidden.filter((id) => id !== optionId)
+        : [...hidden, optionId];
+      const newConfig = {
+        ...viewConfig,
+        kanban: { ...kanban, hiddenOptionIds: newHidden },
+      };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
+    },
+
+    moveCardToColumn: (rowId, targetOptionId) => {
+      const { viewConfig } = get();
+      const kanban = viewConfig.kanban;
+      if (!kanban) return;
+
+      const propertyId = kanban.groupByPropertyId;
+      get().updateRowProperties(rowId, {
+        [propertyId]: { type: 'select', value: targetOptionId },
+      });
+    },
+
+    getSelectProperties: () => {
+      const { schema } = get();
+      if (!schema) return [];
+      return schema.properties.filter((p) => p.type === 'select');
+    },
+
     updatePropertyOptions: (propertyId, options) => {
       get().updateSchema({
         updateProperties: [{ id: propertyId, options }],
@@ -356,6 +430,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         filters: viewConfig.filters,
         hiddenPropertyIds: viewConfig.hiddenPropertyIds,
         propertyOrder: viewConfig.propertyOrder,
+        viewType: viewConfig.viewType,
+        kanban: viewConfig.kanban,
       };
 
       // Optimistic update
@@ -379,11 +455,13 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
       const def = schema.defaultViewConfig;
       const newConfig: ViewConfig = {
+        viewType: def.viewType ?? 'table',
         sort: def.sort,
         filters: def.filters,
         columnWidths: {},
         hiddenPropertyIds: def.hiddenPropertyIds,
         propertyOrder: def.propertyOrder,
+        kanban: def.kanban,
       };
       set({ viewConfig: newConfig });
       persist(newConfig);

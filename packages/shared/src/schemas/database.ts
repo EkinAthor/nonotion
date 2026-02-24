@@ -70,12 +70,23 @@ export const sortConfigSchema = z.object({
   direction: z.enum(['asc', 'desc']),
 });
 
+// Database view type
+export const databaseViewTypeSchema = z.enum(['table', 'kanban']);
+
+// Kanban config
+export const kanbanConfigSchema = z.object({
+  groupByPropertyId: z.string(),
+  hiddenOptionIds: z.array(z.string()),
+});
+
 // Default view config (server-saved)
 export const defaultViewConfigSchema = z.object({
   sort: sortConfigSchema.optional(),
   filters: z.array(filterRuleSchema),
   hiddenPropertyIds: z.array(z.string()),
   propertyOrder: z.array(z.string()),
+  viewType: databaseViewTypeSchema.optional(),
+  kanban: kanbanConfigSchema.optional(),
 });
 
 // Database schema
@@ -191,5 +202,7 @@ export type UpdatePropertiesInputSchema = z.infer<typeof updatePropertiesInputSc
 export type FilterOperatorSchema = z.infer<typeof filterOperatorSchema>;
 export type FilterRuleSchema = z.infer<typeof filterRuleSchema>;
 export type SortConfigSchema = z.infer<typeof sortConfigSchema>;
+export type DatabaseViewTypeSchema = z.infer<typeof databaseViewTypeSchema>;
+export type KanbanConfigSchema = z.infer<typeof kanbanConfigSchema>;
 export type DefaultViewConfigSchema = z.infer<typeof defaultViewConfigSchema>;
 export type DatabaseRowsQuerySchema = z.infer<typeof databaseRowsQuerySchema>;

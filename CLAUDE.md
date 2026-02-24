@@ -149,6 +149,18 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 - **CORS**: `exposedHeaders` includes `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, `retry-after`.
 - **Per-route config**: Routes use `config.rateLimit` option with values from `fastify.rateLimitConfig` (decorated on boot). When disabled, routes set `config: { rateLimit: false }` for zero overhead.
 
+### 15. Kanban View
+`DatabaseViewType = 'table' | 'kanban'` controls which view renders in `DatabaseView` and inline `DatabaseViewEdit`. The view type is stored in `ViewConfig.viewType` (localStorage) and optionally in `DefaultViewConfig.viewType` (server-saved).
+
+- **State**: `ViewConfig` has `viewType` (default `'table'`) and optional `KanbanConfig { groupByPropertyId, hiddenOptionIds }`. Actions: `setViewType()`, `setKanbanGroupBy()`, `toggleKanbanColumnVisibility()`, `moveCardToColumn()`, `getSelectProperties()`.
+- **Grouping**: Rows are grouped by a `select` property's value. Each option becomes a column. Rows with `null` value appear in a "No Value" column. Hidden options are excluded.
+- **DnD**: `@dnd-kit/core` with `useDroppable` columns and `useDraggable` cards. `pointerWithin` collision detection. On drag end, calls `moveCardToColumn()` which delegates to `updateRowProperties()` (optimistic).
+- **Toolbar**: View switcher (table/kanban icons), "Group by" dropdown (lists `select` properties), "Columns" popover (eye/hide toggles per option). Kanban button disabled when no `select` property exists.
+- **Cards**: Show title + up to 3 visible property previews (badges for select/multi_select, text for others). Click navigates to row page. "+ New" in each column creates a row with the column's option pre-set.
+- **Shared colors**: `apps/web/src/lib/select-colors.ts` exports `COLOR_CLASSES` used by `SelectCell`, `MultiSelectCell`, `FilterPopover`, and `KanbanView`.
+
+Types: `DatabaseViewType`, `KanbanConfig` in `packages/shared/src/types/database.ts`. Zod: `databaseViewTypeSchema`, `kanbanConfigSchema` in `packages/shared/src/schemas/database.ts`.
+
 ## Critical Files
 
 | File | Purpose |
@@ -189,6 +201,8 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 | `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |
 | `apps/api/src/routes/users.ts` | User management routes including `PATCH /api/users/:id/owner` |
 | `apps/api/src/config/rate-limit.ts` | Rate limiting config, Fastify type augmentation, registration helper |
+| `apps/web/src/components/database/KanbanView.tsx` | Kanban board with DnD columns, cards, and property previews |
+| `apps/web/src/lib/select-colors.ts` | Shared `COLOR_CLASSES` map for select option badge colors |
 
 ## Commands
 
