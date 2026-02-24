@@ -156,7 +156,8 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 - **Grouping**: Rows are grouped by a `select` property's value. Each option becomes a column. Rows with `null` value appear in a "No Value" column. Hidden options are excluded.
 - **DnD**: `@dnd-kit/core` with `useDroppable` columns and `useDraggable` cards. `pointerWithin` collision detection. On drag end, calls `moveCardToColumn()` which delegates to `updateRowProperties()` (optimistic).
 - **Toolbar**: View switcher (table/kanban icons), "Group by" dropdown (lists `select` properties), "Columns" popover (eye/hide toggles per option). Kanban button disabled when no `select` property exists.
-- **Cards**: Show title + up to 3 visible property previews (badges for select/multi_select, text for others). Click navigates to row page. "+ New" in each column creates a row with the column's option pre-set.
+- **Cards**: Show static title (click navigates to row page) + non-empty property values via `CellRenderer` (no labels — property name shown on hover tooltip). Empty properties are hidden. The entire card is a drag handle; cell edit targets use `stopPropagation` to carve out interactive zones. "+ New" in each column creates a row with the column's option pre-set.
+- **Inline editing**: When `canEdit=true`, property cells on cards are editable inline (same `CellRenderer` components as table view). Title remains static/non-editable on cards.
 - **Shared colors**: `apps/web/src/lib/select-colors.ts` exports `COLOR_CLASSES` used by `SelectCell`, `MultiSelectCell`, `FilterPopover`, and `KanbanView`.
 
 Types: `DatabaseViewType`, `KanbanConfig` in `packages/shared/src/types/database.ts`. Zod: `databaseViewTypeSchema`, `kanbanConfigSchema` in `packages/shared/src/schemas/database.ts`.

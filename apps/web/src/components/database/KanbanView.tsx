@@ -18,11 +18,32 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { DatabaseRow, PropertyDefinition, SelectOption, PublicUser } from '@nonotion/shared';
+import type { DatabaseRow, PropertyDefinition, PropertyValue, SelectOption, PublicUser } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import { usersApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
+import CellRenderer from './cells/CellRenderer';
+
+/** Check if a property value is empty (no meaningful data to display) */
+function isEmptyValue(value: PropertyValue | undefined): boolean {
+  if (!value) return true;
+  switch (value.type) {
+    case 'text':
+    case 'url':
+      return !value.value;
+    case 'select':
+    case 'person':
+    case 'date':
+      return !value.value;
+    case 'multi_select':
+      return value.value.length === 0;
+    case 'checkbox':
+      return false; // checkbox always has a meaningful value
+    default:
+      return true;
+  }
+}
 
 interface KanbanViewProps {
   canEdit: boolean;
@@ -81,7 +102,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
 
   const options = groupByProperty?.options ?? [];
 
-  // Fetch users once for person property display
+  // Fetch users once for person property display (used by DragOverlay only)
   const hasPersonProperty = schema?.properties.some((p) => p.type === 'person') ?? false;
   useEffect(() => {
     if (hasPersonProperty && userMap.size === 0) {
@@ -251,7 +272,6 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
             canEdit={canEdit}
             onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
             onRowClick={(id) => navigate(`/page/${id}`)}
-            userMap={userMap}
             totalColumns={totalColumns}
             activeRowId={activeRow?.id ?? null}
           />
@@ -280,12 +300,11 @@ interface KanbanColumnProps {
   canEdit: boolean;
   onAddRow: () => void;
   onRowClick: (id: string) => void;
-  userMap: Map<string, PublicUser>;
   totalColumns: number;
   activeRowId: string | null;
 }
 
-function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, onAddRow, onRowClick, userMap, totalColumns, activeRowId }: KanbanColumnProps) {
+function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, onAddRow, onRowClick, totalColumns, activeRowId }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `column:${columnId}` });
   const [isAdding, setIsAdding] = useState(false);
 
@@ -334,7 +353,6 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
               cardProperties={cardProperties}
               canEdit={canEdit}
               onClick={() => onRowClick(row.id)}
-              userMap={userMap}
               isOverlay={activeRowId === row.id}
             />
           ))}
@@ -370,11 +388,11 @@ interface SortableKanbanCardProps {
   cardProperties: PropertyDefinition[];
   canEdit: boolean;
   onClick: () => void;
-  userMap: Map<string, PublicUser>;
   isOverlay: boolean;
 }
 
-function SortableKanbanCard({ row, cardProperties, canEdit, onClick, userMap, isOverlay }: SortableKanbanCardProps) {
+function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }: SortableKanbanCardProps) {
+  const { updateRowProperties } = useDatabaseInstance();
   const {
     attributes,
     listeners,
@@ -392,6 +410,13 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, userMap, is
     transition,
   };
 
+  const handleCellChange = useCallback((propertyId: string, value: PropertyValue) => {
+    updateRowProperties(row.id, { [propertyId]: value });
+  }, [updateRowProperties, row.id]);
+
+  // Filter to only non-empty properties
+  const visibleProps = cardProperties.filter((prop) => !isEmptyValue(row.properties[prop.id]));
+
   return (
     <div
       ref={setNodeRef}
@@ -408,25 +433,59 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, userMap, is
         isDragging || isOverlay ? 'opacity-50' : ''
       }`}
     >
-      {/* Title */}
+      {/* Title — static, click navigates to page */}
       <div className="text-sm font-medium text-notion-text truncate">
         {row.icon && <span className="mr-1">{row.icon}</span>}
         {row.title || 'Untitled'}
       </div>
 
-      {/* Property previews */}
-      {cardProperties.length > 0 && (
-        <div className="flex flex-col gap-1.5 mt-2">
-          {cardProperties.map((prop) => (
-            <CardPropertyPreview
+      {/* Properties — compact, no labels, editable cells */}
+      {visibleProps.length > 0 && (
+        <div className="flex flex-col gap-1 mt-2 text-xs">
+          {visibleProps.map((prop) => (
+            <CardEditableProperty
               key={prop.id}
               property={prop}
               value={row.properties[prop.id]}
-              userMap={userMap}
+              rowId={row.id}
+              canEdit={canEdit}
+              onChange={(value) => handleCellChange(prop.id, value)}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Wrapper that renders CellRenderer for a card property (no label, tooltip on hover) */
+function CardEditableProperty({
+  property,
+  value,
+  rowId,
+  canEdit,
+  onChange,
+}: {
+  property: PropertyDefinition;
+  value: PropertyValue | undefined;
+  rowId: string;
+  canEdit: boolean;
+  onChange: (value: PropertyValue) => void;
+}) {
+  return (
+    <div
+      className="min-w-0"
+      title={property.name}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <CellRenderer
+        property={property}
+        value={value}
+        onChange={onChange}
+        canEdit={canEdit}
+        rowId={rowId}
+      />
     </div>
   );
 }
@@ -456,7 +515,7 @@ function KanbanCardOverlay({ row, cardProperties, userMap }: { row: DatabaseRow;
 
 interface CardPropertyPreviewProps {
   property: PropertyDefinition;
-  value: import('@nonotion/shared').PropertyValue | undefined;
+  value: PropertyValue | undefined;
   userMap: Map<string, PublicUser>;
 }
 
