@@ -20,6 +20,7 @@ import type {
   DatabaseRow,
   UpdateSchemaInput,
   UpdatePropertiesInput,
+  UpdateKanbanCardOrderInput,
   FileUploadResponse,
   ImportResult,
   GoogleLoginInput,
@@ -277,6 +278,12 @@ export const databaseApi = {
 
   updateProperties: (pageId: string, input: UpdatePropertiesInput) =>
     request<Page>(`/pages/${pageId}/properties`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  updateKanbanCardOrder: (databaseId: string, input: UpdateKanbanCardOrderInput) =>
+    request<Page>(`/databases/${databaseId}/kanban-order`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),

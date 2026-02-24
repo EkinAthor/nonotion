@@ -64,10 +64,14 @@ export interface DefaultViewConfig {
   kanban?: KanbanConfig;
 }
 
+// Kanban card order: maps "prop_xxx:opt_yyy" compound keys to ordered arrays of row IDs
+export type KanbanCardOrder = Record<string, string[]>;
+
 // Schema defining a database's structure
 export interface DatabaseSchema {
   properties: PropertyDefinition[];
   defaultViewConfig?: DefaultViewConfig;
+  kanbanCardOrder?: KanbanCardOrder;
 }
 
 // Value types for each property type
@@ -105,6 +109,10 @@ export interface UpdateSchemaInput {
 
 export interface UpdatePropertiesInput {
   properties: Record<string, PropertyValue>;
+}
+
+export interface UpdateKanbanCardOrderInput {
+  kanbanCardOrder: KanbanCardOrder;
 }
 
 // Filter operators for database queries

@@ -7,6 +7,7 @@ import type {
   UpdateSchemaInput,
   AddPropertyInput,
   SelectColor,
+  UpdateKanbanCardOrderInput,
 } from '@nonotion/shared';
 import { generatePropertyId, generateOptionId, now } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
@@ -135,7 +136,37 @@ export async function updateSchema(
 
   const timestamp = now();
   return getStorage().updatePage(databaseId, {
-    databaseSchema: { properties, ...(defaultViewConfig && { defaultViewConfig }) },
+    databaseSchema: {
+      properties,
+      ...(defaultViewConfig && { defaultViewConfig }),
+      ...(schema.kanbanCardOrder && { kanbanCardOrder: schema.kanbanCardOrder }),
+    },
+    updatedAt: timestamp,
+    version: database.version + 1,
+  });
+}
+
+/**
+ * Update kanban card order for a database
+ */
+export async function updateKanbanCardOrder(
+  databaseId: string,
+  input: UpdateKanbanCardOrderInput
+): Promise<Page | null> {
+  const database = await getStorage().getPage(databaseId);
+  if (!database || database.type !== 'database') {
+    return null;
+  }
+
+  const schema = database.databaseSchema ?? { properties: [] };
+  const existingOrder = schema.kanbanCardOrder ?? {};
+
+  const timestamp = now();
+  return getStorage().updatePage(databaseId, {
+    databaseSchema: {
+      ...schema,
+      kanbanCardOrder: { ...existingOrder, ...input.kanbanCardOrder },
+    },
     updatedAt: timestamp,
     version: database.version + 1,
   });

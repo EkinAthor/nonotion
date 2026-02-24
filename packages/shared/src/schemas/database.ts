@@ -89,10 +89,14 @@ export const defaultViewConfigSchema = z.object({
   kanban: kanbanConfigSchema.optional(),
 });
 
+// Kanban card order
+export const kanbanCardOrderSchema = z.record(z.string(), z.array(z.string()));
+
 // Database schema
 export const databaseSchemaSchema = z.object({
   properties: z.array(propertyDefinitionSchema),
   defaultViewConfig: defaultViewConfigSchema.optional(),
+  kanbanCardOrder: kanbanCardOrderSchema.optional(),
 });
 
 // Property value schemas
@@ -180,6 +184,10 @@ export const updatePropertiesInputSchema = z.object({
   properties: z.record(z.string(), propertyValueSchema),
 });
 
+export const updateKanbanCardOrderInputSchema = z.object({
+  kanbanCardOrder: kanbanCardOrderSchema,
+});
+
 // Query params schema
 export const databaseRowsQuerySchema = z.object({
   sort: z.string().optional(),
@@ -205,4 +213,6 @@ export type SortConfigSchema = z.infer<typeof sortConfigSchema>;
 export type DatabaseViewTypeSchema = z.infer<typeof databaseViewTypeSchema>;
 export type KanbanConfigSchema = z.infer<typeof kanbanConfigSchema>;
 export type DefaultViewConfigSchema = z.infer<typeof defaultViewConfigSchema>;
+export type KanbanCardOrderSchema = z.infer<typeof kanbanCardOrderSchema>;
+export type UpdateKanbanCardOrderInputSchema = z.infer<typeof updateKanbanCardOrderInputSchema>;
 export type DatabaseRowsQuerySchema = z.infer<typeof databaseRowsQuerySchema>;

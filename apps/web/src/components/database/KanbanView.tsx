@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -7,11 +7,17 @@ import {
   useSensor,
   useSensors,
   useDroppable,
-  useDraggable,
+  closestCorners,
   type DragStartEvent,
+  type DragOverEvent,
   type DragEndEvent,
-  pointerWithin,
 } from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { DatabaseRow, PropertyDefinition, SelectOption, PublicUser } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
@@ -25,10 +31,25 @@ interface KanbanViewProps {
 const NO_VALUE_COLUMN_ID = '__no_value__';
 
 // Minimum column width so 4 columns fit in the database content area.
-// Database max-width is max-w-6xl (1152px) with px-8 (64px) → 1088px usable.
-// Kanban has p-4 (32px) and 3 × gap-3 (36px) → (1088 - 32 - 36) / 4 ≈ 255px.
-// Using 250px as minimum to leave a small margin.
 const MIN_COLUMN_WIDTH = 250;
+
+/** Build compound key for kanbanCardOrder */
+function columnKey(propertyId: string, optionId: string | null): string {
+  return `${propertyId}:${optionId ?? NO_VALUE_COLUMN_ID}`;
+}
+
+/** Find which column a row belongs to */
+function findRowColumn(
+  rowId: string,
+  columnEntries: Array<{ columnId: string; rows: DatabaseRow[] }>
+): string | null {
+  for (const entry of columnEntries) {
+    if (entry.rows.some((r) => r.id === rowId)) {
+      return entry.columnId;
+    }
+  }
+  return null;
+}
 
 export default function KanbanView({ canEdit }: KanbanViewProps) {
   const {
@@ -36,6 +57,9 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     viewConfig,
     activeDatabaseId,
     moveCardToColumn,
+    reorderCardInColumn,
+    moveCardToColumnAtIndex,
+    getOrderedColumnRows,
     addRow,
     getVisibleProperties,
     schema,
@@ -70,28 +94,44 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
   // Group rows into columns
   const visibleOptions = options.filter((o) => !hiddenOptionIds.has(o.id));
   const showNoValue = !hiddenOptionIds.has(NO_VALUE_COLUMN_ID);
-  const columnMap = new Map<string, DatabaseRow[]>();
-  if (showNoValue) {
-    columnMap.set(NO_VALUE_COLUMN_ID, []);
-  }
-  for (const opt of visibleOptions) {
-    columnMap.set(opt.id, []);
-  }
+
+  // Build ordered column entries
+  const columnEntries: Array<{
+    columnId: string;
+    label: string;
+    option?: SelectOption;
+    rows: DatabaseRow[];
+  }> = [];
+
+  const rawColumnMap = new Map<string, DatabaseRow[]>();
+  if (showNoValue) rawColumnMap.set(NO_VALUE_COLUMN_ID, []);
+  for (const opt of visibleOptions) rawColumnMap.set(opt.id, []);
+
   for (const row of rows) {
     if (!groupByPropertyId) continue;
     const prop = row.properties[groupByPropertyId];
     const selectValue = prop?.type === 'select' ? prop.value : null;
     if (!selectValue) {
-      if (showNoValue) {
-        columnMap.get(NO_VALUE_COLUMN_ID)?.push(row);
-      }
-    } else if (columnMap.has(selectValue)) {
-      columnMap.get(selectValue)!.push(row);
+      if (showNoValue) rawColumnMap.get(NO_VALUE_COLUMN_ID)?.push(row);
+    } else if (rawColumnMap.has(selectValue)) {
+      rawColumnMap.get(selectValue)!.push(row);
     }
   }
 
-  // Visible properties excluding title and groupBy — called directly (not memoized)
-  // so it reacts to hiddenPropertyIds changes immediately
+  // Apply saved order to each column
+  if (showNoValue && groupByPropertyId) {
+    const key = columnKey(groupByPropertyId, null);
+    const ordered = getOrderedColumnRows(key, rawColumnMap.get(NO_VALUE_COLUMN_ID) ?? []);
+    columnEntries.push({ columnId: NO_VALUE_COLUMN_ID, label: 'No Value', rows: ordered });
+  }
+  for (const opt of visibleOptions) {
+    if (!groupByPropertyId) continue;
+    const key = columnKey(groupByPropertyId, opt.id);
+    const ordered = getOrderedColumnRows(key, rawColumnMap.get(opt.id) ?? []);
+    columnEntries.push({ columnId: opt.id, label: opt.name, option: opt, rows: ordered });
+  }
+
+  // Visible properties excluding title and groupBy
   const allVisible = getVisibleProperties();
   const cardProperties = allVisible.filter(
     (p) => p.type !== 'title' && p.id !== groupByPropertyId
@@ -102,21 +142,60 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  // Track source column on drag start
+  const sourceColumnRef = useRef<string | null>(null);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const row = rows.find((r) => r.id === event.active.id);
     setActiveRow(row ?? null);
-  }, [rows]);
+    sourceColumnRef.current = findRowColumn(event.active.id as string, columnEntries);
+  }, [rows, columnEntries]);
+
+  const handleDragOver = useCallback((_event: DragOverEvent) => {
+    // Visual feedback is handled by sortable — no local state mutation needed
+  }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveRow(null);
-    if (!event.over || !canEdit) return;
+    if (!event.over || !canEdit || !groupByPropertyId) return;
 
     const rowId = event.active.id as string;
-    const columnId = (event.over.id as string).replace('column:', '');
-    const targetOptionId = columnId === NO_VALUE_COLUMN_ID ? null : columnId;
+    const overId = event.over.id as string;
 
-    moveCardToColumn(rowId, targetOptionId);
-  }, [canEdit, moveCardToColumn]);
+    // Determine target column and index
+    let targetColumnId: string;
+    let targetIndex: number;
+
+    if (overId.startsWith('column:')) {
+      // Dropped on empty area of column — append to end
+      targetColumnId = overId.replace('column:', '');
+      const col = columnEntries.find((c) => c.columnId === targetColumnId);
+      targetIndex = col ? col.rows.filter((r) => r.id !== rowId).length : 0;
+    } else {
+      // Dropped on another card — find its column and position
+      const overColumn = findRowColumn(overId, columnEntries);
+      if (!overColumn) return;
+      targetColumnId = overColumn;
+      const col = columnEntries.find((c) => c.columnId === targetColumnId);
+      if (!col) return;
+      targetIndex = col.rows.findIndex((r) => r.id === overId);
+      if (targetIndex === -1) targetIndex = col.rows.length;
+    }
+
+    const sourceColumnId = sourceColumnRef.current;
+    const targetOptionId = targetColumnId === NO_VALUE_COLUMN_ID ? null : targetColumnId;
+
+    if (sourceColumnId === targetColumnId) {
+      // Same column reorder
+      const key = columnKey(groupByPropertyId, targetOptionId);
+      reorderCardInColumn(key, rowId, targetIndex);
+    } else {
+      // Cross-column move
+      moveCardToColumnAtIndex(rowId, targetOptionId, targetIndex);
+    }
+
+    sourceColumnRef.current = null;
+  }, [canEdit, groupByPropertyId, columnEntries, reorderCardInColumn, moveCardToColumnAtIndex]);
 
   const handleAddRow = useCallback(async (optionId: string | null) => {
     if (!activeDatabaseId || !groupByPropertyId) return;
@@ -150,50 +229,31 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     );
   }
 
-  const totalColumns = visibleOptions.length + (showNoValue ? 1 : 0);
+  const totalColumns = columnEntries.length;
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div
-        className="flex gap-3 p-4 min-h-[200px] overflow-x-auto"
-        style={{
-          /* Each column gets equal share but never narrower than MIN_COLUMN_WIDTH */
-        }}
-      >
-        {/* No Value column */}
-        {showNoValue && (
+      <div className="flex gap-3 p-4 min-h-[200px] overflow-x-auto">
+        {columnEntries.map((entry) => (
           <KanbanColumn
-            columnId={NO_VALUE_COLUMN_ID}
-            label="No Value"
-            rows={columnMap.get(NO_VALUE_COLUMN_ID) ?? []}
+            key={entry.columnId}
+            columnId={entry.columnId}
+            label={entry.label}
+            option={entry.option}
+            rows={entry.rows}
             cardProperties={cardProperties}
             canEdit={canEdit}
-            onAddRow={() => handleAddRow(null)}
+            onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
             onRowClick={(id) => navigate(`/page/${id}`)}
             userMap={userMap}
             totalColumns={totalColumns}
-          />
-        )}
-
-        {/* Option columns */}
-        {visibleOptions.map((option) => (
-          <KanbanColumn
-            key={option.id}
-            columnId={option.id}
-            label={option.name}
-            option={option}
-            rows={columnMap.get(option.id) ?? []}
-            cardProperties={cardProperties}
-            canEdit={canEdit}
-            onAddRow={() => handleAddRow(option.id)}
-            onRowClick={(id) => navigate(`/page/${id}`)}
-            userMap={userMap}
-            totalColumns={totalColumns}
+            activeRowId={activeRow?.id ?? null}
           />
         ))}
       </div>
@@ -222,9 +282,10 @@ interface KanbanColumnProps {
   onRowClick: (id: string) => void;
   userMap: Map<string, PublicUser>;
   totalColumns: number;
+  activeRowId: string | null;
 }
 
-function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, onAddRow, onRowClick, userMap, totalColumns }: KanbanColumnProps) {
+function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, onAddRow, onRowClick, userMap, totalColumns, activeRowId }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `column:${columnId}` });
   const [isAdding, setIsAdding] = useState(false);
 
@@ -239,14 +300,14 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
     }
   };
 
+  const rowIds = rows.map((r) => r.id);
+
   return (
     <div
-      ref={setNodeRef}
       className={`flex flex-col rounded-lg flex-shrink-0 ${
         isOver ? 'bg-blue-50' : 'bg-gray-50'
       }`}
       style={{
-        /* flex-basis fills available space equally, min-width ensures 4 cols fit at 1080p */
         flexBasis: `calc((100% - ${(totalColumns - 1) * 12}px) / ${totalColumns})`,
         minWidth: MIN_COLUMN_WIDTH,
       }}
@@ -263,18 +324,21 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
         <span className="text-xs text-notion-text-secondary flex-shrink-0">{rows.length}</span>
       </div>
 
-      {/* Cards */}
-      <div className="flex flex-col gap-2 px-2 pb-2 flex-1 min-h-[40px]">
-        {rows.map((row) => (
-          <KanbanCard
-            key={row.id}
-            row={row}
-            cardProperties={cardProperties}
-            canEdit={canEdit}
-            onClick={() => onRowClick(row.id)}
-            userMap={userMap}
-          />
-        ))}
+      {/* Cards with sortable context */}
+      <div ref={setNodeRef} className="flex flex-col gap-2 px-2 pb-2 flex-1 min-h-[40px]">
+        <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+          {rows.map((row) => (
+            <SortableKanbanCard
+              key={row.id}
+              row={row}
+              cardProperties={cardProperties}
+              canEdit={canEdit}
+              onClick={() => onRowClick(row.id)}
+              userMap={userMap}
+              isOverlay={activeRowId === row.id}
+            />
+          ))}
+        </SortableContext>
 
         {/* Add new row */}
         {canEdit && (
@@ -301,23 +365,32 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
   );
 }
 
-interface KanbanCardProps {
+interface SortableKanbanCardProps {
   row: DatabaseRow;
   cardProperties: PropertyDefinition[];
   canEdit: boolean;
   onClick: () => void;
   userMap: Map<string, PublicUser>;
+  isOverlay: boolean;
 }
 
-function KanbanCard({ row, cardProperties, canEdit, onClick, userMap }: KanbanCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+function SortableKanbanCard({ row, cardProperties, canEdit, onClick, userMap, isOverlay }: SortableKanbanCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: row.id,
     disabled: !canEdit,
   });
 
-  const style = transform
-    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
-    : undefined;
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   return (
     <div
@@ -332,7 +405,7 @@ function KanbanCard({ row, cardProperties, canEdit, onClick, userMap }: KanbanCa
         }
       }}
       className={`bg-white rounded-lg border border-notion-border shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-        isDragging ? 'opacity-50' : ''
+        isDragging || isOverlay ? 'opacity-50' : ''
       }`}
     >
       {/* Title */}
@@ -341,7 +414,7 @@ function KanbanCard({ row, cardProperties, canEdit, onClick, userMap }: KanbanCa
         {row.title || 'Untitled'}
       </div>
 
-      {/* Property previews - vertical layout, all visible properties */}
+      {/* Property previews */}
       {cardProperties.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-2">
           {cardProperties.map((prop) => (
@@ -456,7 +529,7 @@ function CardPropertyPreview({ property, value, userMap }: CardPropertyPreviewPr
         <div className="flex items-center gap-2 min-w-0">
           {label}
           <span className="text-xs">
-            {value.value ? '☑' : '☐'}
+            {value.value ? '\u2611' : '\u2610'}
           </span>
         </div>
       );

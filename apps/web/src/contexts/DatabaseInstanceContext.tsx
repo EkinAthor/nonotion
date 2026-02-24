@@ -14,6 +14,7 @@ import type {
   DefaultViewConfig,
   DatabaseViewType,
   KanbanConfig,
+  KanbanCardOrder,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
 
@@ -60,6 +61,9 @@ export interface DatabaseInstanceState {
   // View configuration
   viewConfig: ViewConfig;
 
+  // Kanban card order (server-persisted)
+  kanbanCardOrder: KanbanCardOrder;
+
   // Actions
   loadDatabase: (page: Page) => void;
   fetchRows: (options?: { sort?: string; filter?: string }) => Promise<void>;
@@ -81,6 +85,9 @@ export interface DatabaseInstanceState {
   setKanbanGroupBy: (propertyId: string) => void;
   toggleKanbanColumnVisibility: (optionId: string) => void;
   moveCardToColumn: (rowId: string, targetOptionId: string | null) => void;
+  reorderCardInColumn: (columnKey: string, rowId: string, newIndex: number) => void;
+  moveCardToColumnAtIndex: (rowId: string, targetOptionId: string | null, newIndex: number) => void;
+  getOrderedColumnRows: (columnKey: string, columnRows: DatabaseRow[]) => DatabaseRow[];
   getSelectProperties: () => PropertyDefinition[];
 
   // Property options management
@@ -149,6 +156,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     isLoading: false,
     error: null,
     viewConfig: initialViewConfig,
+    kanbanCardOrder: {},
 
     loadDatabase: (page) => {
       if (page.type !== 'database' || !page.databaseSchema) {
@@ -168,6 +176,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         rows: [],
         total: 0,
         error: null,
+        kanbanCardOrder: page.databaseSchema.kanbanCardOrder ?? {},
       };
 
       // Seed view config from server default if user has no local override
@@ -406,6 +415,92 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const propertyId = kanban.groupByPropertyId;
       get().updateRowProperties(rowId, {
         [propertyId]: { type: 'select', value: targetOptionId },
+      });
+    },
+
+    reorderCardInColumn: (columnKey, rowId, newIndex) => {
+      const { kanbanCardOrder, activeDatabaseId } = get();
+      const currentOrder = kanbanCardOrder[columnKey] ?? [];
+
+      // Remove from current position and insert at new index
+      const filtered = currentOrder.filter((id) => id !== rowId);
+      filtered.splice(newIndex, 0, rowId);
+
+      const newKanbanCardOrder = { ...kanbanCardOrder, [columnKey]: filtered };
+      set({ kanbanCardOrder: newKanbanCardOrder });
+
+      // Persist to server
+      if (activeDatabaseId) {
+        databaseApi.updateKanbanCardOrder(activeDatabaseId, {
+          kanbanCardOrder: { [columnKey]: filtered },
+        }).catch((error) => {
+          console.error('Failed to update kanban card order:', error);
+          set({ kanbanCardOrder });
+        });
+      }
+    },
+
+    moveCardToColumnAtIndex: (rowId, targetOptionId, newIndex) => {
+      const { viewConfig, kanbanCardOrder, activeDatabaseId } = get();
+      const kanban = viewConfig.kanban;
+      if (!kanban) return;
+
+      const propertyId = kanban.groupByPropertyId;
+      const sourceColumnKey = (() => {
+        // Find current column of the row
+        const row = get().rows.find((r) => r.id === rowId);
+        const prop = row?.properties[propertyId];
+        const val = prop?.type === 'select' ? prop.value : null;
+        return `${propertyId}:${val ?? '__no_value__'}`;
+      })();
+      const targetColumnKey = `${propertyId}:${targetOptionId ?? '__no_value__'}`;
+
+      // Remove from source column order
+      const sourceOrder = (kanbanCardOrder[sourceColumnKey] ?? []).filter((id) => id !== rowId);
+      // Insert into target column order at specified index
+      const targetOrder = sourceColumnKey === targetColumnKey
+        ? sourceOrder
+        : (kanbanCardOrder[targetColumnKey] ?? []).filter((id) => id !== rowId);
+      targetOrder.splice(newIndex, 0, rowId);
+
+      const orderUpdates: Record<string, string[]> = { [targetColumnKey]: targetOrder };
+      if (sourceColumnKey !== targetColumnKey) {
+        orderUpdates[sourceColumnKey] = sourceOrder;
+      }
+
+      const newKanbanCardOrder = { ...kanbanCardOrder, ...orderUpdates };
+      set({ kanbanCardOrder: newKanbanCardOrder });
+
+      // Update the select property value
+      get().updateRowProperties(rowId, {
+        [propertyId]: { type: 'select', value: targetOptionId },
+      });
+
+      // Persist card order to server
+      if (activeDatabaseId) {
+        databaseApi.updateKanbanCardOrder(activeDatabaseId, {
+          kanbanCardOrder: orderUpdates,
+        }).catch((error) => {
+          console.error('Failed to update kanban card order:', error);
+          set({ kanbanCardOrder });
+        });
+      }
+    },
+
+    getOrderedColumnRows: (columnKey, columnRows) => {
+      const { kanbanCardOrder } = get();
+      const order = kanbanCardOrder[columnKey];
+      if (!order || order.length === 0) return columnRows;
+
+      const orderMap = new Map(order.map((id, idx) => [id, idx]));
+      return [...columnRows].sort((a, b) => {
+        const aIdx = orderMap.get(a.id);
+        const bIdx = orderMap.get(b.id);
+        // Known IDs sorted by saved position, unknown IDs at end
+        if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx;
+        if (aIdx !== undefined) return -1;
+        if (bIdx !== undefined) return 1;
+        return 0;
       });
     },
 

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { databaseRowsQuerySchema } from '@nonotion/shared';
+import { databaseRowsQuerySchema, updateKanbanCardOrderInputSchema } from '@nonotion/shared';
 import * as databaseService from '../services/database-service.js';
 import * as permissionService from '../services/permission-service.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
@@ -39,6 +39,45 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to get rows';
+      return reply.status(400).send({
+        error: { code: 'DATABASE_ERROR', message },
+        success: false,
+      });
+    }
+  });
+
+  // PATCH /api/databases/:id/kanban-order - Update kanban card order
+  fastify.patch<{
+    Params: { id: string };
+    Body: unknown;
+  }>('/api/databases/:id/kanban-order', async (request, reply) => {
+    const canEdit = await permissionService.canEdit(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
+    if (!canEdit) {
+      return reply.status(403).send({
+        error: { code: 'FORBIDDEN', message: 'No edit permission' },
+        success: false,
+      });
+    }
+
+    const parsed = updateKanbanCardOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        success: false,
+      });
+    }
+
+    try {
+      const page = await databaseService.updateKanbanCardOrder(request.params.id, parsed.data);
+      if (!page) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Database not found' },
+          success: false,
+        });
+      }
+      return reply.send({ data: page, success: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update kanban order';
       return reply.status(400).send({
         error: { code: 'DATABASE_ERROR', message },
         success: false,

@@ -20,6 +20,7 @@ import type {
   DatabaseRow,
   UpdateSchemaInput,
   UpdatePropertiesInput,
+  UpdateKanbanCardOrderInput,
   FileUploadResponse,
   ImportResult,
   GoogleLoginInput,
@@ -541,7 +542,30 @@ export const databaseApi = {
     }
 
     const updated = storage.updatePage(databaseId, {
-      databaseSchema: { properties, ...(defaultViewConfig && { defaultViewConfig }) },
+      databaseSchema: {
+        properties,
+        ...(defaultViewConfig && { defaultViewConfig }),
+        ...(schema.kanbanCardOrder && { kanbanCardOrder: schema.kanbanCardOrder }),
+      },
+    });
+    if (!updated) throw new Error('Database not found');
+    return Promise.resolve(updated);
+  },
+
+  updateKanbanCardOrder: (databaseId: string, input: UpdateKanbanCardOrderInput): Promise<Page> => {
+    const database = storage.getPage(databaseId);
+    if (!database || database.type !== 'database') {
+      throw new Error('Database not found');
+    }
+
+    const schema = database.databaseSchema ?? { properties: [] };
+    const existingOrder = schema.kanbanCardOrder ?? {};
+
+    const updated = storage.updatePage(databaseId, {
+      databaseSchema: {
+        ...schema,
+        kanbanCardOrder: { ...existingOrder, ...input.kanbanCardOrder },
+      },
     });
     if (!updated) throw new Error('Database not found');
     return Promise.resolve(updated);
