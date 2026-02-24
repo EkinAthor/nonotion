@@ -69,8 +69,11 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
 
   // Group rows into columns
   const visibleOptions = options.filter((o) => !hiddenOptionIds.has(o.id));
+  const showNoValue = !hiddenOptionIds.has(NO_VALUE_COLUMN_ID);
   const columnMap = new Map<string, DatabaseRow[]>();
-  columnMap.set(NO_VALUE_COLUMN_ID, []);
+  if (showNoValue) {
+    columnMap.set(NO_VALUE_COLUMN_ID, []);
+  }
   for (const opt of visibleOptions) {
     columnMap.set(opt.id, []);
   }
@@ -79,7 +82,9 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     const prop = row.properties[groupByPropertyId];
     const selectValue = prop?.type === 'select' ? prop.value : null;
     if (!selectValue) {
-      columnMap.get(NO_VALUE_COLUMN_ID)?.push(row);
+      if (showNoValue) {
+        columnMap.get(NO_VALUE_COLUMN_ID)?.push(row);
+      }
     } else if (columnMap.has(selectValue)) {
       columnMap.get(selectValue)!.push(row);
     }
@@ -145,7 +150,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     );
   }
 
-  const totalColumns = visibleOptions.length + 1;
+  const totalColumns = visibleOptions.length + (showNoValue ? 1 : 0);
 
   return (
     <DndContext
@@ -161,17 +166,19 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
         }}
       >
         {/* No Value column */}
-        <KanbanColumn
-          columnId={NO_VALUE_COLUMN_ID}
-          label="No Value"
-          rows={columnMap.get(NO_VALUE_COLUMN_ID) ?? []}
-          cardProperties={cardProperties}
-          canEdit={canEdit}
-          onAddRow={() => handleAddRow(null)}
-          onRowClick={(id) => navigate(`/page/${id}`)}
-          userMap={userMap}
-          totalColumns={totalColumns}
-        />
+        {showNoValue && (
+          <KanbanColumn
+            columnId={NO_VALUE_COLUMN_ID}
+            label="No Value"
+            rows={columnMap.get(NO_VALUE_COLUMN_ID) ?? []}
+            cardProperties={cardProperties}
+            canEdit={canEdit}
+            onAddRow={() => handleAddRow(null)}
+            onRowClick={(id) => navigate(`/page/${id}`)}
+            userMap={userMap}
+            totalColumns={totalColumns}
+          />
+        )}
 
         {/* Option columns */}
         {visibleOptions.map((option) => (
