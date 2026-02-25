@@ -11,7 +11,7 @@ interface PagePropertiesProps {
 }
 
 export default function PageProperties({ page, canEdit }: PagePropertiesProps) {
-  const { pages, updatePage } = usePageStore();
+  const { pages, patchPageLocal } = usePageStore();
   const [properties, setProperties] = useState<PropertyDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const storeRef = useRef(createDatabaseInstanceStore());
@@ -46,17 +46,13 @@ export default function PageProperties({ page, canEdit }: PagePropertiesProps) {
   }
 
   const handlePropertyChange = (propertyId: string, value: PropertyValue) => {
+    // Update pageStore locally (no extra API call — databaseApi handles persistence)
+    patchPageLocal(page.id, { properties: { [propertyId]: value } });
+
     // Direct API call (row page is outside the database table view)
     databaseApi.updateProperties(page.id, { properties: { [propertyId]: value } }).catch((error) => {
       console.error('Failed to update row properties:', error);
     });
-
-    // Also update page in pageStore for local sync
-    const newProperties = {
-      ...page.properties,
-      [propertyId]: value,
-    };
-    updatePage(page.id, { properties: newProperties } as never);
   };
 
   return (

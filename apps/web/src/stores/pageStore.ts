@@ -35,6 +35,7 @@ interface PageState {
   createPage: (input: CreatePageInput) => Promise<Page>;
   updatePage: (id: string, input: UpdatePageInput) => void;
   deletePage: (id: string) => void;
+  patchPageLocal: (id: string, patch: Partial<Page>) => void;
   toggleExpanded: (id: string) => void;
   toggleStarredExpanded: (id: string) => void;
 
@@ -159,6 +160,22 @@ export const usePageStore = create<PageState>((set, get) => ({
       console.error('Failed to delete page:', error);
       // Revert by restoring snapshot
       set({ pages: previousPages });
+    });
+  },
+
+  patchPageLocal: (id, patch) => {
+    set((state) => {
+      const existing = state.pages.get(id);
+      if (!existing) return state;
+      const pages = new Map(state.pages);
+      pages.set(id, {
+        ...existing,
+        ...patch,
+        properties: patch.properties
+          ? { ...existing.properties, ...patch.properties }
+          : existing.properties,
+      });
+      return { pages };
     });
   },
 

@@ -17,6 +17,7 @@ import type {
   KanbanCardOrder,
 } from '@nonotion/shared';
 import { databaseApi } from '@/api/client';
+import { usePageStore } from '@/stores/pageStore';
 
 interface ViewConfig {
   viewType: DatabaseViewType;
@@ -285,6 +286,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
     updateRowProperties: (rowId, properties) => {
       const previousRows = get().rows;
+      const previousRowProps = previousRows.find((r) => r.id === rowId)?.properties;
 
       set((state) => ({
         rows: state.rows.map((row) =>
@@ -294,9 +296,16 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         ),
       }));
 
+      // Sync to pageStore so page detail view reflects the change
+      usePageStore.getState().patchPageLocal(rowId, { properties });
+
       databaseApi.updateProperties(rowId, { properties }).catch((error) => {
         console.error('Failed to update row properties:', error);
         set({ rows: previousRows, error: (error as Error).message });
+        // Revert pageStore too
+        if (previousRowProps) {
+          usePageStore.getState().patchPageLocal(rowId, { properties: previousRowProps });
+        }
       });
     },
 
