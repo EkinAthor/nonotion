@@ -21,7 +21,7 @@ export default function PersonCell({ value, onChange, canEdit }: PersonCellProps
   useEffect(() => {
     if (isOpen && users.length === 0) {
       setIsLoading(true);
-      usersApi.getAll()
+      usersApi.list()
         .then(setUsers)
         .catch(console.error)
         .finally(() => setIsLoading(false));

@@ -94,6 +94,7 @@ export const authApi = {
 
 export const usersApi = {
   getAll: (): Promise<PublicUser[]> => Promise.resolve([{ ...DEMO_USER }]),
+  list: (): Promise<PublicUser[]> => Promise.resolve([{ ...DEMO_USER }]),
   get: (_id: string): Promise<PublicUser> => Promise.resolve({ ...DEMO_USER }),
   search: (_email: string): Promise<PublicUser[]> => Promise.resolve([{ ...DEMO_USER }]),
   resetPassword: (_id: string, _input: AdminResetPasswordInput): Promise<PublicUser> =>

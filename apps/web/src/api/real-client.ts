@@ -126,6 +126,8 @@ export const authApi = {
 export const usersApi = {
   getAll: () => request<PublicUser[]>('/users'),
 
+  list: () => request<PublicUser[]>('/users/list'),
+
   get: (id: string) => request<PublicUser>(`/users/${id}`),
 
   search: (email: string) =>

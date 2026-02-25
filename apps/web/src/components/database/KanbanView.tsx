@@ -106,7 +106,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
   const hasPersonProperty = schema?.properties.some((p) => p.type === 'person') ?? false;
   useEffect(() => {
     if (hasPersonProperty && userMap.size === 0) {
-      usersApi.getAll().then((users) => {
+      usersApi.list().then((users) => {
         setUserMap(new Map(users.map((u) => [u.id, u])));
       }).catch(() => {});
     }

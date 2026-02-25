@@ -5,6 +5,12 @@ import * as authService from '../services/auth-service.js';
 import { authMiddleware, adminMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
 
 export async function usersRoutes(fastify: FastifyInstance): Promise<void> {
+  // GET /api/users/list - List all users for property assignment (any authenticated user)
+  fastify.get('/api/users/list', { preHandler: [authMiddleware, mustChangePasswordMiddleware] }, async (_request, reply) => {
+    const users = await userService.getAllUsers();
+    return reply.send({ data: users, success: true });
+  });
+
   // GET /api/users - List all users (admin only)
   fastify.get('/api/users', { preHandler: [adminMiddleware, mustChangePasswordMiddleware] }, async (_request, reply) => {
     const users = await userService.getAllUsers();

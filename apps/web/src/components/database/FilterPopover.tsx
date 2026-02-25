@@ -387,7 +387,7 @@ function PersonFilterInput({
   // Lazy-load users on first open
   useEffect(() => {
     if (isOpen && !loaded) {
-      usersApi.getAll().then((data) => {
+      usersApi.list().then((data) => {
         setUsers(data);
         setLoaded(true);
       }).catch(() => setLoaded(true));
