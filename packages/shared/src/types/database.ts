@@ -52,6 +52,7 @@ export type DatabaseViewType = 'table' | 'kanban';
 export interface KanbanConfig {
   groupByPropertyId: string;
   hiddenOptionIds: string[];
+  columnOrder?: string[];
 }
 
 // Default view configuration saved to server

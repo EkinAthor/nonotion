@@ -1,5 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { IS_DEMO_MODE } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
@@ -21,6 +35,7 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     setViewType,
     setKanbanGroupBy,
     toggleKanbanColumnVisibility,
+    setKanbanColumnOrder,
     getSelectProperties,
     schema,
   } = useDatabaseInstance();
@@ -136,7 +151,9 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
               <ColumnsPopover
                 property={kanbanGroupByProperty}
                 hiddenOptionIds={viewConfig.kanban?.hiddenOptionIds ?? []}
+                columnOrder={viewConfig.kanban?.columnOrder ?? []}
                 onToggle={toggleKanbanColumnVisibility}
+                onReorder={setKanbanColumnOrder}
                 onClose={() => setShowColumnsPopover(false)}
                 anchorRef={columnsButtonRef}
               />
@@ -322,17 +339,21 @@ function GroupByDropdown({
   );
 }
 
-/** Popover to toggle kanban column visibility */
+/** Popover to toggle kanban column visibility and reorder columns */
 function ColumnsPopover({
   property,
   hiddenOptionIds,
+  columnOrder,
   onToggle,
+  onReorder,
   onClose,
   anchorRef,
 }: {
   property: import('@nonotion/shared').PropertyDefinition;
   hiddenOptionIds: string[];
+  columnOrder: string[];
   onToggle: (optionId: string) => void;
+  onReorder: (order: string[]) => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
 }) {
@@ -340,6 +361,34 @@ function ColumnsPopover({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const options = property.options ?? [];
   const hiddenSet = new Set(hiddenOptionIds);
+
+  // Sort options by columnOrder if present, else schema order
+  const orderedOptions = (() => {
+    if (!columnOrder.length) return options;
+    const orderMap = new Map(columnOrder.map((id, i) => [id, i]));
+    return [...options].sort((a, b) =>
+      (orderMap.get(a.id) ?? columnOrder.length) - (orderMap.get(b.id) ?? columnOrder.length)
+    );
+  })();
+  const sortableIds = orderedOptions.map((o) => o.id);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = sortableIds.indexOf(active.id as string);
+    const newIndex = sortableIds.indexOf(over.id as string);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = [...sortableIds];
+    newOrder.splice(oldIndex, 1);
+    newOrder.splice(newIndex, 0, active.id as string);
+    onReorder(newOrder);
+  }, [sortableIds, onReorder]);
 
   useEffect(() => {
     if (!anchorRef.current) return;
@@ -363,56 +412,110 @@ function ColumnsPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed bg-white border border-notion-border rounded-md shadow-lg z-[100] w-[220px] py-1"
+      className="fixed bg-white border border-notion-border rounded-md shadow-lg z-[100] w-[240px] py-1"
       style={{ top: position.top, left: position.left }}
     >
       <div className="px-2 py-1 text-xs font-medium text-notion-text-secondary">
-        Toggle columns
+        Columns
       </div>
-      {/* No Value toggle */}
+      {/* No Value toggle — not draggable, always first */}
       <button
         onClick={() => onToggle('__no_value__')}
         className="w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-notion-hover"
       >
         <span className="text-xs font-medium text-notion-text-secondary">No Value</span>
-        {hiddenSet.has('__no_value__') ? (
-          <svg className="w-4 h-4 text-notion-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-        )}
+        <VisibilityIcon isHidden={hiddenSet.has('__no_value__')} />
       </button>
-      {/* Option toggles */}
-      {options.map((option) => {
-        const isHidden = hiddenSet.has(option.id);
-        const colors = COLOR_CLASSES[option.color];
-        return (
-          <button
-            key={option.id}
-            onClick={() => onToggle(option.id)}
-            className="w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-notion-hover"
-          >
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors.bg} ${colors.text}`}>
-              {option.name}
-            </span>
-            {isHidden ? (
-              <svg className="w-4 h-4 text-notion-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            )}
-          </button>
-        );
-      })}
+      {/* Sortable option rows */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+          {orderedOptions.map((option) => (
+            <SortableColumnRow
+              key={option.id}
+              option={option}
+              isHidden={hiddenSet.has(option.id)}
+              onToggle={() => onToggle(option.id)}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
     </div>,
     document.body
+  );
+}
+
+function SortableColumnRow({
+  option,
+  isHidden,
+  onToggle,
+}: {
+  option: import('@nonotion/shared').SelectOption;
+  isHidden: boolean;
+  onToggle: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: option.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const colors = COLOR_CLASSES[option.color];
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center justify-between px-1 py-1.5 text-sm hover:bg-notion-hover ${
+        isDragging ? 'opacity-50 bg-notion-hover' : ''
+      }`}
+    >
+      {/* Drag handle */}
+      <span
+        {...attributes}
+        {...listeners}
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing px-1 text-notion-text-secondary"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5.5" cy="3.5" r="1.2" />
+          <circle cx="10.5" cy="3.5" r="1.2" />
+          <circle cx="5.5" cy="8" r="1.2" />
+          <circle cx="10.5" cy="8" r="1.2" />
+          <circle cx="5.5" cy="12.5" r="1.2" />
+          <circle cx="10.5" cy="12.5" r="1.2" />
+        </svg>
+      </span>
+      {/* Badge */}
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate flex-1 min-w-0 mx-1 ${colors.bg} ${colors.text}`}>
+        {option.name}
+      </span>
+      {/* Visibility toggle */}
+      <button onClick={onToggle} className="flex-shrink-0 px-1">
+        <VisibilityIcon isHidden={isHidden} />
+      </button>
+    </div>
+  );
+}
+
+function VisibilityIcon({ isHidden }: { isHidden: boolean }) {
+  if (isHidden) {
+    return (
+      <svg className="w-4 h-4 text-notion-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
   );
 }

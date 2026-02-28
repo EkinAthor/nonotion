@@ -89,6 +89,7 @@ export interface DatabaseInstanceState {
   reorderCardInColumn: (columnKey: string, rowId: string, newIndex: number) => void;
   moveCardToColumnAtIndex: (rowId: string, targetOptionId: string | null, newIndex: number) => void;
   getOrderedColumnRows: (columnKey: string, columnRows: DatabaseRow[]) => DatabaseRow[];
+  setKanbanColumnOrder: (order: string[]) => void;
   getSelectProperties: () => PropertyDefinition[];
 
   // Property options management
@@ -511,6 +512,18 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         if (bIdx !== undefined) return 1;
         return 0;
       });
+    },
+
+    setKanbanColumnOrder: (order) => {
+      const { viewConfig } = get();
+      const kanban = viewConfig.kanban;
+      if (!kanban) return;
+      const newConfig = {
+        ...viewConfig,
+        kanban: { ...kanban, columnOrder: order },
+      };
+      set({ viewConfig: newConfig });
+      persist(newConfig);
     },
 
     getSelectProperties: () => {

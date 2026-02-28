@@ -77,6 +77,7 @@ export const databaseViewTypeSchema = z.enum(['table', 'kanban']);
 export const kanbanConfigSchema = z.object({
   groupByPropertyId: z.string(),
   hiddenOptionIds: z.array(z.string()),
+  columnOrder: z.array(z.string()).optional(),
 });
 
 // Default view config (server-saved)

@@ -114,6 +114,13 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
 
   // Group rows into columns
   const visibleOptions = options.filter((o) => !hiddenOptionIds.has(o.id));
+  const columnOrderArr = kanban?.columnOrder;
+  if (columnOrderArr?.length) {
+    const orderMap = new Map(columnOrderArr.map((id, i) => [id, i]));
+    visibleOptions.sort((a, b) =>
+      (orderMap.get(a.id) ?? columnOrderArr.length) - (orderMap.get(b.id) ?? columnOrderArr.length)
+    );
+  }
   const showNoValue = !hiddenOptionIds.has(NO_VALUE_COLUMN_ID);
 
   // Build ordered column entries
