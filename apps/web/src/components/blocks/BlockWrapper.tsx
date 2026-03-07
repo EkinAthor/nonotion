@@ -205,7 +205,7 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
   const needsTransition = transition != null && transition !== 'transform 0ms linear';
   const style: React.CSSProperties | undefined =
     isInDragSet
-      ? { display: 'none' }
+      ? { visibility: 'hidden' }
       : hasActiveTransform || isDragging
         ? {
             transform: transformString ?? undefined,
