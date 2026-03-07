@@ -1,6 +1,13 @@
 # Nonotion
 
-A self-hosted, lightweight Notion alternative with block-based page editing.
+A self-hosted, lightweight Notion alternative with block-based page editing. Covers basic Notion features and allows for import from Notion exports. Intended for personal use (self hosting) or small teams.
+
+Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.app/)
+
+<p align="center">
+  <img src="docs/screenshots/nonotion-page.png" alt="Nonotion Interface" width="100%">
+</p>
+
 
 ## Features
 
@@ -10,7 +17,8 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Slash commands for block type changes
 - Auto-save with debounce
 - Star/unstar pages
-- Multi-user authentication with JWT (email/password + Google OAuth)
+- Multi-user authentication with JWT (email/password)
+- Google OAuth support (optional)
 - Owner account with workspace-wide access to all pages
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties (rename, delete, reorder, hide/show columns per view)
@@ -20,6 +28,19 @@ A self-hosted, lightweight Notion alternative with block-based page editing.
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Configurable storage (JSON/SQLite or PostgreSQL)
 - Demo mode for static hosting without a backend (all data in localStorage)
+
+<p align="center">
+  <img src="docs/screenshots/nonotion-database.png" width="49%" />
+  <img src="docs/screenshots/nonotion-kanban.png" width="49%" />
+</p>
+
+## Not in scope
+
+This is not full notion clone. Some of the features are not available:
+- User presence/sync - last edit wins, you have to reload page to see changes
+- Advanced integrations 
+- AI features
+- Any advanced blocks or interaction options
 
 ## Tech Stack
 
@@ -64,8 +85,10 @@ pnpm --filter @nonotion/shared build
 ---
 
 ## Deployment & Running
+
+There are multiple ways to run the application. For testing purposes, or very small local personal use, there is built in SQLite database (this is not recommended for any production, but it is the easiest to set up). For any production use, please consider using Postgres storage (either locally, or as managed service). 
  
-### Option 1: Non-Production (SQLite) - Recommended for personal use
+### Option 1: Non-Production (SQLite) - Recommended for local testing
  **NOT for production**. Uses local SQLite database (`nonotion.db`). Easiest to set up.
  
  **Run locally (requires Node.js + pnpm):**
@@ -104,7 +127,7 @@ pnpm --filter @nonotion/shared build
  ---
  
 ### Option 3: Production (Postgres)
- **Required for production deployments**. Connects to an external Postgres database (e.g., Supabase, RDS, or a managed service).
+ **Recommended for production deployments**. Connects to an external Postgres database (e.g., Supabase, RDS, or a managed service).
  
  1. Set up your Postgres database.
  2. Configure environment variables (in `.env` or your deployment platform):

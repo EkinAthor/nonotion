@@ -27,7 +27,7 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 1.  **Create a New Project** in Vercel.
 2.  **Connect your Repository**.
 3.  **Project Settings**:
-    *   **Project Name**: `nonotion-api`
+    *   **Project Name**: `your-nonotion-project-api`
     *   **Framework Preset**: `Other`
     *   **Root Directory**: `apps/api`
     *   **Build Command**: `pnpm --filter @nonotion/api... build`
@@ -40,7 +40,7 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
     *   `JWT_SECRET`: A secure random string (32+ characters). **Required** — the API will refuse to start without it.
-    *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://nonotion-web.vercel.app`).
+    *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://your-nonotion-project-web.vercel.app`).
     *   `ADMIN_EMAIL`: Your initial admin email.
 
 > [!NOTE]
@@ -61,7 +61,7 @@ The Web client is a Vite/React SPA.
 1.  **Create another New Project** in Vercel.
 2.  **Connect your Repository**.
 3.  **Project Settings**:
-    *   **Project Name**: `nonotion-web`
+    *   **Project Name**: `your-nonotion-project-web`
     *   **Framework Preset**: `Other` — do **not** use the "Vite" preset, as it overrides the SPA rewrite rules in `vercel.json`
     *   **Root Directory**: `apps/web`
     *   **Build Command**: `pnpm --filter @nonotion/web... build`
@@ -69,7 +69,7 @@ The Web client is a Vite/React SPA.
 4.  **SPA Routing**:
     The repo includes `apps/web/vercel.json` with a rewrite rule that sends all paths to `index.html`, allowing React Router to handle client-side routing.
 5.  **Environment Variables**:
-    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://nonotion-api.vercel.app/api`). Note: the `/api` suffix is required because all routes are registered under `/api/`.
+    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://your-nonotion-project-api.vercel.app/api`). Note: the `/api` suffix is required because all routes are registered under `/api/`.
 
 ---
 
