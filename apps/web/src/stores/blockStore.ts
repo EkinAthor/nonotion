@@ -50,6 +50,11 @@ interface BlockState {
   clearSelection: () => void;
   selectAll: (pageId: string) => void;
   deleteSelectedBlocks: () => Promise<void>;
+
+  // Multi-block drag state
+  draggedBlockIds: string[]; // effective drag set during active drag, empty when idle
+  setDraggedBlockIds: (ids: string[]) => void;
+  clearDraggedBlockIds: () => void;
 }
 
 export const useBlockStore = create<BlockState>((set, get) => ({
@@ -61,6 +66,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   error: null,
   selectedBlockIds: new Set(),
   selectionAnchorId: null,
+  draggedBlockIds: [],
 
   fetchBlocks: async (pageId) => {
     set({ isLoading: true, error: null });
@@ -562,5 +568,13 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     if (prevBlockId) {
       get().setFocusBlock(prevBlockId, 'end');
     }
+  },
+
+  setDraggedBlockIds: (ids) => {
+    set({ draggedBlockIds: ids });
+  },
+
+  clearDraggedBlockIds: () => {
+    set({ draggedBlockIds: [] });
   },
 }));

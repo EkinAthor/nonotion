@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -8,6 +9,7 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  DragCancelEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -19,10 +21,12 @@ import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { usePageStore } from '@/stores/pageStore';
 import BlockWrapper from './BlockWrapper';
+import MultiBlockDragPreview from './MultiBlockDragPreview';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
 import CrossBlockFormatToolbar from './CrossBlockFormatToolbar';
 import { getMarkdownPrefix, getHtmlTag } from './registry';
 import { htmlToInlineMarkdown } from '@/lib/html-markdown';
+import { computeDragSet } from '@/lib/block-hierarchy';
 
 interface BlockCanvasProps {
   pageId: string;
@@ -31,8 +35,9 @@ interface BlockCanvasProps {
 }
 
 export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockCanvasProps) {
-  const { reorderBlocks } = useBlockStore();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const { reorderBlocks, setDraggedBlockIds, clearDraggedBlockIds } = useBlockStore();
+  const draggedBlockIds = useBlockStore((s) => s.draggedBlockIds);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseDownBlockRef = useRef<string | null>(null);
   const isSelectingCrossBlockRef = useRef(false);
@@ -80,8 +85,13 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
           updateMultiSelection(blockId);
         }
       } else if (selectedBlockIds.size > 0) {
-        // Normal click: clear existing multi-selection
-        clearSelection();
+        // Don't clear selection when clicking a drag handle — dnd-kit's
+        // onDragStart needs the selection intact for multi-block drag.
+        const target = e.target as HTMLElement;
+        const isDragHandle = target.closest('button[title="Drag to reorder"]') !== null;
+        if (!isDragHandle) {
+          clearSelection();
+        }
       }
     };
 
@@ -290,25 +300,62 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
   );
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(String(event.active.id));
+    const activeId = String(event.active.id);
+    const { selectedBlockIds, clearSelection } = useBlockStore.getState();
+
+    // If active block is in selection and multi-selected, expand selection
+    // Otherwise, clear selection and drag just this block (+ list children)
+    if (!selectedBlockIds.has(activeId) || selectedBlockIds.size <= 1) {
+      if (selectedBlockIds.size > 0) clearSelection();
+    }
+
+    const currentSelectedIds = useBlockStore.getState().selectedBlockIds;
+    const dragSet = computeDragSet(blocks, currentSelectedIds, activeId);
+
+    setDraggedBlockIds(dragSet);
+    setActiveDragId(activeId);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
+    const currentDragSet = useBlockStore.getState().draggedBlockIds;
 
-    if (over && active.id !== over.id) {
-      const oldIndex = blocks.findIndex((b) => b.id === active.id);
-      const newIndex = blocks.findIndex((b) => b.id === over.id);
+    // Clean up drag state
+    setActiveDragId(null);
+    clearDraggedBlockIds();
 
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newOrder = [...blocks];
-        const [removed] = newOrder.splice(oldIndex, 1);
-        newOrder.splice(newIndex, 0, removed);
+    if (!over || active.id === over.id || currentDragSet.length === 0) return;
 
-        await reorderBlocks(pageId, newOrder.map((b) => b.id));
-      }
-    }
+    const dragSetIds = new Set(currentDragSet);
+    const activeOrigIndex = blocks.findIndex((b) => b.id === active.id);
+    const overOrigIndex = blocks.findIndex((b) => b.id === String(over.id));
+
+    if (activeOrigIndex === -1 || overOrigIndex === -1) return;
+
+    // Remove drag-set blocks from the array
+    const remaining = blocks.filter((b) => !dragSetIds.has(b.id));
+    // Get drag-set blocks in their original relative order
+    const dragSetBlocks = blocks.filter((b) => dragSetIds.has(b.id));
+
+    // Find where 'over' ended up in the remaining array
+    const overIndexInRemaining = remaining.findIndex((b) => b.id === String(over.id));
+    if (overIndexInRemaining === -1) return;
+
+    // Determine insert position
+    const insertIndex = activeOrigIndex < overOrigIndex
+      ? overIndexInRemaining + 1  // dragging down: insert after over
+      : overIndexInRemaining;      // dragging up: insert at over
+
+    // Splice drag-set blocks at the insert position
+    const finalOrder = [...remaining];
+    finalOrder.splice(insertIndex, 0, ...dragSetBlocks);
+
+    await reorderBlocks(pageId, finalOrder.map((b) => b.id));
+  };
+
+  const handleDragCancel = (_event: DragCancelEvent) => {
+    setActiveDragId(null);
+    clearDraggedBlockIds();
   };
 
   // Stable items reference — only recomputes when block IDs or their order change.
@@ -331,6 +378,7 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <SortableContext
           items={sortableItems}
@@ -341,11 +389,23 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
               key={block.id}
               block={block}
               pageId={pageId}
-              isDragging={activeId === block.id}
+              isDragging={activeDragId === block.id}
+              isInDragSet={
+                draggedBlockIds.length > 1 &&
+                draggedBlockIds.includes(block.id) &&
+                activeDragId !== block.id
+              }
               readOnly={readOnly}
             />
           ))}
         </SortableContext>
+        <DragOverlay dropAnimation={null}>
+          {activeDragId && draggedBlockIds.length > 0 && (
+            <MultiBlockDragPreview
+              blocks={blocks.filter((b) => draggedBlockIds.includes(b.id))}
+            />
+          )}
+        </DragOverlay>
       </DndContext>
 
       {!readOnly && <EmptyBlockPlaceholder pageId={pageId} order={blocks.length} />}

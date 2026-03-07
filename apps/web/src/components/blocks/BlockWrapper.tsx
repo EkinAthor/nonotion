@@ -27,10 +27,11 @@ interface BlockWrapperProps {
   block: Block;
   pageId: string;
   isDragging: boolean;
+  isInDragSet?: boolean;
   readOnly?: boolean;
 }
 
-export default function BlockWrapper({ block, pageId, isDragging, readOnly = false }: BlockWrapperProps) {
+export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = false, readOnly = false }: BlockWrapperProps) {
   const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, updateBlock, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const { createPage } = usePageStore();
   const navigate = useNavigate();
@@ -191,7 +192,7 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: block.id });
+  } = useSortable({ id: block.id, disabled: isInDragSet });
 
   // Build inline style only when dnd-kit actually needs it (dragging/animating).
   // Applying transform, transition, or opacity as inline styles on every block —
@@ -203,13 +204,15 @@ export default function BlockWrapper({ block, pageId, isDragging, readOnly = fal
   const hasActiveTransform = transformString != null;
   const needsTransition = transition != null && transition !== 'transform 0ms linear';
   const style: React.CSSProperties | undefined =
-    hasActiveTransform || isDragging
-      ? {
-          transform: transformString ?? undefined,
-          transition: needsTransition ? transition : undefined,
-          opacity: isDragging ? 0.5 : undefined,
-        }
-      : undefined;
+    isInDragSet
+      ? { display: 'none' }
+      : hasActiveTransform || isDragging
+        ? {
+            transform: transformString ?? undefined,
+            transition: needsTransition ? transition : undefined,
+            opacity: isDragging ? 0.5 : undefined,
+          }
+        : undefined;
 
   const handleDelete = async () => {
     await deleteBlock(block.id);
