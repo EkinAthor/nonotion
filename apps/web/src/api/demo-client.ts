@@ -214,6 +214,46 @@ export const pagesApi = {
   },
 
   update: (id: string, input: UpdatePageInput): Promise<Page> => {
+    const existing = storage.getPage(id);
+    if (!existing) throw new Error('Page not found');
+
+    // Handle parentId change side-effects
+    if (input.parentId !== undefined && input.parentId !== existing.parentId) {
+      const oldParentId = existing.parentId;
+      const newParentId = input.parentId;
+
+      // Remove from old parent's childIds
+      if (oldParentId) {
+        const oldParent = storage.getPage(oldParentId);
+        if (oldParent) {
+          storage.updatePage(oldParentId, {
+            childIds: oldParent.childIds.filter((cid) => cid !== id),
+          });
+        }
+      }
+
+      // Add to new parent's childIds
+      if (newParentId) {
+        const newParent = storage.getPage(newParentId);
+        if (newParent && !newParent.childIds.includes(id)) {
+          storage.updatePage(newParentId, {
+            childIds: [...newParent.childIds, id],
+          });
+        }
+      }
+
+      // Update rootPageOrder
+      const order = getDemoPageOrder();
+      if (!oldParentId && newParentId) {
+        // Was root, now child — remove from root order
+        order.rootPageOrder = order.rootPageOrder.filter((pid) => pid !== id);
+      } else if (oldParentId && !newParentId) {
+        // Was child, now root — add to root order
+        order.rootPageOrder.push(id);
+      }
+      saveDemoPageOrder(order);
+    }
+
     const page = storage.updatePage(id, input);
     if (!page) throw new Error('Page not found');
     return Promise.resolve(page);

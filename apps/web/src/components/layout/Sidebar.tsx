@@ -9,6 +9,7 @@ import {
   closestCenter,
   type DragStartEvent,
   type DragEndEvent,
+  type DragMoveEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -17,7 +18,7 @@ import {
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import { IS_DEMO_MODE } from '@/api/client';
-import { flattenTree } from '@/lib/sidebar-dnd';
+import { flattenTree, getProjection, isValidProjection, type Projection } from '@/lib/sidebar-dnd';
 import SortablePageTreeItem from './SortablePageTreeItem';
 import StarredSection from './StarredSection';
 import UserMenu from './UserMenu';
@@ -25,11 +26,13 @@ import ImportDialog from './ImportDialog';
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const { createPage, getPageTree, expandedNodes, isLoading, updatePageOrder } = usePageStore();
+  const { createPage, getPageTree, expandedNodes, isLoading, movePage, pages } = usePageStore();
   const { toggleSidebar, toggleSearch } = useUiStore();
   const [isCreating, setIsCreating] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [projected, setProjected] = useState<Projection | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -62,49 +65,56 @@ export default function Sidebar() {
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setProjected(null);
+    setOverId(null);
+  };
+
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { active, over, delta } = event;
+    if (!over || active.id === over.id) {
+      setProjected(null);
+      setOverId(null);
+      return;
+    }
+
+    const activeItem = flatItems.find((item) => item.id === active.id);
+    if (!activeItem || activeItem.isDatabaseRow) {
+      setProjected(null);
+      setOverId(null);
+      return;
+    }
+
+    const proj = getProjection(flatItems, active.id as string, over.id as string, delta.x);
+    if (proj && isValidProjection(activeItem, proj, pages)) {
+      setProjected(proj);
+      setOverId(over.id as string);
+    } else {
+      setProjected(null);
+      setOverId(null);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over || active.id === over.id) return;
-
-    // For now, only reorder root pages (flat reorder)
+    const { active } = event;
+    const currentProjected = projected;
     const activeItem = flatItems.find((item) => item.id === active.id);
-    const overItem = flatItems.find((item) => item.id === over.id);
 
-    if (!activeItem || !overItem) return;
+    setActiveId(null);
+    setProjected(null);
+    setOverId(null);
 
-    // Only reorder within the same parent
-    if (activeItem.parentId !== overItem.parentId) return;
+    if (!activeItem || !currentProjected) return;
+    if (activeItem.isDatabaseRow) return;
 
-    if (activeItem.parentId === null) {
-      // Reordering root pages
-      const rootIds = pageTree.map((n) => n.id);
-      const oldIndex = rootIds.indexOf(active.id as string);
-      const newIndex = rootIds.indexOf(over.id as string);
-      if (oldIndex === -1 || newIndex === -1) return;
+    const pageId = active.id as string;
+    const { parentId: newParentId, insertIndex } = currentProjected;
 
-      const newOrder = [...rootIds];
-      newOrder.splice(oldIndex, 1);
-      newOrder.splice(newIndex, 0, active.id as string);
-      updatePageOrder({ rootPageOrder: newOrder });
-    } else {
-      // Reordering child pages within a parent — update parent's childIds
-      const { pages, updatePage } = usePageStore.getState();
-      const parent = pages.get(activeItem.parentId);
-      if (!parent) return;
-
-      const childIds = [...parent.childIds];
-      const oldIndex = childIds.indexOf(active.id as string);
-      const newIndex = childIds.indexOf(over.id as string);
-      if (oldIndex === -1 || newIndex === -1) return;
-
-      childIds.splice(oldIndex, 1);
-      childIds.splice(newIndex, 0, active.id as string);
-      updatePage(activeItem.parentId, { childIds });
+    // Auto-expand the new parent so the moved page is visible
+    if (newParentId && !expandedNodes.has(newParentId)) {
+      usePageStore.getState().toggleExpanded(newParentId);
     }
+
+    movePage(pageId, newParentId, insertIndex);
   };
 
   const activeItem = activeId ? flatItems.find((item) => item.id === activeId) : null;
@@ -204,6 +214,7 @@ export default function Sidebar() {
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
             >
               <SortableContext
@@ -214,6 +225,11 @@ export default function Sidebar() {
                   <SortablePageTreeItem
                     key={item.id}
                     item={item}
+                    showIndicator={
+                      overId === item.id && projected
+                        ? { depth: projected.depth }
+                        : null
+                    }
                   />
                 ))}
               </SortableContext>

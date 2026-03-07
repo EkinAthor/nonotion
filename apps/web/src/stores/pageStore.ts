@@ -42,6 +42,7 @@ interface PageState {
   toggleExpanded: (id: string) => void;
   toggleStarredExpanded: (id: string) => void;
   updatePageOrder: (input: UpdatePageOrderInput) => void;
+  movePage: (pageId: string, newParentId: string | null, insertIndex: number) => void;
 
   // Selectors
   getPageTree: () => PageTreeNode[];
@@ -277,6 +278,88 @@ export const usePageStore = create<PageState>((set, get) => ({
     pagesApi.updateOrder(input).catch((error) => {
       console.error('Failed to update page order:', error);
       set({ rootPageOrder: prevRootOrder, starredPageOrder: prevStarredOrder });
+    });
+  },
+
+  movePage: (pageId, newParentId, insertIndex) => {
+    const state = get();
+    const page = state.pages.get(pageId);
+    if (!page) return;
+
+    const oldParentId = page.parentId;
+    if (oldParentId === newParentId) {
+      // Same parent — just reorder
+      if (newParentId === null) {
+        const rootIds = state.rootPageOrder.filter((id) => id !== pageId);
+        rootIds.splice(insertIndex, 0, pageId);
+        get().updatePageOrder({ rootPageOrder: rootIds });
+      } else {
+        const parent = state.pages.get(newParentId);
+        if (!parent) return;
+        const childIds = parent.childIds.filter((id) => id !== pageId);
+        childIds.splice(insertIndex, 0, pageId);
+        get().updatePage(newParentId, { childIds });
+      }
+      return;
+    }
+
+    // Snapshot for revert
+    const prevPages = new Map(state.pages);
+    const prevRootOrder = state.rootPageOrder;
+
+    // Optimistic update
+    set((s) => {
+      const pages = new Map(s.pages);
+      let rootPageOrder = [...s.rootPageOrder];
+
+      // Update the page's parentId
+      pages.set(pageId, { ...page, parentId: newParentId });
+
+      // Remove from old parent's childIds
+      if (oldParentId) {
+        const oldParent = pages.get(oldParentId);
+        if (oldParent) {
+          pages.set(oldParentId, {
+            ...oldParent,
+            childIds: oldParent.childIds.filter((id) => id !== pageId),
+          });
+        }
+      } else {
+        // Was root — remove from rootPageOrder
+        rootPageOrder = rootPageOrder.filter((id) => id !== pageId);
+      }
+
+      // Add to new parent's childIds at insertIndex
+      if (newParentId) {
+        const newParent = pages.get(newParentId);
+        if (newParent) {
+          const childIds = [...newParent.childIds];
+          childIds.splice(insertIndex, 0, pageId);
+          pages.set(newParentId, { ...newParent, childIds });
+        }
+      } else {
+        // Moving to root
+        rootPageOrder.splice(insertIndex, 0, pageId);
+      }
+
+      return { pages, rootPageOrder };
+    });
+
+    // API calls: first update parentId (backend handles old/new parent childIds),
+    // then fix the order since the backend appends to end.
+    pagesApi.update(pageId, { parentId: newParentId }).then(async () => {
+      // After parentId change is persisted, fix the child order or root order
+      if (newParentId) {
+        const newParent = get().pages.get(newParentId);
+        if (newParent) {
+          await pagesApi.update(newParentId, { childIds: newParent.childIds });
+        }
+      } else {
+        await pagesApi.updateOrder({ rootPageOrder: get().rootPageOrder });
+      }
+    }).catch((error) => {
+      console.error('Failed to move page:', error);
+      set({ pages: prevPages, rootPageOrder: prevRootOrder });
     });
   },
 

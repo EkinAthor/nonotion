@@ -7,9 +7,10 @@ import type { FlattenedItem } from '@/lib/sidebar-dnd';
 
 interface SortablePageTreeItemProps {
   item: FlattenedItem;
+  showIndicator?: { depth: number } | null;
 }
 
-export default function SortablePageTreeItem({ item }: SortablePageTreeItemProps) {
+export default function SortablePageTreeItem({ item, showIndicator }: SortablePageTreeItemProps) {
   const navigate = useNavigate();
   const { currentPageId, toggleExpanded, expandedNodes, createPage, deletePage } =
     usePageStore();
@@ -23,7 +24,7 @@ export default function SortablePageTreeItem({ item }: SortablePageTreeItemProps
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({ id: item.id, disabled: item.isDatabaseRow });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -83,7 +84,11 @@ export default function SortablePageTreeItem({ item }: SortablePageTreeItemProps
       >
         {/* Drag handle */}
         <button
-          className="flex-shrink-0 w-4 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 cursor-grab active:cursor-grabbing text-notion-text-secondary"
+          className={`flex-shrink-0 w-4 h-5 flex items-center justify-center rounded text-notion-text-secondary ${
+            item.isDatabaseRow
+              ? 'invisible'
+              : 'opacity-0 group-hover:opacity-60 hover:!opacity-100 cursor-grab active:cursor-grabbing'
+          }`}
           {...attributes}
           {...listeners}
           onClick={(e) => e.stopPropagation()}
@@ -179,6 +184,12 @@ export default function SortablePageTreeItem({ item }: SortablePageTreeItemProps
           </div>
         )}
       </div>
+      {showIndicator && (
+        <div
+          className="h-0.5 bg-blue-500 rounded-full"
+          style={{ marginLeft: `${showIndicator.depth * 12 + 4}px`, marginRight: '4px' }}
+        />
+      )}
     </div>
   );
 }
