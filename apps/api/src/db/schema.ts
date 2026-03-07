@@ -85,6 +85,15 @@ export const files = sqliteTable('files', {
   createdAt: text('created_at').notNull(),
 });
 
+// Settings table (key-value store for workspace settings)
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export type SettingRow = typeof settings.$inferSelect;
+export type NewSettingRow = typeof settings.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;

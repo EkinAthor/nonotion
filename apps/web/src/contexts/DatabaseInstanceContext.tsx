@@ -16,7 +16,7 @@ import type {
   KanbanConfig,
   KanbanCardOrder,
 } from '@nonotion/shared';
-import { databaseApi } from '@/api/client';
+import { databaseApi, pagesApi } from '@/api/client';
 import { usePageStore } from '@/stores/pageStore';
 
 interface ViewConfig {
@@ -73,6 +73,7 @@ export interface DatabaseInstanceState {
   updateRowTitle: (rowId: string, title: string) => void;
   addRow: (row: DatabaseRow) => void;
   removeRow: (rowId: string) => void;
+  reorderRows: (rowIds: string[]) => void;
 
   // View config actions
   setSort: (sort: SortConfig | undefined) => void;
@@ -330,6 +331,27 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         rows: state.rows.filter((r) => r.id !== rowId),
         total: state.total - 1,
       }));
+    },
+
+    reorderRows: (rowIds) => {
+      const { activeDatabaseId, rows } = get();
+      if (!activeDatabaseId) return;
+
+      // Optimistic: reorder local rows
+      const previousRows = rows;
+      const rowMap = new Map(rows.map((r) => [r.id, r]));
+      const reordered = rowIds.map((id) => rowMap.get(id)).filter((r): r is DatabaseRow => !!r);
+      // Append any rows not in the new order (shouldn't happen, but safe)
+      for (const row of rows) {
+        if (!rowIds.includes(row.id)) reordered.push(row);
+      }
+      set({ rows: reordered });
+
+      // Update database page's childIds on server
+      pagesApi.update(activeDatabaseId, { childIds: rowIds }).catch((error) => {
+        console.error('Failed to reorder rows:', error);
+        set({ rows: previousRows });
+      });
     },
 
     setSort: (sort) => {

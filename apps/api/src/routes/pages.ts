@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createPageInputSchema, updatePageInputSchema, updateSchemaInputSchema, updatePropertiesInputSchema } from '@nonotion/shared';
+import { createPageInputSchema, updatePageInputSchema, updateSchemaInputSchema, updatePropertiesInputSchema, updatePageOrderInputSchema } from '@nonotion/shared';
 import * as pageService from '../services/page-service.js';
 import * as databaseService from '../services/database-service.js';
 import * as permissionService from '../services/permission-service.js';
@@ -15,6 +15,26 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/pages', async (request, reply) => {
     const pages = await permissionService.getUserAccessiblePages(request.userId!, { isWorkspaceOwner: request.isOwner });
     return reply.send({ data: pages, success: true });
+  });
+
+  // GET /api/pages/order - Get page order settings
+  fastify.get('/api/pages/order', async (_request, reply) => {
+    const order = await pageService.getPageOrder();
+    return reply.send({ data: order, success: true });
+  });
+
+  // PATCH /api/pages/order - Update page order
+  fastify.patch('/api/pages/order', async (request, reply) => {
+    const parsed = updatePageOrderInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        success: false,
+      });
+    }
+
+    const order = await pageService.updatePageOrder(parsed.data);
+    return reply.send({ data: order, success: true });
   });
 
   // GET /api/pages/:id - Get page by ID

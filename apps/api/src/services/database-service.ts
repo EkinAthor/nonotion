@@ -40,9 +40,16 @@ export async function getRows(
     rows = applyFilter(rows, options.filter, database.databaseSchema);
   }
 
-  // Apply sorting
+  // Apply sorting — use childIds order when no explicit sort
   if (options.sort) {
     rows = applySort(rows, options.sort, database.databaseSchema);
+  } else if (database.childIds.length > 0) {
+    const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
+    rows.sort((a, b) => {
+      const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return aIdx - bIdx;
+    });
   }
 
   const total = rows.length;

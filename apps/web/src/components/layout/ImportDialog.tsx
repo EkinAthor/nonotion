@@ -13,7 +13,7 @@ type ImportState = 'idle' | 'importing' | 'success' | 'error';
 
 export default function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const navigate = useNavigate();
-  const { fetchPages } = usePageStore();
+  const { fetchPages, fetchPageOrder } = usePageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<ImportState>('idle');
@@ -28,8 +28,9 @@ export default function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
     setResult(null);
     setErrorMessage('');
     fetchPages();
+    fetchPageOrder();
     onClose();
-  }, [state, onClose, fetchPages]);
+  }, [state, onClose, fetchPages, fetchPageOrder]);
 
   const handleFileSelect = useCallback((selectedFile: File) => {
     if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
@@ -78,11 +79,12 @@ export default function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
       setResult(importResult);
       setState('success');
       await fetchPages();
+      await fetchPageOrder();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Import failed');
       setState('error');
     }
-  }, [file, fetchPages]);
+  }, [file, fetchPages, fetchPageOrder]);
 
   const handleViewPage = useCallback(() => {
     if (result?.rootPageIds[0]) {

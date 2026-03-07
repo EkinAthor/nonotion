@@ -43,6 +43,13 @@
       "when": 1771868941686,
       "tag": "0005_slim_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1772895811624,
+      "tag": "0006_mysterious_proteus",
+      "breakpoints": true
     }
   ]
 }

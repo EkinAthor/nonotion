@@ -454,4 +454,28 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
     const result = await this.db.delete(pgSchema.files).where(eq(pgSchema.files.id, id));
     return (result.rowCount ?? 0) > 0;
   }
+
+  // ==================== Settings ====================
+
+  async getSetting(key: string): Promise<string | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.settings)
+      .where(eq(pgSchema.settings.key, key));
+    if (rows.length === 0) return null;
+    // jsonb value is stored as-is; we serialize as JSON string for consistency
+    const val = rows[0].value;
+    return typeof val === 'string' ? val : JSON.stringify(val);
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const now = new Date();
+    await this.db
+      .insert(pgSchema.settings)
+      .values({ key, value, updatedAt: now })
+      .onConflictDoUpdate({
+        target: pgSchema.settings.key,
+        set: { value, updatedAt: now },
+      });
+  }
 }

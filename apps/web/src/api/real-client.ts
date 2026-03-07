@@ -25,6 +25,8 @@ import type {
   ImportResult,
   GoogleLoginInput,
   AuthConfigResponse,
+  PageOrderSettings,
+  UpdatePageOrderInput,
 } from '@nonotion/shared';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -214,6 +216,14 @@ export const pagesApi = {
   delete: (id: string) =>
     request<void>(`/pages/${id}`, {
       method: 'DELETE',
+    }),
+
+  getOrder: () => request<PageOrderSettings>('/pages/order'),
+
+  updateOrder: (input: UpdatePageOrderInput) =>
+    request<PageOrderSettings>('/pages/order', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
     }),
 };
 

@@ -32,6 +32,8 @@ import type {
   SelectColor,
   PagePermission,
   AdminResetPasswordInput,
+  PageOrderSettings,
+  UpdatePageOrderInput,
 } from '@nonotion/shared';
 import {
   generatePageId,
@@ -55,6 +57,20 @@ export interface SearchResult {
 }
 
 const now = () => new Date().toISOString();
+
+const PAGE_ORDER_KEY = 'nonotion_demo_page_order';
+
+function getDemoPageOrder(): PageOrderSettings {
+  try {
+    const raw = localStorage.getItem(PAGE_ORDER_KEY);
+    if (raw) return JSON.parse(raw) as PageOrderSettings;
+  } catch { /* ignore */ }
+  return { rootPageOrder: [], starredPageOrder: [] };
+}
+
+function saveDemoPageOrder(order: PageOrderSettings): void {
+  localStorage.setItem(PAGE_ORDER_KEY, JSON.stringify(order));
+}
 
 // ============ AUTH API ============
 
@@ -187,6 +203,11 @@ export const pagesApi = {
           childIds: [...parent.childIds, id],
         });
       }
+    } else {
+      // Root page — append to root order
+      const order = getDemoPageOrder();
+      order.rootPageOrder.push(id);
+      saveDemoPageOrder(order);
     }
 
     return Promise.resolve(page);
@@ -212,6 +233,12 @@ export const pagesApi = {
       }
     }
 
+    // Remove from order arrays
+    const order = getDemoPageOrder();
+    order.rootPageOrder = order.rootPageOrder.filter((pid) => pid !== id);
+    order.starredPageOrder = order.starredPageOrder.filter((pid) => pid !== id);
+    saveDemoPageOrder(order);
+
     // Recursively delete children
     const deleteRecursive = (pageId: string) => {
       const p = storage.getPage(pageId);
@@ -226,6 +253,18 @@ export const pagesApi = {
 
     deleteRecursive(id);
     return Promise.resolve();
+  },
+
+  getOrder: (): Promise<PageOrderSettings> => {
+    return Promise.resolve(getDemoPageOrder());
+  },
+
+  updateOrder: (input: UpdatePageOrderInput): Promise<PageOrderSettings> => {
+    const current = getDemoPageOrder();
+    if (input.rootPageOrder !== undefined) current.rootPageOrder = input.rootPageOrder;
+    if (input.starredPageOrder !== undefined) current.starredPageOrder = input.starredPageOrder;
+    saveDemoPageOrder(current);
+    return Promise.resolve(current);
   },
 };
 
@@ -469,6 +508,13 @@ export const databaseApi = {
     }
     if (options.sort) {
       rows = applySort(rows, options.sort, database.databaseSchema);
+    } else if (database.childIds.length > 0) {
+      const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
+      rows.sort((a, b) => {
+        const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+        const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+        return aIdx - bIdx;
+      });
     }
 
     const total = rows.length;

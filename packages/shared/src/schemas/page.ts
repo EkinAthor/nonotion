@@ -37,6 +37,11 @@ export const updatePageInputSchema = z.object({
   properties: z.record(z.string(), propertyValueSchema).optional(),
 });
 
+export const updatePageOrderInputSchema = z.object({
+  rootPageOrder: z.array(z.string().startsWith('pg_')).optional(),
+  starredPageOrder: z.array(z.string().startsWith('pg_')).optional(),
+});
+
 export type PageTypeSchema = z.infer<typeof pageTypeSchema>;
 export type PageSchema = z.infer<typeof pageSchema>;
 export type CreatePageInputSchema = z.infer<typeof createPageInputSchema>;

@@ -221,6 +221,17 @@ export class JsonFileStorage implements StorageAdapter {
     }
     return result;
   }
+
+  // Settings
+  private settingsCache: Map<string, string> = new Map();
+
+  async getSetting(key: string): Promise<string | null> {
+    return this.settingsCache.get(key) ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    this.settingsCache.set(key, value);
+  }
 }
 
 export const storage = new JsonFileStorage();

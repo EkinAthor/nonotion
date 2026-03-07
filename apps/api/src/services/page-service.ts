@@ -1,7 +1,38 @@
-import type { Page, CreatePageInput, UpdatePageInput } from '@nonotion/shared';
+import type { Page, CreatePageInput, UpdatePageInput, PageOrderSettings, UpdatePageOrderInput } from '@nonotion/shared';
 import { generatePageId, now } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
 import { createDefaultSchema } from './database-service.js';
+
+const ROOT_PAGE_ORDER_KEY = 'rootPageOrder';
+const STARRED_PAGE_ORDER_KEY = 'starredPageOrder';
+
+async function getOrderArray(key: string): Promise<string[]> {
+  const raw = await getStorage().getSetting(key);
+  if (!raw) return [];
+  try { return JSON.parse(raw) as string[]; } catch { return []; }
+}
+
+async function setOrderArray(key: string, ids: string[]): Promise<void> {
+  await getStorage().setSetting(key, JSON.stringify(ids));
+}
+
+export async function getPageOrder(): Promise<PageOrderSettings> {
+  const [rootPageOrder, starredPageOrder] = await Promise.all([
+    getOrderArray(ROOT_PAGE_ORDER_KEY),
+    getOrderArray(STARRED_PAGE_ORDER_KEY),
+  ]);
+  return { rootPageOrder, starredPageOrder };
+}
+
+export async function updatePageOrder(input: UpdatePageOrderInput): Promise<PageOrderSettings> {
+  if (input.rootPageOrder !== undefined) {
+    await setOrderArray(ROOT_PAGE_ORDER_KEY, input.rootPageOrder);
+  }
+  if (input.starredPageOrder !== undefined) {
+    await setOrderArray(STARRED_PAGE_ORDER_KEY, input.starredPageOrder);
+  }
+  return getPageOrder();
+}
 
 export async function getAllPages(): Promise<Page[]> {
   return getStorage().getAllPages();
@@ -51,7 +82,16 @@ export async function createPage(input: CreatePageInput, ownerId: string): Promi
     }
   }
 
-  return getStorage().createPage(page);
+  const created = await getStorage().createPage(page);
+
+  // Append to root page order if it's a root page
+  if (!page.parentId) {
+    const order = await getOrderArray(ROOT_PAGE_ORDER_KEY);
+    order.push(page.id);
+    await setOrderArray(ROOT_PAGE_ORDER_KEY, order);
+  }
+
+  return created;
 }
 
 export async function updatePage(id: string, input: UpdatePageInput): Promise<Page | null> {
@@ -85,6 +125,30 @@ export async function updatePage(id: string, input: UpdatePageInput): Promise<Pa
         });
       }
     }
+
+    // Maintain root page order: moving to/from root
+    if (!existing.parentId && input.parentId) {
+      // Was root, now has parent — remove from root order
+      const order = await getOrderArray(ROOT_PAGE_ORDER_KEY);
+      await setOrderArray(ROOT_PAGE_ORDER_KEY, order.filter((pid) => pid !== id));
+    } else if (existing.parentId && !input.parentId) {
+      // Was child, now root — append to root order
+      const order = await getOrderArray(ROOT_PAGE_ORDER_KEY);
+      order.push(id);
+      await setOrderArray(ROOT_PAGE_ORDER_KEY, order);
+    }
+  }
+
+  // Handle starred change
+  if (input.isStarred !== undefined && input.isStarred !== existing.isStarred) {
+    const starredOrder = await getOrderArray(STARRED_PAGE_ORDER_KEY);
+    if (input.isStarred) {
+      starredOrder.push(id);
+    } else {
+      const idx = starredOrder.indexOf(id);
+      if (idx !== -1) starredOrder.splice(idx, 1);
+    }
+    await setOrderArray(STARRED_PAGE_ORDER_KEY, starredOrder);
   }
 
   return getStorage().updatePage(id, {
@@ -110,6 +174,18 @@ export async function deletePage(id: string): Promise<boolean> {
         version: parent.version + 1,
       });
     }
+  }
+
+  // Remove from order arrays
+  const [rootOrder, starredOrder] = await Promise.all([
+    getOrderArray(ROOT_PAGE_ORDER_KEY),
+    getOrderArray(STARRED_PAGE_ORDER_KEY),
+  ]);
+  if (rootOrder.includes(id)) {
+    await setOrderArray(ROOT_PAGE_ORDER_KEY, rootOrder.filter((pid) => pid !== id));
+  }
+  if (starredOrder.includes(id)) {
+    await setOrderArray(STARRED_PAGE_ORDER_KEY, starredOrder.filter((pid) => pid !== id));
   }
 
   // Recursively delete all children

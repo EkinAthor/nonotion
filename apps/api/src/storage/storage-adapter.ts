@@ -16,6 +16,10 @@ export interface StorageAdapter {
   deleteBlock(id: string): Promise<boolean>;
   deleteBlocksByPage(pageId: string): Promise<void>;
   getBlocksByPages(pageIds: string[]): Promise<Block[]>;
+
+  // Settings
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 export interface UserStorageAdapter {

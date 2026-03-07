@@ -1,19 +1,42 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import { IS_DEMO_MODE } from '@/api/client';
-import PageTree from './PageTree';
+import { flattenTree } from '@/lib/sidebar-dnd';
+import SortablePageTreeItem from './SortablePageTreeItem';
 import StarredSection from './StarredSection';
 import UserMenu from './UserMenu';
 import ImportDialog from './ImportDialog';
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const { createPage, getPageTree, isLoading } = usePageStore();
+  const { createPage, getPageTree, expandedNodes, isLoading, updatePageOrder } = usePageStore();
   const { toggleSidebar, toggleSearch } = useUiStore();
   const [isCreating, setIsCreating] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const pageTree = getPageTree();
+  const flatItems = flattenTree(pageTree, expandedNodes);
 
   const handleNewPage = async () => {
     if (isCreating) return;
@@ -37,7 +60,54 @@ export default function Sidebar() {
     }
   };
 
-  const pageTree = getPageTree();
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    // For now, only reorder root pages (flat reorder)
+    const activeItem = flatItems.find((item) => item.id === active.id);
+    const overItem = flatItems.find((item) => item.id === over.id);
+
+    if (!activeItem || !overItem) return;
+
+    // Only reorder within the same parent
+    if (activeItem.parentId !== overItem.parentId) return;
+
+    if (activeItem.parentId === null) {
+      // Reordering root pages
+      const rootIds = pageTree.map((n) => n.id);
+      const oldIndex = rootIds.indexOf(active.id as string);
+      const newIndex = rootIds.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newOrder = [...rootIds];
+      newOrder.splice(oldIndex, 1);
+      newOrder.splice(newIndex, 0, active.id as string);
+      updatePageOrder({ rootPageOrder: newOrder });
+    } else {
+      // Reordering child pages within a parent — update parent's childIds
+      const { pages, updatePage } = usePageStore.getState();
+      const parent = pages.get(activeItem.parentId);
+      if (!parent) return;
+
+      const childIds = [...parent.childIds];
+      const oldIndex = childIds.indexOf(active.id as string);
+      const newIndex = childIds.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      childIds.splice(oldIndex, 1);
+      childIds.splice(newIndex, 0, active.id as string);
+      updatePage(activeItem.parentId, { childIds });
+    }
+  };
+
+  const activeItem = activeId ? flatItems.find((item) => item.id === activeId) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -130,7 +200,36 @@ export default function Sidebar() {
               No pages yet
             </div>
           ) : (
-            <PageTree nodes={pageTree} depth={0} />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={flatItems.map((item) => item.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {flatItems.map((item) => (
+                  <SortablePageTreeItem
+                    key={item.id}
+                    item={item}
+                  />
+                ))}
+              </SortableContext>
+              <DragOverlay>
+                {activeItem && (
+                  <div className="flex items-center px-1 py-0.5 bg-white rounded shadow-lg border border-notion-border opacity-90">
+                    <span className="w-5 h-5 flex items-center justify-center text-sm">
+                      {activeItem.node.icon || (activeItem.node.type === 'database' ? '🗃️' : '📄')}
+                    </span>
+                    <span className="ml-1 text-sm text-notion-text truncate">
+                      {activeItem.node.title || 'Untitled'}
+                    </span>
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       </div>

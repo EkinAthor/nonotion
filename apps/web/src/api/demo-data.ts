@@ -283,4 +283,13 @@ export function seedDemoData(): void {
   storage.saveAllPages(pages);
   storage.saveAllBlocks(blocks);
   storage.markDemoSeeded();
+
+  // Seed page order
+  const rootPages = pages.filter((p) => !p.parentId);
+  const starredPages = pages.filter((p) => p.isStarred);
+  const orderData = {
+    rootPageOrder: rootPages.map((p) => p.id),
+    starredPageOrder: starredPages.map((p) => p.id),
+  };
+  localStorage.setItem('nonotion_demo_page_order', JSON.stringify(orderData));
 }

@@ -38,3 +38,13 @@ export interface UpdatePageInput {
 export interface PageTreeNode extends Page {
   children: PageTreeNode[];
 }
+
+export interface PageOrderSettings {
+  rootPageOrder: string[];
+  starredPageOrder: string[];
+}
+
+export interface UpdatePageOrderInput {
+  rootPageOrder?: string[];
+  starredPageOrder?: string[];
+}

@@ -8,12 +8,13 @@ import SearchModal from './SearchModal';
 import DemoBanner from './DemoBanner';
 
 export default function MainLayout() {
-  const { fetchPages } = usePageStore();
+  const { fetchPages, fetchPageOrder } = usePageStore();
   const { sidebarOpen, sidebarWidth, toggleSidebar, toggleSearch } = useUiStore();
 
   useEffect(() => {
     fetchPages();
-  }, [fetchPages]);
+    fetchPageOrder();
+  }, [fetchPages, fetchPageOrder]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

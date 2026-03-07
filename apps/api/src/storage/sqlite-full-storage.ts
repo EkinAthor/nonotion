@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users, permissions, pages, blocks, files } from '../db/schema.js';
+import { users, permissions, pages, blocks, files, settings } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import type {
   Page,
@@ -402,5 +402,23 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
   async deleteFile(id: string): Promise<boolean> {
     const result = db.delete(files).where(eq(files.id, id)).run();
     return result.changes > 0;
+  }
+
+  // ==================== Settings ====================
+
+  async getSetting(key: string): Promise<string | null> {
+    const rows = db.select().from(settings).where(eq(settings.key, key)).all();
+    return rows.length > 0 ? rows[0].value : null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const now = new Date().toISOString();
+    db.insert(settings)
+      .values({ key, value, updatedAt: now })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value, updatedAt: now },
+      })
+      .run();
   }
 }
