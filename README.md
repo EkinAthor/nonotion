@@ -172,6 +172,22 @@ npx serve apps/web/dist
 
 Demo data is seeded on first load: a book database with 10 rows, a formatting showcase page, and a getting started page. Changes persist in localStorage across page refreshes but not across browsers or devices.
 
+### Loading Demo Data (Backend)
+
+To populate a backend deployment with sample content (same data as the browser demo mode):
+
+```bash
+pnpm --filter @nonotion/api seed:demo
+```
+
+This creates:
+- An `admin@example.com` user (password: `adminadmin`) if one doesn't exist
+- A "My Book Database" with 10 rows and 9 typed properties
+- A "Formatting Showcase" page demonstrating all block types
+- A "Getting Started" guide page
+
+The script is idempotent — safe to run multiple times. Existing data is skipped.
+
 ---
 
 ## Environment Variables
@@ -213,6 +229,7 @@ Demo data is seeded on first load: a book database with 10 rows, a formatting sh
 pnpm dev                    # Start API + Web
 pnpm --filter @nonotion/api dev    # API only
 pnpm --filter @nonotion/web dev    # Web only
+# when running api only or web only, the variables are loaded from .env in apps/api or apps/web directory. Update them as needed. 
 
 # Build
 pnpm build                  # Build all packages

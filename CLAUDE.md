@@ -220,6 +220,9 @@ pnpm --filter @nonotion/shared build  # Must build first!
 pnpm build                            # Build all
 VITE_DEMO_MODE=true pnpm --filter @nonotion/web build  # Demo mode (no backend)
 
+# Seed
+pnpm --filter @nonotion/api seed:demo  # Seed demo data into backend
+
 # Test
 pnpm --filter @nonotion/e2e test:e2e  # Run Playwright tests
 ```
