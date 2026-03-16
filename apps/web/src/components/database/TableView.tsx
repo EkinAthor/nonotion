@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { PropertyDefinition, PropertyValue, SortConfig, DatabaseRow } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
+import { useUiStore } from '@/stores/uiStore';
 import CellRenderer from './cells/CellRenderer';
 
 interface TableViewProps {
@@ -29,6 +30,7 @@ export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
   const { rows, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties, reorderRows } = useDatabaseInstance();
   const { createPage } = usePageStore();
+  const { openPeekPanel } = useUiStore();
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
@@ -115,11 +117,7 @@ export default function TableView({ canEdit }: TableViewProps) {
               onSort={setSort}
             />
           ))}
-          {canEdit && (
-            <th className="w-10 px-2 py-1 text-left text-xs font-medium text-notion-text-secondary">
-              {/* Placeholder for actions */}
-            </th>
-          )}
+          {/* No action column — peek button overlays first cell */}
         </tr>
       </thead>
       <tbody>
@@ -136,6 +134,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                 canEdit={canEdit}
                 onCellChange={handleCellChange}
                 onRowClick={handleRowClick}
+                onPeekOpen={openPeekPanel}
               />
             ))}
           </SortableContext>
@@ -143,18 +142,30 @@ export default function TableView({ canEdit }: TableViewProps) {
           rows.map((row) => (
             <tr
               key={row.id}
-              className="border-b border-notion-border hover:bg-notion-hover cursor-pointer group"
+              className="border-b border-notion-border hover:bg-notion-hover cursor-pointer group/row"
             >
-              {properties.map((prop) => (
+              {properties.map((prop, index) => (
                 <td
                   key={prop.id}
-                  className="px-2 py-1 text-sm"
+                  className={`px-2 py-1 text-sm ${index === 0 ? 'relative' : ''}`}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).tagName === 'TD') {
                       handleRowClick(row.id);
                     }
                   }}
                 >
+                  {index === 0 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openPeekPanel(row.id); }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 px-1.5 py-0.5 text-xs text-notion-text-secondary hover:bg-gray-200 rounded bg-white/90 z-10 flex items-center gap-1"
+                      title="Open in side peek"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Open
+                    </button>
+                  )}
                   <CellRenderer
                     property={prop}
                     value={prop.type === 'title'
@@ -167,19 +178,6 @@ export default function TableView({ canEdit }: TableViewProps) {
                   />
                 </td>
               ))}
-              {canEdit && (
-                <td className="px-2 py-1">
-                  <button
-                    onClick={() => handleRowClick(row.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-notion-text-secondary hover:bg-gray-200 rounded"
-                    title="Open page"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </button>
-                </td>
-              )}
             </tr>
           ))
         )}
@@ -187,7 +185,7 @@ export default function TableView({ canEdit }: TableViewProps) {
         {/* New Row Button */}
         {canEdit && (
           <tr>
-            <td colSpan={properties.length + (canDragRows ? 2 : 1)} className="px-2 py-1">
+            <td colSpan={properties.length + (canDragRows ? 1 : 0)} className="px-2 py-1">
               <button
                 onClick={handleAddRow}
                 disabled={isAddingRow}
@@ -267,9 +265,10 @@ interface SortableRowProps {
   canEdit: boolean;
   onCellChange: (rowId: string, propertyId: string, value: PropertyValue) => void;
   onRowClick: (rowId: string) => void;
+  onPeekOpen: (rowId: string) => void;
 }
 
-function SortableRow({ row, properties, canEdit, onCellChange, onRowClick }: SortableRowProps) {
+function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPeekOpen }: SortableRowProps) {
   const {
     attributes,
     listeners,
@@ -289,12 +288,12 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick }: Sor
     <tr
       ref={setNodeRef}
       style={style}
-      className="border-b border-notion-border hover:bg-notion-hover cursor-pointer group"
+      className="border-b border-notion-border hover:bg-notion-hover cursor-pointer group/row"
     >
       {/* Drag handle */}
       <td className="w-6 px-0 py-1">
         <button
-          className="w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 cursor-grab active:cursor-grabbing text-notion-text-secondary"
+          className="w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover/row:opacity-60 hover:!opacity-100 cursor-grab active:cursor-grabbing text-notion-text-secondary"
           {...attributes}
           {...listeners}
         >
@@ -310,16 +309,28 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick }: Sor
           </svg>
         </button>
       </td>
-      {properties.map((prop) => (
+      {properties.map((prop, index) => (
         <td
           key={prop.id}
-          className="px-2 py-1 text-sm"
+          className={`px-2 py-1 text-sm ${index === 0 ? 'relative' : ''}`}
           onClick={(e) => {
             if ((e.target as HTMLElement).tagName === 'TD') {
               onRowClick(row.id);
             }
           }}
         >
+          {index === 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onPeekOpen(row.id); }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 px-1.5 py-0.5 text-xs text-notion-text-secondary hover:bg-gray-200 rounded bg-white/90 z-10 flex items-center gap-1"
+              title="Open in side peek"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Open
+            </button>
+          )}
           <CellRenderer
             property={prop}
             value={prop.type === 'title'
@@ -332,19 +343,6 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick }: Sor
           />
         </td>
       ))}
-      {canEdit && (
-        <td className="px-2 py-1">
-          <button
-            onClick={() => onRowClick(row.id)}
-            className="opacity-0 group-hover:opacity-100 p-1 text-notion-text-secondary hover:bg-gray-200 rounded"
-            title="Open page"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </button>
-        </td>
-      )}
     </tr>
   );
 }

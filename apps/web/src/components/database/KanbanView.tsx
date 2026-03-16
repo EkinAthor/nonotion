@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -21,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { DatabaseRow, PropertyDefinition, PropertyValue, SelectOption, PublicUser } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
+import { useUiStore } from '@/stores/uiStore';
 import { usersApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 import CellRenderer from './cells/CellRenderer';
@@ -86,7 +86,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     schema,
   } = useDatabaseInstance();
   const { createPage } = usePageStore();
-  const navigate = useNavigate();
+  const { openPeekPanel } = useUiStore();
   const [activeRow, setActiveRow] = useState<DatabaseRow | null>(null);
   const [userMap, setUserMap] = useState<Map<string, PublicUser>>(new Map());
 
@@ -278,7 +278,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
             cardProperties={cardProperties}
             canEdit={canEdit}
             onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
-            onRowClick={(id) => navigate(`/page/${id}`)}
+            onRowClick={(id) => openPeekPanel(id)}
             totalColumns={totalColumns}
             activeRowId={activeRow?.id ?? null}
           />
