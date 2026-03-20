@@ -266,7 +266,7 @@ function createPropertyDefinition(
 function applyFilter(
   rows: Page[],
   filterStr: string,
-  _schema?: DatabaseSchema
+  schema?: DatabaseSchema
 ): Page[] {
   // Support multiple filters separated by pipe: "propId:op:val|propId:op:val"
   const segments = filterStr.split('|').filter(Boolean);
@@ -275,20 +275,26 @@ function applyFilter(
   // Apply all segments as AND
   let result = rows;
   for (const segment of segments) {
-    result = applySingleFilter(result, segment);
+    result = applySingleFilter(result, segment, schema);
   }
   return result;
 }
 
-function applySingleFilter(rows: Page[], filterStr: string): Page[] {
+function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSchema): Page[] {
   // Format: "propertyId:operator:value"
   const [propId, operator, ...valueParts] = filterStr.split(':');
   const value = valueParts.join(':');
 
   if (!propId || !operator) return rows;
 
+  // Check if filtering on a title property — title lives on row.title, not row.properties
+  const propDef = schema?.properties.find((p) => p.id === propId);
+  const isTitleProperty = propDef?.type === 'title';
+
   return rows.filter((row) => {
-    const propValue = row.properties?.[propId];
+    const propValue = isTitleProperty
+      ? { type: 'title' as const, value: row.title }
+      : row.properties?.[propId];
 
     switch (operator) {
       case 'empty':
