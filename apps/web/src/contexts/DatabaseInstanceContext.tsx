@@ -19,6 +19,8 @@ import type {
 import { databaseApi, pagesApi } from '@/api/client';
 import { usePageStore } from '@/stores/pageStore';
 
+const PAGE_SIZE = 50;
+
 interface ViewConfig {
   viewType: DatabaseViewType;
   sort?: SortConfig;
@@ -57,6 +59,7 @@ export interface DatabaseInstanceState {
   rows: DatabaseRow[];
   total: number;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
 
   // View configuration
@@ -68,6 +71,7 @@ export interface DatabaseInstanceState {
   // Actions
   loadDatabase: (page: Page) => void;
   fetchRows: (options?: { sort?: string; filter?: string }) => Promise<void>;
+  loadMore: () => Promise<void>;
   updateSchema: (input: UpdateSchemaInput) => Promise<Page | null>;
   updateRowProperties: (rowId: string, properties: Record<string, PropertyValue>) => void;
   updateRowTitle: (rowId: string, title: string) => void;
@@ -157,6 +161,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     rows: [],
     total: 0,
     isLoading: false,
+    isLoadingMore: false,
     error: null,
     viewConfig: initialViewConfig,
     kanbanCardOrder: {},
@@ -221,10 +226,56 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
             .join('|');
         }
 
-        const result = await databaseApi.getRows(activeDatabaseId, { sort, filter });
+        const result = await databaseApi.getRows(activeDatabaseId, {
+          sort,
+          filter,
+          limit: PAGE_SIZE,
+          offset: 0,
+        });
         set({ rows: result.rows, total: result.total, isLoading: false });
       } catch (error) {
         set({ error: (error as Error).message, isLoading: false });
+      }
+    },
+
+    loadMore: async () => {
+      const { activeDatabaseId, viewConfig, rows, total, isLoadingMore } = get();
+      if (!activeDatabaseId || isLoadingMore || rows.length >= total) return;
+
+      set({ isLoadingMore: true });
+
+      try {
+        let sort: string | undefined;
+        let filter: string | undefined;
+
+        if (viewConfig.sort) {
+          sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
+        }
+
+        if (viewConfig.filters.length > 0) {
+          filter = viewConfig.filters
+            .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
+            .join('|');
+        }
+
+        const result = await databaseApi.getRows(activeDatabaseId, {
+          sort,
+          filter,
+          limit: PAGE_SIZE,
+          offset: rows.length,
+        });
+
+        // Deduplicate in case optimistic adds overlap with server results
+        const existingIds = new Set(rows.map((r) => r.id));
+        const newRows = result.rows.filter((r) => !existingIds.has(r.id));
+
+        set({
+          rows: [...rows, ...newRows],
+          total: result.total,
+          isLoadingMore: false,
+        });
+      } catch (error) {
+        set({ error: (error as Error).message, isLoadingMore: false });
       }
     },
 
@@ -638,6 +689,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         rows: [],
         total: 0,
         isLoading: false,
+        isLoadingMore: false,
         error: null,
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef

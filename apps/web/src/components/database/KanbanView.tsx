@@ -75,6 +75,9 @@ function findRowColumn(
 export default function KanbanView({ canEdit }: KanbanViewProps) {
   const {
     rows,
+    total,
+    isLoadingMore,
+    loadMore,
     viewConfig,
     activeDatabaseId,
     moveCardToColumn,
@@ -260,41 +263,61 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
   const totalColumns = columnEntries.length;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-3 p-4 min-h-[200px] overflow-x-auto">
-        {columnEntries.map((entry) => (
-          <KanbanColumn
-            key={entry.columnId}
-            columnId={entry.columnId}
-            label={entry.label}
-            option={entry.option}
-            rows={entry.rows}
-            cardProperties={cardProperties}
-            canEdit={canEdit}
-            onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
-            onRowClick={(id) => openPeekPanel(id)}
-            totalColumns={totalColumns}
-            activeRowId={activeRow?.id ?? null}
-          />
-        ))}
-      </div>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-3 p-4 min-h-[200px] overflow-x-auto">
+          {columnEntries.map((entry) => (
+            <KanbanColumn
+              key={entry.columnId}
+              columnId={entry.columnId}
+              label={entry.label}
+              option={entry.option}
+              rows={entry.rows}
+              cardProperties={cardProperties}
+              canEdit={canEdit}
+              onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
+              onRowClick={(id) => openPeekPanel(id)}
+              totalColumns={totalColumns}
+              activeRowId={activeRow?.id ?? null}
+            />
+          ))}
+        </div>
 
-      <DragOverlay>
-        {activeRow && (
-          <KanbanCardOverlay
-            row={activeRow}
-            cardProperties={cardProperties}
-            userMap={userMap}
-          />
-        )}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay>
+          {activeRow && (
+            <KanbanCardOverlay
+              row={activeRow}
+              cardProperties={cardProperties}
+              userMap={userMap}
+            />
+          )}
+        </DragOverlay>
+      </DndContext>
+
+      {rows.length < total && (
+        <div className="px-4 pb-4">
+          <button
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="flex items-center justify-center gap-2 w-full px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+          >
+            {isLoadingMore && (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+            {isLoadingMore ? 'Loading...' : 'Load more'} — Showing {rows.length} of {total}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

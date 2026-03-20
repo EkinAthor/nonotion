@@ -383,23 +383,28 @@ interface GetRowsResult {
 
 // --- Filter/Sort logic (ported from database-service.ts) ---
 
-function applyFilter(rows: Page[], filterStr: string): Page[] {
+function applyFilter(rows: Page[], filterStr: string, schema?: DatabaseSchema): Page[] {
   const segments = filterStr.split('|').filter(Boolean);
   if (segments.length === 0) return rows;
   let result = rows;
   for (const segment of segments) {
-    result = applySingleFilter(result, segment);
+    result = applySingleFilter(result, segment, schema);
   }
   return result;
 }
 
-function applySingleFilter(rows: Page[], filterStr: string): Page[] {
+function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSchema): Page[] {
   const [propId, operator, ...valueParts] = filterStr.split(':');
   const value = valueParts.join(':');
   if (!propId || !operator) return rows;
 
+  const propDef = schema?.properties.find((p) => p.id === propId);
+  const isTitleProperty = propDef?.type === 'title';
+
   return rows.filter((row) => {
-    const propValue = row.properties?.[propId];
+    const propValue = isTitleProperty
+      ? { type: 'title' as const, value: row.title }
+      : row.properties?.[propId];
 
     switch (operator) {
       case 'empty':
@@ -544,7 +549,7 @@ export const databaseApi = {
     let rows = allPages.filter((p) => p.parentId === databaseId);
 
     if (options.filter) {
-      rows = applyFilter(rows, options.filter);
+      rows = applyFilter(rows, options.filter, database.databaseSchema);
     }
     if (options.sort) {
       rows = applySort(rows, options.sort, database.databaseSchema);
