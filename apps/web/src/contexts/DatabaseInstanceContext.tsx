@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { createStore, type StoreApi } from 'zustand';
 import { useStore } from 'zustand';
 import type {
@@ -143,6 +143,25 @@ function getOrderedProperties(
   return sorted;
 }
 
+/** Shallow compare two property bags by key. */
+function propertiesChanged(
+  rowProps: Record<string, PropertyValue> | undefined,
+  pageProps: Record<string, PropertyValue> | undefined,
+): boolean {
+  if (rowProps === pageProps) return false;
+  if (!rowProps || !pageProps) return rowProps !== pageProps;
+  const keys = new Set([...Object.keys(rowProps), ...Object.keys(pageProps)]);
+  for (const k of keys) {
+    const rv = rowProps[k];
+    const pv = pageProps[k];
+    if (rv === pv) continue;
+    if (!rv || !pv) return true;
+    if (rv.type !== pv.type) return true;
+    if (JSON.stringify(rv) !== JSON.stringify(pv)) return true;
+  }
+  return false;
+}
+
 export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<DatabaseInstanceState> {
   // Load saved config from localStorage if key provided
   const savedConfig = persistenceKey ? loadViewConfig(persistenceKey) : null;
@@ -164,7 +183,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     }
   }
 
-  return createStore<DatabaseInstanceState>((set, get) => ({
+  const store = createStore<DatabaseInstanceState>((set, get) => ({
     activeDatabaseId: null,
     schema: null,
     rows: [],
@@ -719,6 +738,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       });
     },
   }));
+
+  return store;
 }
 
 const DatabaseInstanceContext = createContext<StoreApi<DatabaseInstanceState> | null>(null);
@@ -744,4 +765,48 @@ export function useDatabaseInstance<T>(selector?: (state: DatabaseInstanceState)
     throw new Error('useDatabaseInstance must be used within a DatabaseInstanceProvider');
   }
   return useStore(store, selector as (state: DatabaseInstanceState) => T);
+}
+
+/**
+ * Subscribe to pageStore changes and sync matching row data into the database
+ * instance store. Must be called inside a DatabaseInstanceProvider.
+ * Uses useEffect so React StrictMode properly manages the subscription lifecycle.
+ */
+export function useSyncWithPageStore() {
+  const store = useContext(DatabaseInstanceContext);
+
+  useEffect(() => {
+    if (!store) return;
+
+    const unsubscribe = usePageStore.subscribe((pageState) => {
+      const { rows, activeDatabaseId } = store.getState();
+      if (!activeDatabaseId || rows.length === 0) return;
+
+      let changed = false;
+      const updatedRows = rows.map((row) => {
+        const page = pageState.pages.get(row.id);
+        if (!page) return row;
+
+        const titleChanged = page.title !== row.title;
+        const iconChanged = (page.icon ?? null) !== (row.icon ?? null);
+        const propsChanged = propertiesChanged(row.properties, page.properties);
+
+        if (!titleChanged && !iconChanged && !propsChanged) return row;
+
+        changed = true;
+        return {
+          ...row,
+          ...(titleChanged ? { title: page.title } : {}),
+          ...(iconChanged ? { icon: page.icon } : {}),
+          ...(propsChanged ? { properties: { ...row.properties, ...page.properties } } : {}),
+        };
+      });
+
+      if (changed) {
+        store.setState({ rows: updatedRows });
+      }
+    });
+
+    return unsubscribe;
+  }, [store]);
 }
