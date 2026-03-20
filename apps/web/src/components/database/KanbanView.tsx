@@ -50,6 +50,7 @@ interface KanbanViewProps {
 }
 
 const NO_VALUE_COLUMN_ID = '__no_value__';
+const KANBAN_COLUMN_PAGE_SIZE = 30;
 
 // Minimum column width so 4 columns fit in the database content area.
 const MIN_COLUMN_WIDTH = 250;
@@ -75,9 +76,6 @@ function findRowColumn(
 export default function KanbanView({ canEdit }: KanbanViewProps) {
   const {
     rows,
-    total,
-    isLoadingMore,
-    loadMore,
     viewConfig,
     activeDatabaseId,
     moveCardToColumn,
@@ -87,6 +85,8 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     addRow,
     getVisibleProperties,
     schema,
+    kanbanColumnLimits,
+    loadMoreInColumn,
   } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
@@ -126,12 +126,13 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
   }
   const showNoValue = !hiddenOptionIds.has(NO_VALUE_COLUMN_ID);
 
-  // Build ordered column entries
+  // Build ordered column entries with per-column slicing
   const columnEntries: Array<{
     columnId: string;
     label: string;
     option?: SelectOption;
     rows: DatabaseRow[];
+    totalCount: number;
   }> = [];
 
   const rawColumnMap = new Map<string, DatabaseRow[]>();
@@ -149,17 +150,19 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     }
   }
 
-  // Apply saved order to each column
+  // Apply saved order and per-column slicing
   if (showNoValue && groupByPropertyId) {
     const key = columnKey(groupByPropertyId, null);
     const ordered = getOrderedColumnRows(key, rawColumnMap.get(NO_VALUE_COLUMN_ID) ?? []);
-    columnEntries.push({ columnId: NO_VALUE_COLUMN_ID, label: 'No Value', rows: ordered });
+    const limit = kanbanColumnLimits[key] ?? KANBAN_COLUMN_PAGE_SIZE;
+    columnEntries.push({ columnId: NO_VALUE_COLUMN_ID, label: 'No Value', rows: ordered.slice(0, limit), totalCount: ordered.length });
   }
   for (const opt of visibleOptions) {
     if (!groupByPropertyId) continue;
     const key = columnKey(groupByPropertyId, opt.id);
     const ordered = getOrderedColumnRows(key, rawColumnMap.get(opt.id) ?? []);
-    columnEntries.push({ columnId: opt.id, label: opt.name, option: opt, rows: ordered });
+    const limit = kanbanColumnLimits[key] ?? KANBAN_COLUMN_PAGE_SIZE;
+    columnEntries.push({ columnId: opt.id, label: opt.name, option: opt, rows: ordered.slice(0, limit), totalCount: ordered.length });
   }
 
   // Visible properties excluding title and groupBy
@@ -279,10 +282,15 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
               label={entry.label}
               option={entry.option}
               rows={entry.rows}
+              totalCount={entry.totalCount}
               cardProperties={cardProperties}
               canEdit={canEdit}
               onAddRow={() => handleAddRow(entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId)}
               onRowClick={(id) => openPeekPanel(id)}
+              onLoadMore={() => {
+                const key = columnKey(groupByPropertyId!, entry.columnId === NO_VALUE_COLUMN_ID ? null : entry.columnId);
+                loadMoreInColumn(key);
+              }}
               totalColumns={totalColumns}
               activeRowId={activeRow?.id ?? null}
             />
@@ -299,24 +307,6 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
           )}
         </DragOverlay>
       </DndContext>
-
-      {rows.length < total && (
-        <div className="px-4 pb-4">
-          <button
-            onClick={loadMore}
-            disabled={isLoadingMore}
-            className="flex items-center justify-center gap-2 w-full px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
-          >
-            {isLoadingMore && (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
-            {isLoadingMore ? 'Loading...' : 'Load more'} — Showing {rows.length} of {total}
-          </button>
-        </div>
-      )}
     </>
   );
 }
@@ -326,15 +316,17 @@ interface KanbanColumnProps {
   label: string;
   option?: SelectOption;
   rows: DatabaseRow[];
+  totalCount: number;
   cardProperties: PropertyDefinition[];
   canEdit: boolean;
   onAddRow: () => void;
   onRowClick: (id: string) => void;
+  onLoadMore: () => void;
   totalColumns: number;
   activeRowId: string | null;
 }
 
-function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, onAddRow, onRowClick, totalColumns, activeRowId }: KanbanColumnProps) {
+function KanbanColumn({ columnId, label, option, rows, totalCount, cardProperties, canEdit, onAddRow, onRowClick, onLoadMore, totalColumns, activeRowId }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `column:${columnId}` });
   const [isAdding, setIsAdding] = useState(false);
 
@@ -370,7 +362,7 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
         ) : (
           <span className="text-xs font-medium text-notion-text-secondary truncate">{label}</span>
         )}
-        <span className="text-xs text-notion-text-secondary flex-shrink-0">{rows.length}</span>
+        <span className="text-xs text-notion-text-secondary flex-shrink-0">{totalCount}</span>
       </div>
 
       {/* Cards with sortable context */}
@@ -387,6 +379,16 @@ function KanbanColumn({ columnId, label, option, rows, cardProperties, canEdit, 
             />
           ))}
         </SortableContext>
+
+        {/* Per-column load more */}
+        {totalCount > rows.length && (
+          <button
+            onClick={onLoadMore}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          >
+            Load more — {rows.length} of {totalCount}
+          </button>
+        )}
 
         {/* Add new row */}
         {canEdit && (

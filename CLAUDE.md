@@ -163,12 +163,21 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 Types: `DatabaseViewType`, `KanbanConfig` in `packages/shared/src/types/database.ts`. Zod: `databaseViewTypeSchema`, `kanbanConfigSchema` in `packages/shared/src/schemas/database.ts`.
 
 ### 16. Database Pagination
-Backend `getRows` supports `limit`/`offset` params. Frontend fetches in pages of `PAGE_SIZE = 50` rows.
+Backend `getRows` supports `limit`/`offset` params. Table and kanban views paginate differently.
 
-- **Initial load**: `fetchRows()` sends `limit: 50, offset: 0`. Resets rows on each call (filter/sort change).
-- **Load more**: `loadMore()` sends `offset: rows.length` with the same sort/filter. Appends new rows with dedup by ID (handles optimistic adds). Guarded by `isLoadingMore` and `rows.length >= total`.
-- **UI**: Both `TableView` and `KanbanView` show a "Load more — Showing X of Y" button when `rows.length < total`.
-- **Filter/sort interaction**: Changing filters or sort resets to page 1 (via `fetchRows()`). Load more continues from the current offset with the active filter/sort.
+**Table view** (global, offset-based):
+- `fetchRows()` sends `limit: PAGE_SIZE (50), offset: 0`. Resets rows on each call (filter/sort change).
+- `loadMore()` sends `offset: rows.length` with the same sort/filter. Appends new rows with dedup by ID.
+- UI shows a global "Load more — Showing X of Y" button when `rows.length < total`.
+
+**Kanban view** (per-column, client-side slicing):
+- `fetchRows()` sends `limit: KANBAN_FETCH_LIMIT (10000)` to fetch all rows at once.
+- Each column is sliced to `KANBAN_COLUMN_PAGE_SIZE = 30` items. `kanbanColumnLimits: Record<string, number>` in `DatabaseInstanceContext` tracks per-column display limits.
+- `loadMoreInColumn(columnKey)` bumps a column's display limit by 30. Each column shows its own "Load more — X of Y" button when sliced rows < total column rows.
+- Column header count shows the real total (not the sliced count).
+- `kanbanColumnLimits` resets to `{}` on: filter change, sort change, view type switch, group-by change, revert to default, clear database.
+
+**Shared**: Changing filters or sort resets pagination (via `fetchRows()`). Switching view type triggers a re-fetch with the appropriate limit.
 
 ### 17. Title Property Filter
 `applySingleFilter()` (backend + demo-client) checks if the filter targets a title-type property via `schema`. If so, constructs `propValue` from `row.title` instead of `row.properties[propId]`. This mirrors the existing title handling in `applySort()`.
