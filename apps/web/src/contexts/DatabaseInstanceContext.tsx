@@ -70,6 +70,9 @@ export interface DatabaseInstanceState {
   // Kanban per-column display limits (client-side pagination)
   kanbanColumnLimits: Record<string, number>;
 
+  // IDs of rows added during this session (for kanban pagination visibility)
+  newlyAddedRowIds: Set<string>;
+
   // Kanban card order (server-persisted)
   kanbanCardOrder: KanbanCardOrder;
 
@@ -171,6 +174,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     error: null,
     viewConfig: initialViewConfig,
     kanbanColumnLimits: {},
+    newlyAddedRowIds: new Set(),
     kanbanCardOrder: {},
 
     loadDatabase: (page) => {
@@ -218,7 +222,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       if (!activeDatabaseId) return;
 
       const isKanban = viewConfig.viewType === 'kanban';
-      set({ isLoading: true, error: null, ...(isKanban ? { kanbanColumnLimits: {} } : {}) });
+      set({ isLoading: true, error: null, ...(isKanban ? { kanbanColumnLimits: {}, newlyAddedRowIds: new Set() } : {}) });
 
       try {
         let sort = options.sort;
@@ -388,6 +392,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       set((state) => ({
         rows: [...state.rows, row],
         total: state.total + 1,
+        newlyAddedRowIds: new Set(state.newlyAddedRowIds).add(row.id),
       }));
     },
 
@@ -421,14 +426,14 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
     setSort: (sort) => {
       const newConfig = { ...get().viewConfig, sort };
-      set({ viewConfig: newConfig, kanbanColumnLimits: {} });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
 
     setFilters: (filters) => {
       const newConfig = { ...get().viewConfig, filters };
-      set({ viewConfig: newConfig, kanbanColumnLimits: {} });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -475,7 +480,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       }
 
       const newConfig = { ...viewConfig, viewType, kanban };
-      set({ viewConfig: newConfig, kanbanColumnLimits: {} });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -484,7 +489,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const { viewConfig } = get();
       const kanban: KanbanConfig = { groupByPropertyId: propertyId, hiddenOptionIds: [] };
       const newConfig = { ...viewConfig, kanban };
-      set({ viewConfig: newConfig, kanbanColumnLimits: {} });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -669,7 +674,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         propertyOrder: def.propertyOrder,
         kanban: def.kanban,
       };
-      set({ viewConfig: newConfig, kanbanColumnLimits: {} });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -708,6 +713,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         isLoadingMore: false,
         error: null,
         kanbanColumnLimits: {},
+        newlyAddedRowIds: new Set(),
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef
       });

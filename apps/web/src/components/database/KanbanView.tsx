@@ -87,6 +87,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     schema,
     kanbanColumnLimits,
     loadMoreInColumn,
+    newlyAddedRowIds,
   } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
@@ -155,14 +156,20 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     const key = columnKey(groupByPropertyId, null);
     const ordered = getOrderedColumnRows(key, rawColumnMap.get(NO_VALUE_COLUMN_ID) ?? []);
     const limit = kanbanColumnLimits[key] ?? KANBAN_COLUMN_PAGE_SIZE;
-    columnEntries.push({ columnId: NO_VALUE_COLUMN_ID, label: 'No Value', rows: ordered.slice(0, limit), totalCount: ordered.length });
+    const sliced = ordered.slice(0, limit);
+    const slicedIds = new Set(sliced.map((r) => r.id));
+    const extraNewRows = ordered.filter((r) => !slicedIds.has(r.id) && newlyAddedRowIds.has(r.id));
+    columnEntries.push({ columnId: NO_VALUE_COLUMN_ID, label: 'No Value', rows: [...sliced, ...extraNewRows], totalCount: ordered.length });
   }
   for (const opt of visibleOptions) {
     if (!groupByPropertyId) continue;
     const key = columnKey(groupByPropertyId, opt.id);
     const ordered = getOrderedColumnRows(key, rawColumnMap.get(opt.id) ?? []);
     const limit = kanbanColumnLimits[key] ?? KANBAN_COLUMN_PAGE_SIZE;
-    columnEntries.push({ columnId: opt.id, label: opt.name, option: opt, rows: ordered.slice(0, limit), totalCount: ordered.length });
+    const sliced = ordered.slice(0, limit);
+    const slicedIds = new Set(sliced.map((r) => r.id));
+    const extraNewRows = ordered.filter((r) => !slicedIds.has(r.id) && newlyAddedRowIds.has(r.id));
+    columnEntries.push({ columnId: opt.id, label: opt.name, option: opt, rows: [...sliced, ...extraNewRows], totalCount: ordered.length });
   }
 
   // Visible properties excluding title and groupBy
@@ -380,16 +387,6 @@ function KanbanColumn({ columnId, label, option, rows, totalCount, cardPropertie
           ))}
         </SortableContext>
 
-        {/* Per-column load more */}
-        {totalCount > rows.length && (
-          <button
-            onClick={onLoadMore}
-            className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
-          >
-            Load more — {rows.length} of {totalCount}
-          </button>
-        )}
-
         {/* Add new row */}
         {canEdit && (
           <button
@@ -408,6 +405,16 @@ function KanbanColumn({ columnId, label, option, rows, totalCount, cardPropertie
               </svg>
             )}
             New
+          </button>
+        )}
+
+        {/* Per-column load more */}
+        {totalCount > rows.length && (
+          <button
+            onClick={onLoadMore}
+            className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-notion-text-secondary hover:bg-white rounded transition-colors"
+          >
+            {rows.length} of {totalCount} - Load more
           </button>
         )}
       </div>
