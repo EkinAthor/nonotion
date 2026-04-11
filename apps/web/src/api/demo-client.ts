@@ -126,7 +126,7 @@ export const usersApi = {
 
 // ============ SHARES API ============
 
-interface ShareWithUser extends PagePermission {
+export interface ShareWithUser extends PagePermission {
   user: PublicUser | null;
 }
 
@@ -369,14 +369,14 @@ export const blocksApi = {
 
 // ============ DATABASE API ============
 
-interface GetRowsOptions {
+export interface GetRowsOptions {
   sort?: string;
   filter?: string;
   limit?: number;
   offset?: number;
 }
 
-interface GetRowsResult {
+export interface GetRowsResult {
   rows: DatabaseRow[];
   total: number;
 }
