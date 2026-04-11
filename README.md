@@ -498,6 +498,19 @@ Nonotion uses **modern Supabase primitives** for authentication with Realtime: p
 
    > **Note:** The exact `realtime.topic()` format may vary. If subscriptions fail, check the Supabase Realtime logs (Dashboard → Logs → Realtime) to verify the topic format and adjust `split_part` indices accordingly.
 
+6. **If RLS is enabled on `public.permissions`**, also run this policy. The realtime authorization policy above does an `EXISTS (SELECT FROM public.permissions ...)` check that runs as the `authenticated` role and is itself subject to RLS. Without this policy the EXISTS subquery returns nothing and channel subscriptions are denied for all non-owner users:
+
+   ```sql
+   -- Allow authenticated users to read their own permission rows.
+   -- Required for the realtime authorization policy to verify channel access
+   -- when RLS is enabled on public.permissions.
+   CREATE POLICY "authenticated_read_own_permissions" ON public.permissions
+     FOR SELECT TO authenticated
+     USING (user_id = (auth.jwt() ->> 'sub')::text);
+   ```
+
+   This is restrictive — users can only see their own permission rows, not anyone else's. The Nonotion REST API is unaffected because it connects to Postgres as a privileged role that bypasses RLS; only the realtime authorization needs this policy.
+
 ### Security Notes
 
 - `SUPABASE_SECRET_KEY` is **backend-only** — never exposed to the frontend. Used by the backend broadcaster to send Realtime messages.
