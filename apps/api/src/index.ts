@@ -92,7 +92,7 @@ const corsOrigins = process.env.CORS_ORIGINS
 await fastify.register(cors, {
   origin: corsOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-Id'],
   credentials: true,
   exposedHeaders: ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'],
 });
