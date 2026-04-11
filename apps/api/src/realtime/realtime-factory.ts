@@ -8,7 +8,7 @@ export async function initializeBroadcaster(config: RealtimeConfig): Promise<Rea
   if (config.enabled) {
     // Dynamic import to avoid loading @supabase/supabase-js when realtime is disabled
     const { SupabaseBroadcaster } = await import('./supabase-broadcaster.js');
-    broadcasterInstance = new SupabaseBroadcaster(config.supabaseUrl, config.supabaseServiceKey);
+    broadcasterInstance = new SupabaseBroadcaster(config.supabaseUrl, config.supabaseSecretKey);
     console.log('Realtime broadcasting enabled (Supabase)');
   } else {
     broadcasterInstance = new NoopBroadcaster();

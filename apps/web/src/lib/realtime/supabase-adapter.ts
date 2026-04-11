@@ -17,8 +17,8 @@ export class SupabaseAdapter implements RealtimeAdapter {
   private databaseEventHandler: ((event: string, payload: Record<string, unknown>) => void) | null = null;
   private presenceSyncHandler: ((users: PresenceUser[]) => void) | null = null;
 
-  connect(config: { supabaseUrl: string; supabaseAnonKey: string; token: string }): void {
-    this.supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+  connect(config: { supabaseUrl: string; supabasePublishableKey: string; token: string }): void {
+    this.supabase = createClient(config.supabaseUrl, config.supabasePublishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     this.supabase.realtime.setAuth(config.token);

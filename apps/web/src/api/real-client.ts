@@ -371,7 +371,7 @@ export interface RealtimeTokenResponse {
   token?: string;
   expiresAt?: string;
   supabaseUrl?: string;
-  supabaseAnonKey?: string;
+  supabasePublishableKey?: string;
 }
 
 export const realtimeApi = {

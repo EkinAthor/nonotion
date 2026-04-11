@@ -10,8 +10,8 @@ export class SupabaseBroadcaster implements RealtimeBroadcaster {
   private supabase: SupabaseClient;
   private channels = new Map<string, RealtimeChannel>();
 
-  constructor(supabaseUrl: string, supabaseServiceKey: string) {
-    this.supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  constructor(supabaseUrl: string, supabaseSecretKey: string) {
+    this.supabase = createClient(supabaseUrl, supabaseSecretKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       realtime: { heartbeatIntervalMs: 30000 },
     });

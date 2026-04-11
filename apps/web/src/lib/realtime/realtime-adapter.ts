@@ -6,7 +6,7 @@ import type { PresenceUser } from '@nonotion/shared';
  */
 export interface RealtimeAdapter {
   /** Authenticate with the realtime service. */
-  connect(config: { supabaseUrl: string; supabaseAnonKey: string; token: string }): void;
+  connect(config: { supabaseUrl: string; supabasePublishableKey: string; token: string }): void;
 
   /** Refresh the auth token without reconnecting. */
   refreshToken(token: string): void;

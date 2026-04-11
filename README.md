@@ -221,9 +221,10 @@ The script is idempotent — safe to run multiple times. Existing data is skippe
 | `RATE_LIMIT_SEARCH_WINDOW_MINUTES` | Search: window duration in minutes | `1` |
 | `REALTIME_ENABLED` | Enable real-time collaboration (requires Supabase) | `false` |
 | `SUPABASE_URL` | Supabase project URL | - |
-| `SUPABASE_ANON_KEY` | Supabase anon/public key | - |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (backend-only) | - |
-| `SUPABASE_JWT_SECRET` | Supabase JWT secret (backend-only) | - |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable API key (`sb_publishable_...`) | - |
+| `SUPABASE_SECRET_KEY` | Supabase secret API key (`sb_secret_...`, backend-only) | - |
+| `SUPABASE_JWT_PRIVATE_KEY` | ES256 private key (PEM, backend-only) | - |
+| `SUPABASE_JWT_KID` | Key ID from Supabase JWT Signing Keys dashboard | - |
 
 ---
 
@@ -405,22 +406,48 @@ Nonotion supports optional real-time collaboration powered by Supabase Realtime.
 
 ### Setup
 
-1. In your Supabase dashboard, go to **Settings > API** and copy:
-   - **Project URL** → `SUPABASE_URL`
-   - **anon/public key** → `SUPABASE_ANON_KEY`
-   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY`
-   - **JWT Secret** → `SUPABASE_JWT_SECRET`
+Nonotion uses **modern Supabase primitives** for authentication with Realtime: publishable / secret API keys and an ES256 JWT signing key. These replace the legacy anon, service_role, and HS256 JWT secret values. Legacy keys are not supported.
 
-2. Set environment variables:
+1. **Get API keys** — In your Supabase dashboard, go to **Settings > API > API Keys** and copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **Publishable key** (format: `sb_publishable_...`) → `SUPABASE_PUBLISHABLE_KEY`
+   - **Secret key** (format: `sb_secret_...`) → `SUPABASE_SECRET_KEY`
+
+   If these keys don't exist yet, click "Create new" in the API Keys section to generate them.
+
+2. **Generate an ES256 JWT signing key** — run the helper script included in this repo:
+   ```bash
+   node apps/api/scripts/generate-jwt-signing-key.mjs
+   ```
+
+   The script will:
+   - Generate an ES256 (P-256 elliptic curve) key pair using Node.js crypto
+   - Print the private key as a **JWK (JSON Web Key)** — the format Supabase expects when importing
+   - Print a compact single-line JWK (to paste into `.env` as `SUPABASE_JWT_PRIVATE_KEY`)
+   - Walk you through the Supabase dashboard import + rotate flow
+
+   The script is cross-platform — works on Windows, macOS, and Linux with no `openssl` required.
+
+3. **Import the private key to Supabase**:
+   - Dashboard → **Settings > Auth > JWT Signing Keys**
+   - Click **Import existing private key**, choose algorithm **ES256**, paste the pretty-printed JWK JSON, save
+   - Copy the generated **Key ID (kid)** that Supabase displays
+   - Click **Rotate keys** to make this the current signing key
+   - The old HS256 legacy key becomes "previously used" — leave it in that state for at least 1 hour (the token TTL) before revoking, so existing sessions don't get invalidated
+
+4. **Set environment variables:**
    ```env
    REALTIME_ENABLED=true
    SUPABASE_URL=https://xxxxx.supabase.co
-   SUPABASE_ANON_KEY=eyJ...
-   SUPABASE_SERVICE_ROLE_KEY=eyJ...
-   SUPABASE_JWT_SECRET=your-jwt-secret
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   SUPABASE_SECRET_KEY=sb_secret_...
+   SUPABASE_JWT_PRIVATE_KEY='{"kty":"EC","crv":"P-256","x":"...","y":"...","d":"...","alg":"ES256","use":"sig"}'
+   SUPABASE_JWT_KID=<the kid from step 3>
    ```
 
-3. **Run the Realtime Authorization SQL** in Supabase SQL Editor (Settings > SQL Editor). This policy restricts channel access to users with the right permissions. `FOR ALL` with both `USING` (receive broadcasts) and `WITH CHECK` (send presence track) is required — presence tracking needs INSERT access:
+   > **Important:** `SUPABASE_JWT_PRIVATE_KEY` is a **compact JSON string** (JWK format). Wrap it in **single quotes** in `.env` because the JSON itself uses double quotes. The generator script prints a ready-to-paste line.
+
+5. **Run the Realtime Authorization SQL** in Supabase SQL Editor (Settings > SQL Editor). This policy restricts channel access to users with the right permissions. `FOR ALL` with both `USING` (receive broadcasts) and `WITH CHECK` (send presence track) is required — presence tracking needs INSERT access:
 
    ```sql
    CREATE POLICY "authorize_realtime_channels" ON realtime.messages
@@ -473,11 +500,13 @@ Nonotion supports optional real-time collaboration powered by Supabase Realtime.
 
 ### Security Notes
 
-- `SUPABASE_SERVICE_ROLE_KEY` is **backend-only** — never exposed to the frontend
-- `SUPABASE_JWT_SECRET` is used to sign short-lived Realtime auth tokens — backend-only
-- All channels use **private mode** — Supabase enforces per-page authorization via the RLS policy above
-- The backend is the sole broadcaster — clients only receive events, never send to channels
-- Workspace owners bypass per-page checks via the `is_owner` JWT claim
+- `SUPABASE_SECRET_KEY` is **backend-only** — never exposed to the frontend. Used by the backend broadcaster to send Realtime messages.
+- `SUPABASE_JWT_PRIVATE_KEY` is the ES256 private key used to sign short-lived Realtime auth tokens — backend-only. Supabase verifies these tokens using the corresponding public key (via the imported JWT signing key).
+- `SUPABASE_PUBLISHABLE_KEY` is returned to the frontend at runtime via `/api/realtime/token`, never baked into the frontend bundle.
+- All channels use **private mode** — Supabase enforces per-page authorization via the RLS policy above.
+- The backend is the sole broadcaster — clients only receive events, never send to channels.
+- Workspace owners bypass per-page checks via the `is_owner` JWT claim.
+- **Never commit your ES256 private key PEM file** to git. If you generated it with `--out`, add it to `.gitignore`.
 
 ### Disabling
 

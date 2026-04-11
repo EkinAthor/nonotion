@@ -45,14 +45,14 @@ class RealtimeManager {
     try {
       const tokenData = await realtimeApi.getToken();
       if (!tokenData.enabled) return;
-      if (!('token' in tokenData) || !tokenData.token || !tokenData.supabaseUrl || !tokenData.supabaseAnonKey) {
+      if (!('token' in tokenData) || !tokenData.token || !tokenData.supabaseUrl || !tokenData.supabasePublishableKey) {
         return;
       }
 
       this.adapter = new SupabaseAdapter();
       this.adapter.connect({
         supabaseUrl: tokenData.supabaseUrl,
-        supabaseAnonKey: tokenData.supabaseAnonKey,
+        supabasePublishableKey: tokenData.supabasePublishableKey,
         token: tokenData.token,
       });
 

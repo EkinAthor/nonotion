@@ -3,9 +3,10 @@
 export interface RealtimeConfig {
   enabled: boolean;
   supabaseUrl: string;
-  supabaseServiceKey: string;
-  supabaseAnonKey: string;
-  supabaseJwtSecret: string;
+  supabaseSecretKey: string;        // sb_secret_* (replaces service_role)
+  supabasePublishableKey: string;    // sb_publishable_* (replaces anon)
+  supabaseJwtPrivateKey: string;     // ES256 private key in PKCS#8 PEM format
+  supabaseJwtKid: string;            // Key ID from Supabase dashboard
 }
 
 // ─── Loader ─────────────────────────────────────────────────────────────────
@@ -13,18 +14,41 @@ export interface RealtimeConfig {
 export function loadRealtimeConfig(): RealtimeConfig {
   const enabled = process.env.REALTIME_ENABLED === 'true';
   const supabaseUrl = process.env.SUPABASE_URL ?? '';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? '';
-  const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET ?? '';
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY ?? '';
+  const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY ?? '';
+  // JWK JSON string — parsed by the token route via JSON.parse + importJWK.
+  const supabaseJwtPrivateKey = process.env.SUPABASE_JWT_PRIVATE_KEY ?? '';
+  const supabaseJwtKid = process.env.SUPABASE_JWT_KID ?? '';
 
-  if (enabled && (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey || !supabaseJwtSecret)) {
+  if (
+    enabled &&
+    (!supabaseUrl ||
+      !supabaseSecretKey ||
+      !supabasePublishableKey ||
+      !supabaseJwtPrivateKey ||
+      !supabaseJwtKid)
+  ) {
     console.warn(
       'REALTIME_ENABLED=true but missing required Supabase env vars ' +
-      '(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, SUPABASE_JWT_SECRET). ' +
-      'Realtime will be disabled.',
+        '(SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY, ' +
+        'SUPABASE_JWT_PRIVATE_KEY, SUPABASE_JWT_KID). Realtime will be disabled.',
     );
-    return { enabled: false, supabaseUrl, supabaseServiceKey, supabaseAnonKey, supabaseJwtSecret };
+    return {
+      enabled: false,
+      supabaseUrl,
+      supabaseSecretKey,
+      supabasePublishableKey,
+      supabaseJwtPrivateKey,
+      supabaseJwtKid,
+    };
   }
 
-  return { enabled, supabaseUrl, supabaseServiceKey, supabaseAnonKey, supabaseJwtSecret };
+  return {
+    enabled,
+    supabaseUrl,
+    supabaseSecretKey,
+    supabasePublishableKey,
+    supabaseJwtPrivateKey,
+    supabaseJwtKid,
+  };
 }

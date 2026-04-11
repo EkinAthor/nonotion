@@ -187,7 +187,7 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 
 - **Backend Broadcaster Adapter**: `apps/api/src/realtime/` — `RealtimeBroadcaster` interface with `SupabaseBroadcaster` (uses service role key) and `NoopBroadcaster` implementations. Factory in `realtime-factory.ts` (singleton pattern matching storage-factory). Config in `apps/api/src/config/realtime.ts`.
 - **Backend Broadcasting**: Routes (`blocks.ts`, `pages.ts`, `databases.ts`) fire-and-forget broadcast after successful writes. Services are NOT modified — broadcasting happens at the route level to keep services storage-agnostic.
-- **Token Endpoint**: `GET /api/realtime/token` — issues short-lived JWT (1h) signed with `SUPABASE_JWT_SECRET`. Contains `sub` (userId), `role: 'authenticated'`, `is_owner` (boolean). Also returns `supabaseUrl` and `supabaseAnonKey` so frontend doesn't need its own env vars.
+- **Token Endpoint**: `GET /api/realtime/token` — issues short-lived JWT (1h) signed with **ES256** using `SUPABASE_JWT_PRIVATE_KEY` (JWK format — JSON Web Key string). JWT header includes `alg: 'ES256'` and `kid` (matching the signing key imported into Supabase). Payload contains `sub` (userId), `role: 'authenticated'`, `is_owner` (boolean). The private key is parsed once at module scope via `importJWK()` and cached. Also returns `supabaseUrl` and `supabasePublishableKey` so the frontend doesn't need its own env vars.
 - **Frontend Adapter**: `apps/web/src/lib/realtime/` — `RealtimeAdapter` interface with `SupabaseAdapter` implementation. All channels use `{ config: { private: true } }` for RLS-based authorization.
 - **RealtimeManager**: Singleton in `realtime-manager.ts`, lives outside React. Calls `getState()` on Zustand stores. Handles: init, token refresh (50min timer), page/database join/leave, active block tracking (debounced 300ms), self-echo filtering, visibility change re-fetch.
 - **Presence Store**: `apps/web/src/stores/presenceStore.ts` — `pageUsers` (who's on the page) and derived `activeBlockEditors` (Map<blockId, PresenceUser>).
@@ -195,7 +195,8 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 - **Presence UI**: `PresenceAvatarBar` (avatar circles in page top bar), `BlockEditIndicator` (colored left border + name tag on blocks being edited by others). Soft lock: visual only, doesn't prevent editing.
 - **Channel structure**: `page:{pageId}` (broadcast + presence), `database:{databaseId}` (broadcast only). Private channels with RLS policy on `realtime.messages`.
 - **Demo mode**: `isRealtimeEnabled()` returns `false` when `IS_DEMO_MODE` is true. Zero impact.
-- **Env vars**: `REALTIME_ENABLED`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`.
+- **Env vars**: `REALTIME_ENABLED`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_PRIVATE_KEY`, `SUPABASE_JWT_KID`. Uses modern Supabase primitives (publishable/secret API keys + ES256 JWT signing key) — legacy anon/service_role/HS256 not supported.
+- **Key generator**: `apps/api/scripts/generate-jwt-signing-key.mjs` is a Node.js helper that generates an ES256 key pair using `jose.generateKeyPair()`, exports PKCS#8 PEM, and walks the user through the Supabase import + rotate flow. Cross-platform, no openssl dependency.
 
 ## Critical Files
 
