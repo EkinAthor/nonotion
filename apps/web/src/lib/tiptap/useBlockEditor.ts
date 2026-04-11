@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { useEditor, Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
+import { getRealtimeManager } from '@/lib/realtime';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DOMSerializer } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
@@ -698,6 +699,12 @@ export function useBlockEditor({
           });
         }
       }
+    },
+    onFocus: () => {
+      getRealtimeManager()?.updateActiveBlock(block.id);
+    },
+    onBlur: () => {
+      getRealtimeManager()?.updateActiveBlock(null);
     },
     editorProps: {
       attributes: {

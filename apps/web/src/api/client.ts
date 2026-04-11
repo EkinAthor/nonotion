@@ -14,5 +14,6 @@ export const databaseApi = client.databaseApi;
 export const filesApi = client.filesApi;
 export const searchApi = client.searchApi;
 export const importApi = client.importApi;
+export const realtimeApi = client.realtimeApi;
 
-export type { SearchResult, ShareWithUser, GetRowsOptions, GetRowsResult } from './real-client';
+export type { SearchResult, ShareWithUser, GetRowsOptions, GetRowsResult, RealtimeTokenResponse } from './real-client';

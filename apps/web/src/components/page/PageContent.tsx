@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { usePageStore } from '@/stores/pageStore';
 import { useBlockStore } from '@/stores/blockStore';
 import { pagesApi } from '@/api/client';
+import { getRealtimeManager } from '@/lib/realtime';
+import { usePresenceStore } from '@/stores/presenceStore';
+import PresenceAvatarBar from '@/components/presence/PresenceAvatarBar';
 import PageHeader from './PageHeader';
 import PageBreadcrumb from './PageBreadcrumb';
 import PageProperties from './PageProperties';
@@ -24,6 +27,7 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
   const [permission, setPermission] = useState<PermissionLevel | null>(null);
   const [permissionLoading, setPermissionLoading] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
+  const realtimeConnected = usePresenceStore((s) => s.connected);
 
   const page = pages.get(pageId);
   const blocks = getBlocksForPage(pageId);
@@ -40,9 +44,13 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
       .catch(() => setPermission(null))
       .finally(() => setPermissionLoading(false));
 
+    // Join realtime page channel
+    getRealtimeManager()?.joinPage(pageId);
+
     return () => {
       setPermission(null);
       setPermissionLoading(true);
+      getRealtimeManager()?.leavePage();
     };
   }, [pageId, fetchBlocks, isDatabase]);
 
@@ -89,7 +97,8 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
           ) : (
             <PageBreadcrumb pageId={page.id} />
           )}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            {realtimeConnected && <PresenceAvatarBar />}
             <button
               onClick={handleToggleStar}
               className={`p-1.5 rounded hover:bg-notion-hover ${page.isStarred ? 'text-yellow-500' : 'text-notion-text-secondary'}`}

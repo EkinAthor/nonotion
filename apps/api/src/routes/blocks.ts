@@ -3,6 +3,7 @@ import { createBlockInputSchema, updateBlockInputSchema, reorderBlocksInputSchem
 import * as blockService from '../services/block-service.js';
 import * as permissionService from '../services/permission-service.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
+import { getBroadcaster } from '../realtime/realtime-factory.js';
 
 export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
   // Add auth, password change check, and approval check to all routes
@@ -44,6 +45,9 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const block = await blockService.createBlock(parsed.data);
+    getBroadcaster().broadcastToPage(request.params.pageId, 'block_create', {
+      block, pageId: request.params.pageId, userId: request.userId, clientId: request.clientId,
+    }).catch(err => fastify.log.warn(err, 'Failed to broadcast block_create'));
     return reply.status(201).send({ data: block, success: true });
   });
 
@@ -81,6 +85,9 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
         success: false,
       });
     }
+    getBroadcaster().broadcastToPage(existingBlock.pageId, 'block_update', {
+      blockId: request.params.id, block, pageId: existingBlock.pageId, userId: request.userId, clientId: request.clientId,
+    }).catch(err => fastify.log.warn(err, 'Failed to broadcast block_update'));
     return reply.send({ data: block, success: true });
   });
 
@@ -110,6 +117,9 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
         success: false,
       });
     }
+    getBroadcaster().broadcastToPage(existingBlock.pageId, 'block_delete', {
+      blockId: request.params.id, pageId: existingBlock.pageId, userId: request.userId, clientId: request.clientId,
+    }).catch(err => fastify.log.warn(err, 'Failed to broadcast block_delete'));
     return reply.status(204).send();
   });
 
@@ -133,6 +143,9 @@ export async function blocksRoutes(fastify: FastifyInstance): Promise<void> {
 
     try {
       const blocks = await blockService.reorderBlocks(request.params.pageId, parsed.data);
+      getBroadcaster().broadcastToPage(request.params.pageId, 'block_reorder', {
+        pageId: request.params.pageId, blocks, userId: request.userId, clientId: request.clientId,
+      }).catch(err => fastify.log.warn(err, 'Failed to broadcast block_reorder'));
       return reply.send({ data: blocks, success: true });
     } catch (error) {
       return reply.status(400).send({

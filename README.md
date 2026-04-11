@@ -28,6 +28,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Configurable storage (JSON/SQLite or PostgreSQL)
 - Demo mode for static hosting without a backend (all data in localStorage)
+- Real-time collaboration with user presence (optional, Supabase-powered)
 
 <p align="center">
   <img src="docs/screenshots/nonotion-database.png" width="49%" />
@@ -37,7 +38,6 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 ## Not in scope
 
 This is not full notion clone. Some of the features are not available:
-- User presence/sync - last edit wins, you have to reload page to see changes
 - Advanced integrations 
 - AI features
 - Any advanced blocks or interaction options
@@ -219,6 +219,12 @@ The script is idempotent — safe to run multiple times. Existing data is skippe
 | `RATE_LIMIT_IMPORT_WINDOW_MINUTES` | Import: window duration in minutes | `1` |
 | `RATE_LIMIT_SEARCH_MAX` | Search: max requests per window | `30` |
 | `RATE_LIMIT_SEARCH_WINDOW_MINUTES` | Search: window duration in minutes | `1` |
+| `REALTIME_ENABLED` | Enable real-time collaboration (requires Supabase) | `false` |
+| `SUPABASE_URL` | Supabase project URL | - |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable API key (`sb_publishable_...`) | - |
+| `SUPABASE_SECRET_KEY` | Supabase secret API key (`sb_secret_...`, backend-only) | - |
+| `SUPABASE_JWT_PRIVATE_KEY` | ES256 private key (PEM, backend-only) | - |
+| `SUPABASE_JWT_KID` | Key ID from Supabase JWT Signing Keys dashboard | - |
 
 ---
 
@@ -316,6 +322,12 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | POST | `/api/users/:id/reset-password` | Reset user password |
 | DELETE | `/api/users/:id` | Delete user |
 
+### Realtime
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/realtime/token` | Get Supabase Realtime auth token |
+
 ### Sharing
 
 | Method | Endpoint | Description |
@@ -378,6 +390,127 @@ The API includes built-in rate limiting powered by `@fastify/rate-limit`. It is 
 All limits are configurable via environment variables (see table above). Set `RATE_LIMIT_ENABLED=false` to disable rate limiting entirely.
 
 Rate limiting uses an in-memory store keyed by client IP. It is automatically disabled on Vercel serverless deployments (where in-memory state doesn't persist between invocations) — use Vercel Firewall / WAF rules for rate limiting in that environment.
+
+## Real-time Collaboration (Optional)
+
+Nonotion supports optional real-time collaboration powered by Supabase Realtime. When enabled, multiple users editing the same page see each other's changes live, with presence indicators showing who's on the page and which blocks they're editing.
+
+**Features:**
+- Live block content and structure updates (create, edit, delete, reorder)
+- Database/kanban card updates in near real-time
+- User presence avatars showing who's viewing a page
+- Soft lock indicators on blocks being edited by others
+- Block-level last-write-wins conflict resolution
+
+**Prerequisites:** Supabase project with `STORAGE_TYPE=postgres` pointing to Supabase.
+
+### Setup
+
+Nonotion uses **modern Supabase primitives** for authentication with Realtime: publishable / secret API keys and an ES256 JWT signing key. These replace the legacy anon, service_role, and HS256 JWT secret values. Legacy keys are not supported.
+
+1. **Get API keys** — In your Supabase dashboard, go to **Settings > API > API Keys** and copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **Publishable key** (format: `sb_publishable_...`) → `SUPABASE_PUBLISHABLE_KEY`
+   - **Secret key** (format: `sb_secret_...`) → `SUPABASE_SECRET_KEY`
+
+   If these keys don't exist yet, click "Create new" in the API Keys section to generate them.
+
+2. **Generate an ES256 JWT signing key** — run the helper script included in this repo:
+   ```bash
+   node apps/api/scripts/generate-jwt-signing-key.mjs
+   ```
+
+   The script will:
+   - Generate an ES256 (P-256 elliptic curve) key pair using Node.js crypto
+   - Print the private key as a **JWK (JSON Web Key)** — the format Supabase expects when importing
+   - Print a compact single-line JWK (to paste into `.env` as `SUPABASE_JWT_PRIVATE_KEY`)
+   - Walk you through the Supabase dashboard import + rotate flow
+
+   The script is cross-platform — works on Windows, macOS, and Linux with no `openssl` required.
+
+3. **Import the private key to Supabase**:
+   - Dashboard → **Settings > Auth > JWT Signing Keys**
+   - Click **Import existing private key**, choose algorithm **ES256**, paste the pretty-printed JWK JSON, save
+   - Copy the generated **Key ID (kid)** that Supabase displays
+   - Click **Rotate keys** to make this the current signing key
+   - The old HS256 legacy key becomes "previously used" — leave it in that state for at least 1 hour (the token TTL) before revoking, so existing sessions don't get invalidated
+
+4. **Set environment variables:**
+   ```env
+   REALTIME_ENABLED=true
+   SUPABASE_URL=https://xxxxx.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   SUPABASE_SECRET_KEY=sb_secret_...
+   SUPABASE_JWT_PRIVATE_KEY='{"kty":"EC","crv":"P-256","x":"...","y":"...","d":"...","alg":"ES256","use":"sig"}'
+   SUPABASE_JWT_KID=<the kid from step 3>
+   ```
+
+   > **Important:** `SUPABASE_JWT_PRIVATE_KEY` is a **compact JSON string** (JWK format). Wrap it in **single quotes** in `.env` because the JSON itself uses double quotes. The generator script prints a ready-to-paste line.
+
+5. **Run the Realtime Authorization SQL** in Supabase SQL Editor (Settings > SQL Editor). This policy restricts channel access to users with the right permissions. `FOR ALL` with both `USING` (receive broadcasts) and `WITH CHECK` (send presence track) is required — presence tracking needs INSERT access:
+
+   ```sql
+   CREATE POLICY "authorize_realtime_channels" ON realtime.messages
+     FOR ALL TO authenticated
+     USING (
+       (auth.jwt() ->> 'is_owner')::boolean = true
+       OR
+       (
+         realtime.topic() LIKE 'page:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+       OR
+       (
+         realtime.topic() LIKE 'database:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+     )
+     WITH CHECK (
+       (auth.jwt() ->> 'is_owner')::boolean = true
+       OR
+       (
+         realtime.topic() LIKE 'page:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+       OR
+       (
+         realtime.topic() LIKE 'database:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+     );
+   ```
+
+   > **Note:** The exact `realtime.topic()` format may vary. If subscriptions fail, check the Supabase Realtime logs (Dashboard → Logs → Realtime) to verify the topic format and adjust `split_part` indices accordingly.
+
+### Security Notes
+
+- `SUPABASE_SECRET_KEY` is **backend-only** — never exposed to the frontend. Used by the backend broadcaster to send Realtime messages.
+- `SUPABASE_JWT_PRIVATE_KEY` is the ES256 private key used to sign short-lived Realtime auth tokens — backend-only. Supabase verifies these tokens using the corresponding public key (via the imported JWT signing key).
+- `SUPABASE_PUBLISHABLE_KEY` is returned to the frontend at runtime via `/api/realtime/token`, never baked into the frontend bundle.
+- All channels use **private mode** — Supabase enforces per-page authorization via the RLS policy above.
+- The backend is the sole broadcaster — clients only receive events, never send to channels.
+- Workspace owners bypass per-page checks via the `is_owner` JWT claim.
+- **Never commit your ES256 private key PEM file** to git. If you generated it with `--out`, add it to `.gitignore`.
+
+### Disabling
+
+Set `REALTIME_ENABLED=false` or remove the Supabase env vars. The application works identically to before — no presence UI, no WebSocket connections, zero overhead.
 
 ## User Roles
 

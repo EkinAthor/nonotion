@@ -182,6 +182,22 @@ Backend `getRows` supports `limit`/`offset` params. Table and kanban views pagin
 ### 17. Title Property Filter
 `applySingleFilter()` (backend + demo-client) checks if the filter targets a title-type property via `schema`. If so, constructs `propValue` from `row.title` instead of `row.properties[propId]`. This mirrors the existing title handling in `applySort()`.
 
+### 18. Real-time Collaboration (Optional)
+Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABLED=true` + Supabase env vars. Completely disabled by default (zero overhead).
+
+- **Backend Broadcaster Adapter**: `apps/api/src/realtime/` — `RealtimeBroadcaster` interface with `SupabaseBroadcaster` (uses service role key) and `NoopBroadcaster` implementations. Factory in `realtime-factory.ts` (singleton pattern matching storage-factory). Config in `apps/api/src/config/realtime.ts`.
+- **Backend Broadcasting**: Routes (`blocks.ts`, `pages.ts`, `databases.ts`) fire-and-forget broadcast after successful writes. Services are NOT modified — broadcasting happens at the route level to keep services storage-agnostic.
+- **Token Endpoint**: `GET /api/realtime/token` — issues short-lived JWT (1h) signed with **ES256** using `SUPABASE_JWT_PRIVATE_KEY` (JWK format — JSON Web Key string). JWT header includes `alg: 'ES256'` and `kid` (matching the signing key imported into Supabase). Payload contains `sub` (userId), `role: 'authenticated'`, `is_owner` (boolean). The private key is parsed once at module scope via `importJWK()` and cached. Also returns `supabaseUrl` and `supabasePublishableKey` so the frontend doesn't need its own env vars.
+- **Frontend Adapter**: `apps/web/src/lib/realtime/` — `RealtimeAdapter` interface with `SupabaseAdapter` implementation. All channels use `{ config: { private: true } }` for RLS-based authorization.
+- **RealtimeManager**: Singleton in `realtime-manager.ts`, lives outside React. Calls `getState()` on Zustand stores. Handles: init, token refresh (50min timer), page/database join/leave, active block tracking (debounced 300ms), self-echo filtering, visibility change re-fetch.
+- **Presence Store**: `apps/web/src/stores/presenceStore.ts` — `pageUsers` (who's on the page) and derived `activeBlockEditors` (Map<blockId, PresenceUser>).
+- **Database Instance Registry**: `apps/web/src/stores/databaseInstanceRegistry.ts` — global Map so RealtimeManager can push events to the correct database instance store.
+- **Presence UI**: `PresenceAvatarBar` (avatar circles in page top bar), `BlockEditIndicator` (colored left border + name tag on blocks being edited by others). Soft lock: visual only, doesn't prevent editing.
+- **Channel structure**: `page:{pageId}` (broadcast + presence), `database:{databaseId}` (broadcast only). Private channels with RLS policy on `realtime.messages`.
+- **Demo mode**: `isRealtimeEnabled()` returns `false` when `IS_DEMO_MODE` is true. Zero impact.
+- **Env vars**: `REALTIME_ENABLED`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_PRIVATE_KEY`, `SUPABASE_JWT_KID`. Uses modern Supabase primitives (publishable/secret API keys + ES256 JWT signing key) — legacy anon/service_role/HS256 not supported.
+- **Key generator**: `apps/api/scripts/generate-jwt-signing-key.mjs` is a Node.js helper that generates an ES256 key pair using `jose.generateKeyPair()`, exports PKCS#8 PEM, and walks the user through the Supabase import + rotate flow. Cross-platform, no openssl dependency.
+
 ## Critical Files
 
 | File | Purpose |
@@ -222,8 +238,18 @@ Backend `getRows` supports `limit`/`offset` params. Table and kanban views pagin
 | `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |
 | `apps/api/src/routes/users.ts` | User management routes including `PATCH /api/users/:id/owner` |
 | `apps/api/src/config/rate-limit.ts` | Rate limiting config, Fastify type augmentation, registration helper |
+| `apps/api/src/config/realtime.ts` | Realtime config loader from env vars |
+| `apps/api/src/realtime/realtime-broadcaster.ts` | `RealtimeBroadcaster` interface |
+| `apps/api/src/realtime/realtime-factory.ts` | Broadcaster singleton factory (Supabase or Noop) |
+| `apps/api/src/routes/realtime.ts` | `GET /api/realtime/token` endpoint |
 | `apps/web/src/components/database/KanbanView.tsx` | Kanban board with DnD columns, cards, and property previews |
 | `apps/web/src/lib/select-colors.ts` | Shared `COLOR_CLASSES` map for select option badge colors |
+| `apps/web/src/lib/realtime/realtime-manager.ts` | Singleton coordinator — bridges Supabase events to Zustand stores |
+| `apps/web/src/lib/realtime/supabase-adapter.ts` | Supabase Realtime adapter (private channels, presence, broadcast) |
+| `apps/web/src/stores/presenceStore.ts` | Presence state (pageUsers, activeBlockEditors) |
+| `apps/web/src/stores/databaseInstanceRegistry.ts` | Global registry for database instance stores |
+| `apps/web/src/components/presence/PresenceAvatarBar.tsx` | Avatar bar component for page top bar |
+| `apps/web/src/components/presence/BlockEditIndicator.tsx` | Soft lock border + name tag on blocks |
 
 ## Commands
 
@@ -322,10 +348,8 @@ pnpm --filter @nonotion/api tsc --noEmit
 ## Future Considerations
 
 These are planned but NOT yet implemented:
-- Real-time collaboration (WebSocket)
 - Additional block types (tables)
 - S3/external file storage backend (currently BLOB in DB)
-- Database storage (Supabase)
 
 When implementing these, check `docs/implementation-plan.md` for architectural guidance.
 

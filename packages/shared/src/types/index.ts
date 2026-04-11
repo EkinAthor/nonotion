@@ -6,3 +6,4 @@ export * from './api.js';
 export * from './database.js';
 export * from './file.js';
 export * from './import.js';
+export * from './realtime.js';

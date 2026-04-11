@@ -22,6 +22,8 @@ import DividerEdit from './registry/DividerEdit';
 import PageLinkEdit from './registry/PageLinkEdit';
 import DatabaseViewEdit from './registry/DatabaseViewEdit';
 import BlockContextMenu from './BlockContextMenu';
+import { usePresenceStore } from '@/stores/presenceStore';
+import BlockEditIndicator from '@/components/presence/BlockEditIndicator';
 
 interface BlockWrapperProps {
   block: Block;
@@ -250,6 +252,7 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
   };
 
   const isSelected = useBlockStore((state) => state.selectedBlockIds.has(block.id));
+  const editingUser = usePresenceStore((state) => state.activeBlockEditors.get(block.id));
 
   return (
     <div
@@ -319,6 +322,9 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
           onClose={() => setMenuOpen(false)}
         />
       )}
+
+      {/* Remote user editing indicator */}
+      {editingUser && <BlockEditIndicator user={editingUser} />}
 
       {/* Block content */}
       <div className="flex-1 min-w-0">

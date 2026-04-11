@@ -55,6 +55,12 @@ interface BlockState {
   draggedBlockIds: string[]; // effective drag set during active drag, empty when idle
   setDraggedBlockIds: (ids: string[]) => void;
   clearDraggedBlockIds: () => void;
+
+  // Remote update actions (called by RealtimeManager, never trigger API calls)
+  applyRemoteBlockUpdate: (blockId: string, block: Block) => void;
+  applyRemoteBlockCreate: (block: Block) => void;
+  applyRemoteBlockDelete: (blockId: string, pageId: string) => void;
+  applyRemoteBlockReorder: (pageId: string, blocks: Block[]) => void;
 }
 
 export const useBlockStore = create<BlockState>((set, get) => ({
@@ -576,5 +582,83 @@ export const useBlockStore = create<BlockState>((set, get) => ({
 
   clearDraggedBlockIds: () => {
     set({ draggedBlockIds: [] });
+  },
+
+  // ─── Remote update actions (realtime) ─────────────────────────────────
+
+  applyRemoteBlockUpdate: (blockId, block) => {
+    const { focusBlockId } = get();
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = blocksByPage.get(block.pageId);
+      if (!blocks) return state;
+
+      const index = blocks.findIndex((b) => b.id === blockId);
+      if (index === -1) return state;
+
+      const existing = blocks[index];
+      // Skip stale events
+      if (block.version <= existing.version) return state;
+
+      const updatedBlocks = [...blocks];
+      if (blockId === focusBlockId) {
+        // User is editing this block — only update version, not content (LWW guard)
+        updatedBlocks[index] = { ...existing, version: block.version };
+      } else {
+        updatedBlocks[index] = { ...block };
+      }
+      blocksByPage.set(block.pageId, updatedBlocks);
+      return { blocksByPage };
+    });
+  },
+
+  applyRemoteBlockCreate: (block) => {
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = blocksByPage.get(block.pageId) || [];
+
+      // Dedup: skip if block ID already exists
+      if (blocks.some((b) => b.id === block.id)) return state;
+
+      // Shift existing blocks at/after the new block's order to make room.
+      // The backend does this same shift when creating, but only broadcasts the
+      // new block — not the shifted ones. So we must replicate the shift locally.
+      const shifted = blocks.map((b) =>
+        b.order >= block.order ? { ...b, order: b.order + 1 } : b
+      );
+      const updatedBlocks = [...shifted, block].sort((a, b) => a.order - b.order);
+      blocksByPage.set(block.pageId, updatedBlocks);
+      return { blocksByPage };
+    });
+  },
+
+  applyRemoteBlockDelete: (blockId, pageId) => {
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = blocksByPage.get(pageId);
+      if (!blocks) return state;
+
+      const filtered = blocks.filter((b) => b.id !== blockId);
+      if (filtered.length === blocks.length) return state; // Block not found
+
+      const reordered = filtered.map((b, i) => ({ ...b, order: i }));
+      blocksByPage.set(pageId, reordered);
+      return { blocksByPage };
+    });
+  },
+
+  applyRemoteBlockReorder: (pageId, blocks) => {
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const existing = blocksByPage.get(pageId) || [];
+
+      // Preserve any locally-dirty blocks (temp IDs) not in the remote list
+      const remoteIds = new Set(blocks.map((b) => b.id));
+      const localOnly = existing.filter((b) => !remoteIds.has(b.id));
+
+      const merged = [...blocks, ...localOnly].sort((a, b) => a.order - b.order);
+      blocksByPage.set(pageId, merged);
+      return { blocksByPage };
+    });
   },
 }));
