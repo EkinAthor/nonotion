@@ -119,6 +119,10 @@ export interface DatabaseInstanceState {
   getAllPropertiesOrdered: () => PropertyDefinition[];
   hasDefaultConfig: () => boolean;
   clearDatabase: () => void;
+
+  // Remote update actions (called by RealtimeManager, never trigger API calls)
+  applyRemoteRowUpdate: (rowId: string, properties: Record<string, PropertyValue>, title?: string) => void;
+  applyRemoteCardMove: (kanbanCardOrder?: Record<string, string[]>) => void;
 }
 
 /** Order properties: title always first, then by view-local order (fallback to schema order). */
@@ -736,6 +740,29 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef
       });
+    },
+
+    // ─── Remote update actions (realtime) ─────────────────────────────
+
+    applyRemoteRowUpdate: (rowId, properties, title) => {
+      set((state) => {
+        const index = state.rows.findIndex((r) => r.id === rowId);
+        if (index === -1) return state;
+
+        const updatedRows = [...state.rows];
+        updatedRows[index] = {
+          ...updatedRows[index],
+          properties: { ...updatedRows[index].properties, ...properties },
+          ...(title !== undefined ? { title } : {}),
+          updatedAt: new Date().toISOString(),
+        };
+        return { rows: updatedRows };
+      });
+    },
+
+    applyRemoteCardMove: (kanbanCardOrder) => {
+      if (!kanbanCardOrder) return;
+      set({ kanbanCardOrder: kanbanCardOrder as KanbanCardOrder });
     },
   }));
 

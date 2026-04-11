@@ -13,9 +13,12 @@ import { databasesRoutes } from './routes/databases.js';
 import { filesRoutes } from './routes/files.js';
 import { importRoutes } from './routes/import.js';
 import { searchRoutes } from './routes/search.js';
+import { realtimeRoutes } from './routes/realtime.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
 import { registerRateLimit } from './config/rate-limit.js';
+import { loadRealtimeConfig } from './config/realtime.js';
+import { initializeBroadcaster } from './realtime/realtime-factory.js';
 
 // Determine storage type from environment
 const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'sqlite';
@@ -68,6 +71,10 @@ if (getStorageType() === 'postgres') {
   }
 }
 
+// Initialize realtime broadcaster
+const realtimeConfig = loadRealtimeConfig();
+await initializeBroadcaster(realtimeConfig);
+
 // Check for admin password reset via env var
 await ensureAdminPasswordReset();
 
@@ -110,6 +117,7 @@ await fastify.register(databasesRoutes);
 await fastify.register(filesRoutes);
 await fastify.register(importRoutes);
 await fastify.register(searchRoutes);
+await fastify.register(realtimeRoutes);
 
 // Health check (exempt from rate limiting)
 fastify.get('/health', { config: { rateLimit: false } }, async () => {

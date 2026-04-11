@@ -814,6 +814,10 @@ export const searchApi = {
 
 // ============ IMPORT API ============
 
+export const realtimeApi = {
+  getToken: async () => ({ enabled: false as const }),
+};
+
 export const importApi = {
   importZip: async (_file: File): Promise<ImportResult> => {
     throw new Error('Import is not available in demo mode');

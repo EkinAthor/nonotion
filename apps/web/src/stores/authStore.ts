@@ -119,6 +119,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Disconnect realtime on logout (imported lazily to avoid circular deps)
+        import('@/lib/realtime').then(({ getRealtimeManager }) => {
+          getRealtimeManager()?.disconnect();
+        });
         set({
           user: null,
           token: null,

@@ -28,6 +28,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Configurable storage (JSON/SQLite or PostgreSQL)
 - Demo mode for static hosting without a backend (all data in localStorage)
+- Real-time collaboration with user presence (optional, Supabase-powered)
 
 <p align="center">
   <img src="docs/screenshots/nonotion-database.png" width="49%" />
@@ -37,7 +38,6 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 ## Not in scope
 
 This is not full notion clone. Some of the features are not available:
-- User presence/sync - last edit wins, you have to reload page to see changes
 - Advanced integrations 
 - AI features
 - Any advanced blocks or interaction options
@@ -219,6 +219,11 @@ The script is idempotent — safe to run multiple times. Existing data is skippe
 | `RATE_LIMIT_IMPORT_WINDOW_MINUTES` | Import: window duration in minutes | `1` |
 | `RATE_LIMIT_SEARCH_MAX` | Search: max requests per window | `30` |
 | `RATE_LIMIT_SEARCH_WINDOW_MINUTES` | Search: window duration in minutes | `1` |
+| `REALTIME_ENABLED` | Enable real-time collaboration (requires Supabase) | `false` |
+| `SUPABASE_URL` | Supabase project URL | - |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key | - |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (backend-only) | - |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret (backend-only) | - |
 
 ---
 
@@ -316,6 +321,12 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | POST | `/api/users/:id/reset-password` | Reset user password |
 | DELETE | `/api/users/:id` | Delete user |
 
+### Realtime
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/realtime/token` | Get Supabase Realtime auth token |
+
 ### Sharing
 
 | Method | Endpoint | Description |
@@ -378,6 +389,99 @@ The API includes built-in rate limiting powered by `@fastify/rate-limit`. It is 
 All limits are configurable via environment variables (see table above). Set `RATE_LIMIT_ENABLED=false` to disable rate limiting entirely.
 
 Rate limiting uses an in-memory store keyed by client IP. It is automatically disabled on Vercel serverless deployments (where in-memory state doesn't persist between invocations) — use Vercel Firewall / WAF rules for rate limiting in that environment.
+
+## Real-time Collaboration (Optional)
+
+Nonotion supports optional real-time collaboration powered by Supabase Realtime. When enabled, multiple users editing the same page see each other's changes live, with presence indicators showing who's on the page and which blocks they're editing.
+
+**Features:**
+- Live block content and structure updates (create, edit, delete, reorder)
+- Database/kanban card updates in near real-time
+- User presence avatars showing who's viewing a page
+- Soft lock indicators on blocks being edited by others
+- Block-level last-write-wins conflict resolution
+
+**Prerequisites:** Supabase project with `STORAGE_TYPE=postgres` pointing to Supabase.
+
+### Setup
+
+1. In your Supabase dashboard, go to **Settings > API** and copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **anon/public key** → `SUPABASE_ANON_KEY`
+   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY`
+   - **JWT Secret** → `SUPABASE_JWT_SECRET`
+
+2. Set environment variables:
+   ```env
+   REALTIME_ENABLED=true
+   SUPABASE_URL=https://xxxxx.supabase.co
+   SUPABASE_ANON_KEY=eyJ...
+   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+   SUPABASE_JWT_SECRET=your-jwt-secret
+   ```
+
+3. **Run the Realtime Authorization SQL** in Supabase SQL Editor (Settings > SQL Editor). This policy restricts channel access to users with the right permissions. `FOR ALL` with both `USING` (receive broadcasts) and `WITH CHECK` (send presence track) is required — presence tracking needs INSERT access:
+
+   ```sql
+   CREATE POLICY "authorize_realtime_channels" ON realtime.messages
+     FOR ALL TO authenticated
+     USING (
+       (auth.jwt() ->> 'is_owner')::boolean = true
+       OR
+       (
+         realtime.topic() LIKE 'page:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+       OR
+       (
+         realtime.topic() LIKE 'database:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+     )
+     WITH CHECK (
+       (auth.jwt() ->> 'is_owner')::boolean = true
+       OR
+       (
+         realtime.topic() LIKE 'page:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+       OR
+       (
+         realtime.topic() LIKE 'database:%'
+         AND EXISTS (
+           SELECT 1 FROM public.permissions
+           WHERE permissions.page_id = split_part(realtime.topic(), ':', 2)
+             AND permissions.user_id = (auth.jwt() ->> 'sub')::text
+         )
+       )
+     );
+   ```
+
+   > **Note:** The exact `realtime.topic()` format may vary. If subscriptions fail, check the Supabase Realtime logs (Dashboard → Logs → Realtime) to verify the topic format and adjust `split_part` indices accordingly.
+
+### Security Notes
+
+- `SUPABASE_SERVICE_ROLE_KEY` is **backend-only** — never exposed to the frontend
+- `SUPABASE_JWT_SECRET` is used to sign short-lived Realtime auth tokens — backend-only
+- All channels use **private mode** — Supabase enforces per-page authorization via the RLS policy above
+- The backend is the sole broadcaster — clients only receive events, never send to channels
+- Workspace owners bypass per-page checks via the `is_owner` JWT claim
+
+### Disabling
+
+Set `REALTIME_ENABLED=false` or remove the Supabase env vars. The application works identically to before — no presence UI, no WebSocket connections, zero overhead.
 
 ## User Roles
 

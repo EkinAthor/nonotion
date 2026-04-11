@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Page } from '@nonotion/shared';
 import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance, useSyncWithPageStore } from '@/contexts/DatabaseInstanceContext';
+import { registerDatabaseInstance, unregisterDatabaseInstance } from '@/stores/databaseInstanceRegistry';
+import { getRealtimeManager } from '@/lib/realtime';
 import TableView from './TableView';
 import KanbanView from './KanbanView';
 import DatabaseToolbar from './DatabaseToolbar';
@@ -12,6 +14,16 @@ interface DatabaseViewProps {
 
 export default function DatabaseView({ page, canEdit }: DatabaseViewProps) {
   const storeRef = useRef(createDatabaseInstanceStore(page.id));
+
+  // Register store in global registry for realtime events
+  useEffect(() => {
+    registerDatabaseInstance(page.id, storeRef.current);
+    getRealtimeManager()?.joinDatabase(page.id);
+    return () => {
+      unregisterDatabaseInstance(page.id);
+      getRealtimeManager()?.leaveDatabase();
+    };
+  }, [page.id]);
 
   return (
     <DatabaseInstanceProvider store={storeRef.current}>

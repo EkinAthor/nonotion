@@ -366,6 +366,18 @@ export const searchApi = {
 };
 
 // Import API
+export interface RealtimeTokenResponse {
+  enabled: boolean;
+  token?: string;
+  expiresAt?: string;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+}
+
+export const realtimeApi = {
+  getToken: () => request<RealtimeTokenResponse>('/realtime/token'),
+};
+
 export const importApi = {
   importZip: async (file: File): Promise<ImportResult> => {
     const formData = new FormData();

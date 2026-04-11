@@ -3,6 +3,7 @@ import { databaseRowsQuerySchema, updateKanbanCardOrderInputSchema } from '@nono
 import * as databaseService from '../services/database-service.js';
 import * as permissionService from '../services/permission-service.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
+import { getBroadcaster } from '../realtime/realtime-factory.js';
 
 export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
   // Add auth, password change check, and approval check to all routes
@@ -75,6 +76,10 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      getBroadcaster().broadcastToDatabase(request.params.id, 'card_move', {
+        databaseId: request.params.id, kanbanCardOrder: page.databaseSchema?.kanbanCardOrder,
+        userId: request.userId,
+      }).catch(err => fastify.log.warn(err, 'Failed to broadcast card_move'));
       return reply.send({ data: page, success: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update kanban order';
