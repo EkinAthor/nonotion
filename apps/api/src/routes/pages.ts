@@ -185,7 +185,7 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
     getBroadcaster().broadcastToDatabase(request.params.id, 'schema_update', {
-      databaseId: request.params.id, schema: page.databaseSchema, userId: request.userId,
+      databaseId: request.params.id, schema: page.databaseSchema, userId: request.userId, clientId: request.clientId,
     }).catch(err => fastify.log.warn(err, 'Failed to broadcast schema_update'));
     return reply.send({ data: page, success: true });
   });
@@ -218,7 +218,8 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
     if (page.parentId) {
       getBroadcaster().broadcastToDatabase(page.parentId, 'row_update', {
         rowId: request.params.id, databaseId: page.parentId,
-        properties: parsed.data.properties, title: page.title, userId: request.userId,
+        properties: parsed.data.properties, title: page.title,
+        userId: request.userId, clientId: request.clientId,
       }).catch(err => fastify.log.warn(err, 'Failed to broadcast row_update'));
     }
     return reply.send({ data: page, success: true });

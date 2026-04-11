@@ -19,6 +19,7 @@ import { ensureAdminPasswordReset } from './services/auth-service.js';
 import { registerRateLimit } from './config/rate-limit.js';
 import { loadRealtimeConfig } from './config/realtime.js';
 import { initializeBroadcaster } from './realtime/realtime-factory.js';
+import { clientIdMiddleware } from './middleware/client-id.js';
 
 // Determine storage type from environment
 const storageType: StorageType = (process.env.STORAGE_TYPE as StorageType) || 'sqlite';
@@ -106,6 +107,9 @@ await fastify.register(jwt, { secret: jwtSecret });
 
 // Register rate limiting (after JWT, before routes)
 await registerRateLimit(fastify);
+
+// Populate request.clientId from X-Client-Id header for every request
+fastify.addHook('onRequest', clientIdMiddleware);
 
 // Register routes
 await fastify.register(authRoutes);

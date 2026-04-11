@@ -78,7 +78,7 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
       }
       getBroadcaster().broadcastToDatabase(request.params.id, 'card_move', {
         databaseId: request.params.id, kanbanCardOrder: page.databaseSchema?.kanbanCardOrder,
-        userId: request.userId,
+        userId: request.userId, clientId: request.clientId,
       }).catch(err => fastify.log.warn(err, 'Failed to broadcast card_move'));
       return reply.send({ data: page, success: true });
     } catch (error) {

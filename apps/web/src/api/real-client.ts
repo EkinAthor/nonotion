@@ -28,6 +28,7 @@ import type {
   PageOrderSettings,
   UpdatePageOrderInput,
 } from '@nonotion/shared';
+import { getClientId } from '@/lib/realtime/client-id';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -58,6 +59,10 @@ async function request<T>(
       headers.set('Authorization', `Bearer ${token}`);
     }
   }
+
+  // Always send the client session id so backend broadcasts can include it
+  // in payloads, enabling same-user multi-browser sync.
+  headers.set('X-Client-Id', getClientId());
 
   if (options?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');

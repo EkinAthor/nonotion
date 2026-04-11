@@ -17,12 +17,14 @@ export interface BlockUpdatePayload {
   blockId: string;
   pageId: string;
   userId: string;
+  clientId?: string;
   block: Block;
 }
 
 export interface BlockCreatePayload {
   pageId: string;
   userId: string;
+  clientId?: string;
   block: Block;
 }
 
@@ -30,11 +32,13 @@ export interface BlockDeletePayload {
   blockId: string;
   pageId: string;
   userId: string;
+  clientId?: string;
 }
 
 export interface BlockReorderPayload {
   pageId: string;
   userId: string;
+  clientId?: string;
   blocks: Block[];
 }
 
@@ -42,6 +46,7 @@ export interface RowUpdatePayload {
   rowId: string;
   databaseId: string;
   userId: string;
+  clientId?: string;
   properties: Record<string, PropertyValue>;
   title?: string;
 }
@@ -50,6 +55,7 @@ export interface CardMovePayload {
   rowId: string;
   databaseId: string;
   userId: string;
+  clientId?: string;
   targetOptionId: string | null;
   kanbanCardOrder?: KanbanCardOrder;
 }

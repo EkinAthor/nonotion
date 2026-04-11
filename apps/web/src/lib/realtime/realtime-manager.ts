@@ -3,6 +3,7 @@ import type { RealtimeAdapter } from './realtime-adapter';
 import { SupabaseAdapter } from './supabase-adapter';
 import { isRealtimeEnabled } from './realtime-config';
 import { assignColor } from './presence-colors';
+import { getClientId } from './client-id';
 import { realtimeApi } from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useBlockStore } from '@/stores/blockStore';
@@ -17,7 +18,12 @@ class RealtimeManager {
   private adapter: RealtimeAdapter | null = null;
   private currentPageId: string | null = null;
   private currentDatabaseId: string | null = null;
+  // User ID — used to filter self out of the presence avatar bar.
   private currentUserId: string | null = null;
+  // Client (browser session) ID — used to filter broadcasts originating from
+  // this same tab/session. Different browsers/devices of the same user get
+  // different clientIds, so their events pass through and update local state.
+  private readonly clientId: string = getClientId();
   private tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private activeBlockDebounce: ReturnType<typeof setTimeout> | null = null;
   private initialized = false;
@@ -206,8 +212,10 @@ class RealtimeManager {
   // ─── Private handlers ──────────────────────────────────────────────────
 
   private handlePageEvent = (event: string, payload: Record<string, unknown>): void => {
-    // Self-echo filter
-    if (payload.userId === this.currentUserId) return;
+    // Self-echo filter — skip broadcasts originating from this same browser
+    // session. Events from other sessions (same user, different browser/device,
+    // or different users) pass through and update local state.
+    if (payload.clientId && payload.clientId === this.clientId) return;
 
     const blockStore = useBlockStore.getState();
 
@@ -239,7 +247,8 @@ class RealtimeManager {
   };
 
   private handleDatabaseEvent = (event: string, payload: Record<string, unknown>): void => {
-    if (payload.userId === this.currentUserId) return;
+    // Self-echo filter (see handlePageEvent for rationale)
+    if (payload.clientId && payload.clientId === this.clientId) return;
 
     const databaseId = (payload.databaseId as string) ?? this.currentDatabaseId;
     if (!databaseId) return;
