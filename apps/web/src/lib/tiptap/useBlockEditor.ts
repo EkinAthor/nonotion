@@ -58,7 +58,12 @@ interface UseBlockEditorOptions {
   headingLevel?: 1 | 2 | 3;
   readOnly?: boolean;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
-  onChangeBlockType?: (newType: BlockType, newText?: string, action?: string) => Promise<void>;
+  onChangeBlockType?: (
+    newType: BlockType,
+    newText?: string,
+    action?: string,
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+  ) => Promise<void>;
   onFocusPreviousBlock?: () => void;
   onFocusNextBlock?: () => void;
   onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
@@ -668,6 +673,27 @@ export function useBlockEditor({
         if (debounceRef.current) clearTimeout(debounceRef.current);
         changeBlockTypeRef.current?.('divider', '');
         return;
+      }
+
+      // Markdown shortcuts: '- ' -> bullet list, 'N. ' -> numbered list. Paragraph only.
+      // Keep cursor at start of the converted block since the user typed the prefix
+      // at the beginning — the rest of the text was already there before them.
+      if (blockRef.current.type === 'paragraph') {
+        const bulletMatch = text.match(/^- (.*)$/);
+        if (bulletMatch) {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = undefined;
+          changeBlockTypeRef.current?.('bullet_list', bulletMatch[1], undefined, { cursorPosition: 'start' });
+          return;
+        }
+        const numMatch = text.match(/^(\d+)\. (.*)$/);
+        if (numMatch) {
+          const start = parseInt(numMatch[1], 10);
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = undefined;
+          changeBlockTypeRef.current?.('numbered_list', numMatch[2], undefined, { startNumber: start, cursorPosition: 'start' });
+          return;
+        }
       }
 
       // Check for slash command using plain text

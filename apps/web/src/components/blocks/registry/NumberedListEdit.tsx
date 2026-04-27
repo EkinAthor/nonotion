@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { EditorContent } from '@tiptap/react';
 import type { Block, NumberedListContent } from '@nonotion/shared';
 import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
+import { formatNumberForLevel } from '@/lib/list-numbering';
 import SlashCommandMenu from '../SlashCommandMenu';
 import FormatToolbar from '../FormatToolbar';
 
@@ -15,7 +16,7 @@ interface NumberedListEditProps {
 }
 
 export default function NumberedListEdit({ block, readOnly = false }: NumberedListEditProps) {
-  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
+  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock, getBlocksForPage, updateBlock } = useBlockStore();
 
   const content = block.content as NumberedListContent;
@@ -37,31 +38,47 @@ export default function NumberedListEdit({ block, readOnly = false }: NumberedLi
     }
   }, [block.id, content, indent, updateBlock]);
 
-  // Calculate the display number based on consecutive numbered_list blocks at the same indent level
-  const displayNumber = useMemo(() => {
+  // Calculate the displayed numeral for this numbered list block.
+  // - Walk backward, skipping deeper-indented children (they don't break the sibling sequence).
+  // - Stop at a same-indent non-numbered_list block (sequence break) or a shallower indent (out of scope).
+  // - If a same-indent sibling has `startNumber`, treat it as an anchor and return anchor + offset.
+  // - Format the resulting numeric value per indent level (decimal/alpha/roman cycle).
+  // Computed inline (not memoized) so the value updates when adjacent blocks change —
+  // the parent subscribes to the whole store via useBlockStore() so this re-runs on every relevant render.
+  const displayNumber = (() => {
+    const ownStart = content.startNumber;
+
     const blocks = getBlocksForPage(block.pageId);
     const sorted = [...blocks].sort((a, b) => a.order - b.order);
-    const idx = sorted.findIndex(b => b.id === block.id);
+    const idx = sorted.findIndex((b) => b.id === block.id);
 
-    let count = 1;
-    for (let i = idx - 1; i >= 0; i--) {
-      const prevBlock = sorted[i];
-      if (prevBlock.type !== 'numbered_list') break;
+    let value: number;
+    if (ownStart !== undefined) {
+      value = ownStart;
+    } else {
+      let siblingsBack = 0;
+      let resolved: number | null = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        const prev = sorted[i];
+        const prevContent = prev.content as { indent?: number; startNumber?: number };
+        const prevIndent = prevContent.indent ?? 0;
 
-      const prevContent = prevBlock.content as NumberedListContent;
-      const prevIndent = prevContent.indent ?? 0;
+        if (prevIndent < indent) break;
+        if (prevIndent > indent) continue; // deeper sub-item, skip but keep walking
+        // same indent
+        if (prev.type !== 'numbered_list') break;
 
-      // Only count blocks at the same indent level
-      if (prevIndent === indent) {
-        count++;
-      } else if (prevIndent < indent) {
-        // We've hit a parent level, stop counting
-        break;
+        siblingsBack++;
+        if (prevContent.startNumber !== undefined) {
+          resolved = prevContent.startNumber + siblingsBack;
+          break;
+        }
       }
-      // If prevIndent > indent, it's a child, skip but continue
+      value = resolved ?? siblingsBack + 1;
     }
-    return count;
-  }, [block.pageId, block.id, indent, getBlocksForPage]);
+
+    return formatNumberForLevel(value, indent);
+  })();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
     block,
@@ -89,24 +106,22 @@ export default function NumberedListEdit({ block, readOnly = false }: NumberedLi
         { text: textAfterCursor, indent },
         currentOrder + 1
       );
-      setFocusBlock(newBlock.id);
+      setFocusBlock(newBlock.id, 'start');
     },
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
     onPasteMultipleBlocks: pasteMultipleBlocks,
     onDeleteAndMergeToPrevious: async (currentText: string) => {
-      // If empty and indented, outdent instead of merging
+      // If empty and indented, outdent first
       if (!currentText.trim() && indent > 0) {
         await handleOutdent();
         return;
       }
-      // If empty at root level, convert to paragraph
-      if (!currentText.trim()) {
-        await changeBlockType('paragraph', currentText);
-        return;
-      }
-      await deleteAndMergeToPrevious(currentText);
+      // Otherwise: backspace at start of a numbered list converts to paragraph
+      // (preserving content). A subsequent backspace will then merge into the
+      // previous block via the paragraph's own handler.
+      await changeBlockType('paragraph', currentText, undefined, { cursorPosition: 'start' });
     },
     onIndent: handleIndent,
     onOutdent: handleOutdent,
@@ -130,7 +145,7 @@ export default function NumberedListEdit({ block, readOnly = false }: NumberedLi
 
   return (
     <div className="flex items-start gap-2" style={{ paddingLeft: `${indent * 24}px` }}>
-      <span className="text-notion-text select-none mt-0.5 min-w-[1.5rem] text-right tabular-nums">{displayNumber}.</span>
+      <span className="text-notion-text select-none mt-0.5 min-w-[1rem] text-right tabular-nums">{displayNumber}.</span>
       <div className="flex-1 min-w-0 text-base text-notion-text leading-relaxed relative">
         <EditorContent editor={editor} />
         {editor && !readOnly && <FormatToolbar editor={editor} />}

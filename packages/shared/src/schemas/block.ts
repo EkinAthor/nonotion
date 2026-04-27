@@ -42,6 +42,7 @@ export const bulletListContentSchema = z.object({
 export const numberedListContentSchema = z.object({
   text: z.string(),
   indent: z.number().int().nonnegative().optional(),
+  startNumber: z.number().int().nonnegative().optional(),
 }).strict();
 
 export const checklistContentSchema = z.object({

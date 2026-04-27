@@ -70,7 +70,7 @@ export default function ChecklistEdit({ block, readOnly = false }: ChecklistEdit
         { text: textAfterCursor, checked: false, indent },
         currentOrder + 1
       );
-      setFocusBlock(newBlock.id);
+      setFocusBlock(newBlock.id, 'start');
     },
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
