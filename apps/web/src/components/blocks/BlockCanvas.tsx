@@ -371,6 +371,7 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
     <div
       ref={containerRef}
       className="min-h-[200px] pb-32 relative"
+      data-undo-scope={`page:${pageId}`}
     >
       <CrossBlockFormatToolbar containerRef={containerRef} />
       <DndContext

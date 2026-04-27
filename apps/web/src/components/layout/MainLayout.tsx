@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import { IS_DEMO_MODE } from '@/api/client';
+import { useUndoShortcuts } from '@/lib/undo/useUndoShortcuts';
 import Sidebar from './Sidebar';
 import SidePanel from './SidePanel';
 import SearchModal from './SearchModal';
@@ -11,6 +12,8 @@ import DemoBanner from './DemoBanner';
 export default function MainLayout() {
   const { fetchPages, fetchPageOrder } = usePageStore();
   const { sidebarOpen, sidebarWidth, peekPageId, sidebarAutoCollapsed, toggleSidebar, setSidebarOpen, toggleSearch } = useUiStore();
+
+  useUndoShortcuts();
 
   useEffect(() => {
     fetchPages();

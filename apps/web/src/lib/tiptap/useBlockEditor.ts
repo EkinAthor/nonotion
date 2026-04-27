@@ -19,6 +19,8 @@ import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/regis
 import { stripOuterPTag } from './html-utils';
 import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { inlineMarkdownToHtml } from '@/lib/html-markdown';
+import { noteTextEdit, flushTextGroup, discardTextGroup } from '@/lib/undo/textGroupBuffer';
+import { isApplying } from '@/lib/undo/undoManager';
 
 function parseLineForBlockType(line: string): PasteBlockData {
   const { type, text, checked } = parseMarkdownLine(line);
@@ -154,6 +156,8 @@ export function useBlockEditor({
   // Flush pending save on unmount instead of discarding
   useEffect(() => {
     return () => {
+      // Flush any in-flight typing into the undo stack first.
+      flushTextGroup(blockRef.current.id);
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         // Flush: save immediately instead of discarding
@@ -244,6 +248,7 @@ export function useBlockEditor({
         const from = slashStartPosRef.current;
         const to = currentEditor.state.selection.from;
         currentEditor.chain().focus().deleteRange({ from, to }).run();
+        discardTextGroup(blockRef.current.id);
 
         // Cancel any pending debounced save
         if (debounceRef.current) {
@@ -655,6 +660,9 @@ export function useBlockEditor({
         dropcursor: false,
         gapcursor: false,
         // Keep code (inline) enabled - removed code: false
+        // History is owned by our custom HistoryGroupingBuffer (see lib/undo/textGroupBuffer.ts).
+        // TipTap's per-block stack would conflict with the cross-document stack.
+        history: false,
       }),
       Placeholder.configure({
         placeholder,
@@ -680,12 +688,19 @@ export function useBlockEditor({
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       const html = stripOuterPTag(editor.getHTML());
+
+      // Capture pre-update content for the undo buffer BEFORE saveContent
+      // overwrites lastKnownContentRef.
+      const previousText = lastKnownContentRef.current;
+      const isUserEdit = !isSyncingExternalContentRef.current && !isApplying();
+
       saveContent(html);
 
       // Check for divider auto-conversion (---, ***, ___)
       const text = editor.getText();
       if (/^(?:---|\*\*\*|___)$/.test(text)) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        discardTextGroup(blockRef.current.id);
         changeBlockTypeRef.current?.('divider', '');
         return;
       }
@@ -698,6 +713,7 @@ export function useBlockEditor({
         if (bulletMatch) {
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = undefined;
+          discardTextGroup(blockRef.current.id);
           changeBlockTypeRef.current?.('bullet_list', bulletMatch[1], undefined, { cursorPosition: 'start' });
           return;
         }
@@ -706,9 +722,28 @@ export function useBlockEditor({
           const start = parseInt(numMatch[1], 10);
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = undefined;
+          discardTextGroup(blockRef.current.id);
           changeBlockTypeRef.current?.('numbered_list', numMatch[2], undefined, { startNumber: start, cursorPosition: 'start' });
           return;
         }
+      }
+
+      if (isUserEdit && previousText !== html) {
+        const currentBlock = blockRef.current;
+        const beforeContent: BlockContent = headingLevel
+          ? ({ ...currentBlock.content, text: previousText, level: headingLevel } as BlockContent)
+          : ({ ...currentBlock.content, text: previousText } as BlockContent);
+        const afterContent: BlockContent = headingLevel
+          ? ({ ...currentBlock.content, text: html, level: headingLevel } as BlockContent)
+          : ({ ...currentBlock.content, text: html } as BlockContent);
+        const sel = editor.state.selection;
+        noteTextEdit({
+          blockId: currentBlock.id,
+          scopeId: `page:${currentBlock.pageId}`,
+          before: beforeContent,
+          after: afterContent,
+          selectionAfter: { kind: 'tiptap', blockId: currentBlock.id, from: sel.from, to: sel.to },
+        });
       }
 
       // Check for slash command using plain text
@@ -746,6 +781,7 @@ export function useBlockEditor({
     },
     onBlur: () => {
       getRealtimeManager()?.updateActiveBlock(null);
+      flushTextGroup(blockRef.current.id);
     },
     editorProps: {
       attributes: {

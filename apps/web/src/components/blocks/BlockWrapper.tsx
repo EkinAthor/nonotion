@@ -24,6 +24,8 @@ import DatabaseViewEdit from './registry/DatabaseViewEdit';
 import BlockContextMenu from './BlockContextMenu';
 import { usePresenceStore } from '@/stores/presenceStore';
 import BlockEditIndicator from '@/components/presence/BlockEditIndicator';
+import { beginTransaction, endTransaction } from '@/lib/undo/undoManager';
+import { pushBlockContentEntry } from '@/lib/undo/entries';
 
 interface BlockWrapperProps {
   block: Block;
@@ -87,13 +89,19 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
       return;
     }
 
-    changeBlockType(block.id, newType, newText, options);
-    if (newType === 'divider' || newType === 'database_view') {
-      // Non-text blocks — auto-create a paragraph below and focus it
-      handleCreateBlockBelow('');
-    } else {
-      // Set focus to this block after type change so the new editor gets focus
-      setFocusBlock(block.id, options?.cursorPosition ?? 'end');
+    const scopeId = `page:${pageId}`;
+    beginTransaction(scopeId, 'change block type');
+    try {
+      changeBlockType(block.id, newType, newText, options);
+      if (newType === 'divider' || newType === 'database_view') {
+        // Non-text blocks — auto-create a paragraph below and focus it
+        await handleCreateBlockBelow('');
+      } else {
+        // Set focus to this block after type change so the new editor gets focus
+        setFocusBlock(block.id, options?.cursorPosition ?? 'end');
+      }
+    } finally {
+      endTransaction(scopeId);
     }
   }, [block.id, pageId, changeBlockType, setFocusBlock, handleCreateBlockBelow, createPage, updateBlock, navigate]);
 
@@ -143,38 +151,60 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
 
-    // If previous block is a divider, page_link, or database_view, delete it and keep current block intact
-    if (prevBlock.type === 'divider' || prevBlock.type === 'page_link' || prevBlock.type === 'database_view') {
-      deleteBlock(prevBlockId);
-      return;
+    const scopeId = `page:${pageId}`;
+    beginTransaction(scopeId, 'merge with previous block');
+    try {
+      // If previous block is a divider, page_link, or database_view, delete it and keep current block intact
+      if (prevBlock.type === 'divider' || prevBlock.type === 'page_link' || prevBlock.type === 'database_view') {
+        deleteBlock(prevBlockId);
+        return;
+      }
+
+      // Calculate cursor position: previous block plain text length + 1 (for TipTap position offset)
+      const prevText = getBlockText(prevBlock.content);
+      const cursorPosition = getPlainTextLength(prevText) + 1;
+
+      // Fire-and-forget: all three operations execute their optimistic
+      // set() calls synchronously. React batches the resulting re-render.
+      if (currentText && 'text' in prevBlock.content) {
+        const mergedText = prevText + currentText;
+        const beforeContent = { ...prevBlock.content };
+        const afterContent = { ...prevBlock.content, text: mergedText };
+        updateBlock(prevBlockId, { content: afterContent });
+        pushBlockContentEntry({
+          blockId: prevBlockId,
+          pageId,
+          before: beforeContent,
+          after: afterContent,
+          label: 'merge text',
+        });
+      }
+
+      deleteBlock(block.id);
+      setFocusBlock(prevBlockId, cursorPosition);
+    } finally {
+      endTransaction(scopeId);
     }
-
-    // Calculate cursor position: previous block plain text length + 1 (for TipTap position offset)
-    const prevText = getBlockText(prevBlock.content);
-    const cursorPosition = getPlainTextLength(prevText) + 1;
-
-    // Fire-and-forget: all three operations execute their optimistic
-    // set() calls synchronously. React batches the resulting re-render.
-    if (currentText && 'text' in prevBlock.content) {
-      const mergedText = prevText + currentText;
-      updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
-    }
-
-    deleteBlock(block.id);
-    setFocusBlock(prevBlockId, cursorPosition);
-  }, [block.id, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
+  }, [block.id, pageId, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
 
   const handlePasteImage = useCallback(async (file: File): Promise<void> => {
     try {
+      // Upload first (not undoable — only the block lifecycle is reversed).
       const result = await filesApi.upload(file);
-      const currentBlock = getBlockById(block.id);
-      const currentOrder = currentBlock?.order ?? block.order;
-      const newBlock = await createBlock(pageId, 'image', {
-        url: result.url,
-        alt: file.name,
-        caption: '',
-      }, currentOrder + 1);
-      setFocusBlock(newBlock.id);
+      const scopeId = `page:${pageId}`;
+      beginTransaction(scopeId, 'paste image');
+      try {
+        const currentBlock = getBlockById(block.id);
+        const currentOrder = currentBlock?.order ?? block.order;
+        const newBlock = await createBlock(pageId, 'image', {
+          url: result.url,
+          alt: file.name,
+          caption: '',
+        }, currentOrder + 1);
+        setFocusBlock(newBlock.id);
+      } finally {
+        endTransaction(scopeId);
+      }
     } catch (error) {
       console.error('Image paste upload failed:', error);
     }

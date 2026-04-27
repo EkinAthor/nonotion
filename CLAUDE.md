@@ -198,6 +198,20 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 - **Env vars**: `REALTIME_ENABLED`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_PRIVATE_KEY`, `SUPABASE_JWT_KID`. Uses modern Supabase primitives (publishable/secret API keys + ES256 JWT signing key) — legacy anon/service_role/HS256 not supported.
 - **Key generator**: `apps/api/scripts/generate-jwt-signing-key.mjs` is a Node.js helper that generates an ES256 key pair using `jose.generateKeyPair()`, exports PKCS#8 PEM, and walks the user through the Supabase import + rotate flow. Cross-platform, no openssl dependency.
 
+### 19. Document Undo / Redo
+Document-feel cross-block undo. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y operate as a single unified stack covering text edits, structural ops (create / delete / reorder), block-type changes, multi-block paste / delete, paste-image, indent/outdent, and checklist toggle. Shipped in three phases: structural ops, text-edit grouping, and composites. Database row/property/kanban and page-tree mutations are deferred — see `docs/undo-redo-progress.md`.
+
+- **Module home**: `apps/web/src/lib/undo/` — `undoTypes.ts`, `undoManager.ts`, `blockExecutor.ts`, `textGroupBuffer.ts`, `entries.ts`, `useUndoShortcuts.ts`.
+- **Architecture**: inverse-command pattern with selective field snapshots. Each entry carries a discriminated `payload` describing the inverse mutation. Inverses run through existing optimistic store actions, so realtime LWW guards and error-revert paths stay uniform.
+- **Scope**: per-page stacks keyed by `'page:' + pageId`. The active scope is resolved by walking up from `document.activeElement` to the nearest `[data-undo-scope]` ancestor; falls back to the currently open page. `BlockCanvas` declares the scope attribute.
+- **Keyboard**: single capture-phase `keydown` listener mounted in `MainLayout` via `useUndoShortcuts()`. Runs before TipTap and any other listener.
+- **TipTap**: StarterKit's `history` extension is **disabled** in `useBlockEditor.ts`. The custom `textGroupBuffer.ts` owns text-edit history. Each typing burst (separated by ≥300ms idle, blur, structural mutation, 30-char threshold, or unmount) becomes one `block.content` entry. Markdown shortcuts (`# `, `- `, `1. `, `---`) and slash commands call `discardTextGroup(blockId)` so the typed prefix is consumed by the type change rather than recorded as undoable text.
+- **Composites / transactions**: `beginTransaction(scopeId, label)` / `endTransaction(scopeId)` (refcounted) emit one `composite` entry from the buffered children. Used by `BlockWrapper.handleChangeBlockType`, `handleDeleteAndMergeToPrevious`, `handlePasteImage`, and the multi-paste / multi-delete paths in `blockStore`.
+- **Recreate after delete**: `blockStore.recreateBlock(block)` re-inserts a deleted block with its **original ID** (so dependent entries higher in the stack remain valid). Used by both `block.delete` undo and `block.create` redo.
+- **Realtime safety**: `applyRemote*` paths in `blockStore.ts` bypass `pushEntry`. Defensive `isApplying()` short-circuit on every push and inside `noteTextEdit` (via the `isUserEdit` guard).
+- **Failure mode**: if an inverse's API call rejects and the store falls back to refetch, the executor catches and calls `clearScope(scopeId)`. Stack depth capped at 200 entries per scope; oldest dropped on overflow.
+- **Out of scope**: filters, sort, view config, column widths, kanban-column-visibility, sidebar/expanded state, presence, search modal — never undoable.
+
 ## Critical Files
 
 | File | Purpose |
@@ -250,6 +264,12 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 | `apps/web/src/stores/databaseInstanceRegistry.ts` | Global registry for database instance stores |
 | `apps/web/src/components/presence/PresenceAvatarBar.tsx` | Avatar bar component for page top bar |
 | `apps/web/src/components/presence/BlockEditIndicator.tsx` | Soft lock border + name tag on blocks |
+| `apps/web/src/lib/undo/undoManager.ts` | Cross-document undo manager — scope stacks, transactions, isApplying flag, executor registry |
+| `apps/web/src/lib/undo/textGroupBuffer.ts` | Per-block text-edit grouping; replaces TipTap StarterKit history |
+| `apps/web/src/lib/undo/blockExecutor.ts` | Forward/inverse application of block.* undo entries |
+| `apps/web/src/lib/undo/entries.ts` | `pushBlockContentEntry` / `pushBlockChangeTypeEntry` helpers for ad-hoc pushes |
+| `apps/web/src/lib/undo/useUndoShortcuts.ts` | Capture-phase Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y handler mounted in MainLayout |
+| `docs/undo-redo-progress.md` | Living tracker for shipped phases and deferred scope (DB cells, kanban, page-tree) |
 
 ## Commands
 

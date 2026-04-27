@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import type { Block, BlockType, BlockContent, CreateBlockInput, UpdateBlockInput } from '@nonotion/shared';
 import { generateBlockId } from '@nonotion/shared';
 import { blocksApi } from '@/api/client';
+import { pushEntry, makeEntryId, isApplying, beginTransaction, endTransaction } from '@/lib/undo/undoManager';
+import type { SelectionState, UndoEntry } from '@/lib/undo/undoTypes';
+import { getEditor } from '@/stores/editorRegistry';
+import { flushAllTextGroups } from '@/lib/undo/textGroupBuffer';
+import { pushBlockChangeTypeEntry } from '@/lib/undo/entries';
 
 // Temp ID → real server ID mapping (only needed for API calls)
 const tempToRealId = new Map<string, string>();
@@ -10,6 +15,16 @@ const pendingCreates = new Map<string, Promise<Block>>();
 
 function resolveId(id: string): string {
   return tempToRealId.get(id) ?? id;
+}
+
+function captureSelection(blockId: string | null): SelectionState {
+  if (!blockId) return null;
+  const editor = getEditor(blockId);
+  if (editor && editor.isFocused) {
+    const { from, to } = editor.state.selection;
+    return { kind: 'tiptap', blockId, from, to };
+  }
+  return { kind: 'block-focus', blockId };
 }
 
 export type FocusPosition = 'start' | 'end' | number | null;
@@ -32,6 +47,8 @@ interface BlockState {
   ) => Promise<Block[]>;
   updateBlock: (id: string, input: UpdateBlockInput) => Promise<Block>;
   deleteBlock: (id: string) => Promise<void>;
+  /** Re-insert a block with its exact ID. Used by undo/redo. */
+  recreateBlock: (block: Block) => Promise<void>;
   reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
   setFocusBlock: (id: string | null, position?: FocusPosition) => void;
@@ -94,6 +111,9 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   createBlock: async (pageId, type, content, order) => {
+    if (!isApplying()) flushAllTextGroups();
+    const selectionBefore = captureSelection(get().focusBlockId);
+
     // 1. Generate temp block immediately
     const tempId = generateBlockId();
     const tempBlock: Block = {
@@ -127,6 +147,20 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
       return { blocksByPage };
     });
+
+    if (!isApplying()) {
+      const persistedBlock: Block = { ...tempBlock, order: tempBlock.order };
+      const entry: UndoEntry = {
+        id: makeEntryId(),
+        scopeId: `page:${pageId}`,
+        payload: { kind: 'block.create', pageId, block: persistedBlock },
+        label: 'create block',
+        timestamp: Date.now(),
+        selectionBefore,
+        selectionAfter: { kind: 'block-focus', blockId: tempId, position: 'end' },
+      };
+      pushEntry(entry.scopeId, entry);
+    }
 
     // 3. Fire API call in background
     const input: Omit<CreateBlockInput, 'pageId'> = { type, content, order };
@@ -175,15 +209,20 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   createMultipleBlocks: async (pageId, blocksToCreate, afterOrder) => {
-    // Delegate to optimistic createBlock for each — all appear instantly
-    const createdBlocks: Block[] = [];
-    for (let i = 0; i < blocksToCreate.length; i++) {
-      const { type, content } = blocksToCreate[i];
-      const order = afterOrder + 1 + i;
-      const block = await get().createBlock(pageId, type, content, order);
-      createdBlocks.push(block);
+    const scopeId = `page:${pageId}`;
+    beginTransaction(scopeId, 'paste');
+    try {
+      const createdBlocks: Block[] = [];
+      for (let i = 0; i < blocksToCreate.length; i++) {
+        const { type, content } = blocksToCreate[i];
+        const order = afterOrder + 1 + i;
+        const block = await get().createBlock(pageId, type, content, order);
+        createdBlocks.push(block);
+      }
+      return createdBlocks;
+    } finally {
+      endTransaction(scopeId);
     }
-    return createdBlocks;
   },
 
   updateBlock: async (id, input) => {
@@ -247,13 +286,30 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   deleteBlock: async (id) => {
-    // Find the block's pageId before removing
+    if (!isApplying()) flushAllTextGroups();
+    // Find the block's pageId and snapshot before removing
     let pageId: string | null = null;
+    let snapshot: Block | null = null;
     for (const [pId, blocks] of get().blocksByPage.entries()) {
-      if (blocks.find((b) => b.id === id)) {
+      const found = blocks.find((b) => b.id === id);
+      if (found) {
         pageId = pId;
+        snapshot = { ...found };
         break;
       }
+    }
+
+    if (pageId && snapshot && !isApplying()) {
+      const entry: UndoEntry = {
+        id: makeEntryId(),
+        scopeId: `page:${pageId}`,
+        payload: { kind: 'block.delete', pageId, block: snapshot },
+        label: 'delete block',
+        timestamp: Date.now(),
+        selectionBefore: captureSelection(get().focusBlockId),
+        selectionAfter: null,
+      };
+      pushEntry(entry.scopeId, entry);
     }
 
     // 1. Optimistic removal from store
@@ -291,7 +347,73 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     });
   },
 
+  recreateBlock: async (block) => {
+    const { pageId } = block;
+
+    // 1. Optimistic insert with the original ID, shifting blocks at/after order.
+    set((state) => {
+      const blocksByPage = new Map(state.blocksByPage);
+      const blocks = [...(blocksByPage.get(pageId) || [])];
+      // Skip if a block with this ID already exists (defensive).
+      if (blocks.some((b) => b.id === block.id)) return state;
+      const shifted = blocks.map((b) => (b.order >= block.order ? { ...b, order: b.order + 1 } : b));
+      shifted.push({ ...block });
+      blocksByPage.set(pageId, shifted.sort((a, b) => a.order - b.order));
+      return { blocksByPage };
+    });
+
+    // 2. Recreate on the server. Use a fresh promise registered against the
+    //    block's id so dependent ops (e.g. updateBlock) wait for it.
+    const createPromise = blocksApi.create(pageId, {
+      type: block.type,
+      content: block.content,
+      order: block.order,
+    }).then((real) => {
+      tempToRealId.set(block.id, real.id);
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        const blocks = blocksByPage.get(pageId);
+        if (blocks) {
+          const idx = blocks.findIndex((b) => b.id === block.id);
+          if (idx !== -1) {
+            const updated = [...blocks];
+            updated[idx] = { ...updated[idx], version: real.version };
+            blocksByPage.set(pageId, updated);
+          }
+        }
+        return { blocksByPage };
+      });
+      pendingCreates.delete(block.id);
+      return real;
+    }).catch((error) => {
+      // Revert on failure
+      set((state) => {
+        const blocksByPage = new Map(state.blocksByPage);
+        const blocks = blocksByPage.get(pageId);
+        if (blocks) {
+          const filtered = blocks.filter((b) => b.id !== block.id);
+          const reordered = filtered.map((b, i) => ({ ...b, order: i }));
+          blocksByPage.set(pageId, reordered);
+        }
+        return { blocksByPage };
+      });
+      pendingCreates.delete(block.id);
+      console.error('Failed to recreate block:', error);
+      throw error;
+    });
+
+    pendingCreates.set(block.id, createPromise);
+    await createPromise;
+  },
+
   reorderBlocks: async (pageId, blockIds) => {
+    if (!isApplying()) flushAllTextGroups();
+    // Capture the previous order BEFORE mutating, for undo.
+    const previousIds = (get().blocksByPage.get(pageId) ?? [])
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((b) => b.id);
+
     // Optimistic update
     set((state) => {
       const blocksByPage = new Map(state.blocksByPage);
@@ -305,6 +427,19 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       blocksByPage.set(pageId, reordered);
       return { blocksByPage };
     });
+
+    if (!isApplying() && previousIds.join(',') !== blockIds.join(',')) {
+      const entry: UndoEntry = {
+        id: makeEntryId(),
+        scopeId: `page:${pageId}`,
+        payload: { kind: 'block.reorder', pageId, beforeIds: previousIds, afterIds: blockIds },
+        label: 'reorder blocks',
+        timestamp: Date.now(),
+        selectionBefore: captureSelection(get().focusBlockId),
+        selectionAfter: captureSelection(get().focusBlockId),
+      };
+      pushEntry(entry.scopeId, entry);
+    }
 
     try {
       // Resolve temp IDs to real server IDs for the API call
@@ -331,6 +466,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   changeBlockType: async (id, newType, newText, options) => {
+    if (!isApplying()) flushAllTextGroups();
     // Find the block to get its current content
     let existingBlock: Block | undefined;
     for (const blocks of get().blocksByPage.values()) {
@@ -425,6 +561,13 @@ export const useBlockStore = create<BlockState>((set, get) => ({
         }
       }
       return { blocksByPage };
+    });
+
+    pushBlockChangeTypeEntry({
+      blockId: id,
+      pageId: existingBlock.pageId,
+      before: { type: existingBlock.type, content: existingBlock.content },
+      after: { type: newType, content },
     });
 
     // Fire API call in background (same pattern as deleteBlock)
@@ -580,9 +723,15 @@ export const useBlockStore = create<BlockState>((set, get) => ({
 
     const firstBlock = selectedBlocks[0];
     const prevBlockId = get().getAdjacentBlockId(firstBlock.id, 'prev');
+    const scopeId = `page:${firstBlock.pageId}`;
 
-    // deleteBlock is now optimistic — all removals happen synchronously
-    ids.forEach(id => deleteBlock(id));
+    beginTransaction(scopeId, 'delete blocks');
+    try {
+      // deleteBlock is now optimistic — all removals happen synchronously
+      ids.forEach(id => deleteBlock(id));
+    } finally {
+      endTransaction(scopeId);
+    }
 
     clearSelection();
 

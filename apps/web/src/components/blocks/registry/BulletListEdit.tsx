@@ -4,6 +4,7 @@ import type { Block, BulletListContent } from '@nonotion/shared';
 import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
+import { pushBlockContentEntry } from '@/lib/undo/entries';
 import SlashCommandMenu from '../SlashCommandMenu';
 import FormatToolbar from '../FormatToolbar';
 
@@ -23,19 +24,31 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
 
   const handleIndent = useCallback(async () => {
     if (indent < MAX_INDENT) {
-      await updateBlock(block.id, {
-        content: { ...content, indent: indent + 1 },
+      const after = { ...content, indent: indent + 1 };
+      pushBlockContentEntry({
+        blockId: block.id,
+        pageId: block.pageId,
+        before: content,
+        after,
+        label: 'indent',
       });
+      await updateBlock(block.id, { content: after });
     }
-  }, [block.id, content, indent, updateBlock]);
+  }, [block.id, block.pageId, content, indent, updateBlock]);
 
   const handleOutdent = useCallback(async () => {
     if (indent > 0) {
-      await updateBlock(block.id, {
-        content: { ...content, indent: indent - 1 },
+      const after = { ...content, indent: indent - 1 };
+      pushBlockContentEntry({
+        blockId: block.id,
+        pageId: block.pageId,
+        before: content,
+        after,
+        label: 'outdent',
       });
+      await updateBlock(block.id, { content: after });
     }
-  }, [block.id, content, indent, updateBlock]);
+  }, [block.id, block.pageId, content, indent, updateBlock]);
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
     block,
