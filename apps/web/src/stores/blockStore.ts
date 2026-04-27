@@ -35,7 +35,12 @@ interface BlockState {
   reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
   setFocusBlock: (id: string | null, position?: FocusPosition) => void;
-  changeBlockType: (id: string, newType: BlockType, newText?: string) => Promise<Block>;
+  changeBlockType: (
+    id: string,
+    newType: BlockType,
+    newText?: string,
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+  ) => Promise<Block>;
 
   // Selectors
   getBlocksForPage: (pageId: string) => Block[];
@@ -325,7 +330,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     set({ focusBlockId: id, focusPosition: position });
   },
 
-  changeBlockType: async (id, newType, newText) => {
+  changeBlockType: async (id, newType, newText, options) => {
     // Find the block to get its current content
     let existingBlock: Block | undefined;
     for (const blocks of get().blocksByPage.values()) {
@@ -366,10 +371,20 @@ export const useBlockStore = create<BlockState>((set, get) => ({
         content = { text, level: 3 };
         break;
       case 'bullet_list':
-      case 'numbered_list':
         // Preserve indent when converting between list types
         content = existingIndent !== undefined ? { text, indent: existingIndent } : { text };
         break;
+      case 'numbered_list': {
+        // Preserve indent when converting between list types; carry startNumber when provided
+        const numbered: BlockContent = existingIndent !== undefined
+          ? { text, indent: existingIndent }
+          : { text };
+        if (options?.startNumber !== undefined) {
+          (numbered as { startNumber?: number }).startNumber = options.startNumber;
+        }
+        content = numbered;
+        break;
+      }
       case 'checklist':
         // Preserve indent when converting between list types
         content = existingIndent !== undefined

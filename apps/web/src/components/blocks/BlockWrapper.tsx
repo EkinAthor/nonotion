@@ -47,11 +47,17 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
     const currentBlock = getBlockById(block.id);
     const currentOrder = currentBlock?.order ?? block.order;
     const newBlock = await createBlock(pageId, 'paragraph', { text: initialText }, currentOrder + 1);
-    setFocusBlock(newBlock.id);
+    // Focus at start so cursor lands at the split point, not after carried-over text
+    setFocusBlock(newBlock.id, 'start');
     return newBlock.id;
   }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
-  const handleChangeBlockType = useCallback(async (newType: BlockType, newText?: string, action?: string): Promise<void> => {
+  const handleChangeBlockType = useCallback(async (
+    newType: BlockType,
+    newText?: string,
+    action?: string,
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+  ): Promise<void> => {
     if (newType === 'page_link' && action === 'create_subpage') {
       // Create a sub-page, link to it, then navigate.
       // Use a single updateBlock with both type + content to avoid a race
@@ -70,13 +76,13 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
       return;
     }
 
-    changeBlockType(block.id, newType, newText);
+    changeBlockType(block.id, newType, newText, options);
     if (newType === 'divider' || newType === 'database_view') {
       // Non-text blocks — auto-create a paragraph below and focus it
       handleCreateBlockBelow('');
     } else {
       // Set focus to this block after type change so the new editor gets focus
-      setFocusBlock(block.id);
+      setFocusBlock(block.id, options?.cursorPosition ?? 'end');
     }
   }, [block.id, pageId, changeBlockType, setFocusBlock, handleCreateBlockBelow, createPage, updateBlock, navigate]);
 

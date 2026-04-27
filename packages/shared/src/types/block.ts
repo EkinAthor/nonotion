@@ -39,6 +39,7 @@ export interface BulletListContent {
 export interface NumberedListContent {
   text: string;
   indent?: number;
+  startNumber?: number; // When set, anchors the displayed number for this block (and continues subsequent siblings)
 }
 
 export interface ChecklistContent {
