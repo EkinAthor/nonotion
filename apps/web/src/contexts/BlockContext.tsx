@@ -10,6 +10,7 @@ export interface BlockContextValue {
   pageId: string;
   blockId: string;
   createBlockBelow: (initialText?: string) => Promise<string>;
+  insertParagraphAbove: () => Promise<string>;
   changeBlockType: (
     newType: BlockType,
     newText?: string,

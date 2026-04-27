@@ -13,7 +13,7 @@ interface HeadingEditProps {
 }
 
 export default function HeadingEdit({ block, readOnly = false }: HeadingEditProps) {
-  const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
+  const { createBlockBelow, insertParagraphAbove, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
   const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
@@ -24,6 +24,7 @@ export default function HeadingEdit({ block, readOnly = false }: HeadingEditProp
     onCreateBlockBelow: async (textAfterCursor) => {
       await createBlockBelow(textAfterCursor);
     },
+    onSplitBlockAtStart: insertParagraphAbove,
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
