@@ -58,6 +58,7 @@ interface UseBlockEditorOptions {
   headingLevel?: 1 | 2 | 3;
   readOnly?: boolean;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
+  onSplitBlockAtStart?: () => unknown | Promise<unknown>;
   onChangeBlockType?: (
     newType: BlockType,
     newText?: string,
@@ -86,6 +87,7 @@ export function useBlockEditor({
   headingLevel,
   readOnly = false,
   onCreateBlockBelow,
+  onSplitBlockAtStart,
   onChangeBlockType,
   onFocusPreviousBlock,
   onFocusNextBlock,
@@ -184,6 +186,7 @@ export function useBlockEditor({
   const pendingSavesRef = useRef<Set<string>>(new Set());
   // Refs for callbacks - handling things like preserving position of block indent
   const createCallbackRef = useRef(onCreateBlockBelow);
+  const splitAtStartCallbackRef = useRef(onSplitBlockAtStart);
   const focusPrevCallbackRef = useRef(onFocusPreviousBlock);
   const focusNextCallbackRef = useRef(onFocusNextBlock);
 
@@ -215,6 +218,10 @@ export function useBlockEditor({
   useEffect(() => {
     createCallbackRef.current = onCreateBlockBelow;
   }, [onCreateBlockBelow]);
+
+  useEffect(() => {
+    splitAtStartCallbackRef.current = onSplitBlockAtStart;
+  }, [onSplitBlockAtStart]);
 
   useEffect(() => {
     focusPrevCallbackRef.current = onFocusPreviousBlock;
@@ -482,6 +489,14 @@ export function useBlockEditor({
           // Get the HTML fragment after cursor
           const { from } = editor.state.selection;
           const docEnd = editor.state.doc.content.size - 1;
+
+          // Opt-in: when cursor is at the very start of a non-empty block, hand off
+          // to the host (e.g. headings) to insert an empty block above instead of
+          // splitting content into a new block below.
+          if (splitAtStartCallbackRef.current && from === 1 && docEnd > 1) {
+            splitAtStartCallbackRef.current();
+            return true;
+          }
 
           let htmlAfter = '';
           if (from < docEnd) {

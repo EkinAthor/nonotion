@@ -52,6 +52,17 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
     return newBlock.id;
   }, [pageId, block.id, block.order, createBlock, setFocusBlock, getBlockById]);
 
+  const handleInsertParagraphAbove = useCallback(async (): Promise<string> => {
+    const currentBlock = getBlockById(block.id);
+    const currentOrder = currentBlock?.order ?? block.order;
+    // Passing currentOrder shifts this block (and everything after) down by one
+    // and slots the new paragraph in at the current position. Cursor stays in
+    // the current block (now bumped down) — the editor instance is keyed by
+    // block id so it survives the reorder.
+    const newBlock = await createBlock(pageId, 'paragraph', { text: '' }, currentOrder);
+    return newBlock.id;
+  }, [pageId, block.id, block.order, createBlock, getBlockById]);
+
   const handleChangeBlockType = useCallback(async (
     newType: BlockType,
     newText?: string,
@@ -339,6 +350,7 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
             pageId,
             blockId: block.id,
             createBlockBelow: handleCreateBlockBelow,
+            insertParagraphAbove: handleInsertParagraphAbove,
             changeBlockType: handleChangeBlockType,
             focusPreviousBlock: handleFocusPreviousBlock,
             focusNextBlock: handleFocusNextBlock,
