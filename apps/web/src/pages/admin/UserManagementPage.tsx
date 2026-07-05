@@ -109,6 +109,18 @@ export default function UserManagementPage() {
         }
     }
 
+    async function toggleTwoFactor(user: PublicUser) {
+        try {
+            setActionLoading(user.id);
+            const updated = await usersApi.updateTwoFactor(user.id, !user.twoFactorEnabled);
+            setUsers(users.map(u => u.id === user.id ? updated : u));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to update two-factor status');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -184,12 +196,19 @@ export default function UserManagementPage() {
                                     )}
                                 </td>
                                 <td className="py-3 px-4">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.approved
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                        {user.approved ? 'Approved' : 'Pending'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.approved
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-yellow-100 text-yellow-800'
+                                            }`}>
+                                            {user.approved ? 'Approved' : 'Pending'}
+                                        </span>
+                                        {user.twoFactorEnabled && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="Email two-factor authentication enabled">
+                                                2FA
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="py-3 px-4">
                                     <div className="flex items-center gap-2">
@@ -233,6 +252,17 @@ export default function UserManagementPage() {
                                                     </button>
                                                 )}
                                             </>
+                                        )}
+
+                                        {user.hasPassword && (
+                                            <button
+                                                onClick={() => toggleTwoFactor(user)}
+                                                disabled={actionLoading === user.id}
+                                                className="text-xs px-2 py-1 border border-blue-300 rounded hover:bg-blue-50 text-blue-600 disabled:opacity-50"
+                                                title="Enable or disable email two-factor authentication for this user"
+                                            >
+                                                {user.twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
+                                            </button>
                                         )}
 
                                         <button

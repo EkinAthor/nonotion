@@ -30,6 +30,11 @@ function rowToUser(row: pgSchema.UserRow): User {
     isOwner: row.isOwner,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
+    twoFactorEnabled: row.twoFactorEnabled,
+    twoFactorCodeHash: row.twoFactorCodeHash ?? null,
+    twoFactorCodeExpiresAt: row.twoFactorCodeExpiresAt ?? null,
+    twoFactorCodeAttempts: row.twoFactorCodeAttempts,
+    twoFactorCodePurpose: (row.twoFactorCodePurpose as User['twoFactorCodePurpose']) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -253,6 +258,11 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       isOwner: user.isOwner,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
+      twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorCodeHash: user.twoFactorCodeHash,
+      twoFactorCodeExpiresAt: user.twoFactorCodeExpiresAt,
+      twoFactorCodeAttempts: user.twoFactorCodeAttempts,
+      twoFactorCodePurpose: user.twoFactorCodePurpose,
       createdAt: new Date(user.createdAt),
       updatedAt: new Date(user.updatedAt),
     });
@@ -274,6 +284,14 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;
     if (updates.googleId !== undefined) updateData.googleId = updates.googleId;
+    if (updates.twoFactorEnabled !== undefined) updateData.twoFactorEnabled = updates.twoFactorEnabled;
+    if (updates.twoFactorCodeHash !== undefined) updateData.twoFactorCodeHash = updates.twoFactorCodeHash;
+    if (updates.twoFactorCodeExpiresAt !== undefined)
+      updateData.twoFactorCodeExpiresAt = updates.twoFactorCodeExpiresAt;
+    if (updates.twoFactorCodeAttempts !== undefined)
+      updateData.twoFactorCodeAttempts = updates.twoFactorCodeAttempts;
+    if (updates.twoFactorCodePurpose !== undefined)
+      updateData.twoFactorCodePurpose = updates.twoFactorCodePurpose;
     if (updates.updatedAt !== undefined) updateData.updatedAt = new Date(updates.updatedAt);
 
     if (Object.keys(updateData).length > 0) {

@@ -77,6 +77,11 @@ function loadSqliteUsers(sqliteDb: ReturnType<typeof drizzleSqlite>): User[] {
     isOwner: row.isOwner,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
+    twoFactorEnabled: row.twoFactorEnabled,
+    twoFactorCodeHash: row.twoFactorCodeHash ?? null,
+    twoFactorCodeExpiresAt: row.twoFactorCodeExpiresAt ?? null,
+    twoFactorCodeAttempts: row.twoFactorCodeAttempts,
+    twoFactorCodePurpose: (row.twoFactorCodePurpose as User['twoFactorCodePurpose']) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));

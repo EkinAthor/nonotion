@@ -19,6 +19,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Star/unstar pages
 - Multi-user authentication with JWT (email/password)
 - Google OAuth support (optional)
+- Email two-factor authentication (opt-in for password accounts; admin can toggle per user)
 - Owner account with workspace-wide access to all pages
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties (rename, delete, reorder, hide/show columns per view)
@@ -200,6 +201,8 @@ The script is idempotent — safe to run multiple times. Existing data is skippe
 | `REQUIRE_USER_APPROVAL` | Require admin approval for new users | `true` |
 | `AUTH_MODES` | Authentication methods: `db`, `google`, or `db,google` | `db` |
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID (required when AUTH_MODES includes `google`) | - |
+| `RESEND_API_KEY` | Resend API key (required for email 2FA; auto-provisioned by Vercel's Resend integration) | - |
+| `EMAIL_FROM` | Sender address for 2FA verification emails | - |
 | `STORAGE_TYPE` | `sqlite` (default) or `postgres` | `sqlite` |
 | `DATABASE_URL` | PostgreSQL connection URL | - |
 | `PORT` | API server port | `3001` |
@@ -261,10 +264,14 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 |--------|----------|-------------|
 | GET | `/api/auth/config` | Get auth config (public) |
 | POST | `/api/auth/register` | Register new user |
-| POST | `/api/auth/login` | Login (email/password) |
+| POST | `/api/auth/login` | Login (email/password; returns a 2FA challenge if enabled) |
+| POST | `/api/auth/login/verify-2fa` | Complete a 2FA login challenge (pending token + code) |
 | POST | `/api/auth/google` | Login with Google ID token |
 | GET | `/api/auth/me` | Get current user |
 | POST | `/api/auth/change-password` | Change password |
+| POST | `/api/auth/2fa/initiate` | Email a code to begin enabling 2FA |
+| POST | `/api/auth/2fa/confirm` | Confirm the code and enable 2FA |
+| POST | `/api/auth/2fa/disable` | Disable 2FA (requires current password) |
 
 ### Pages
 
@@ -313,6 +320,7 @@ pnpm --filter @nonotion/e2e test:e2e       # Run E2E tests
 | PATCH | `/api/users/:id/role` | Update user role |
 | PATCH | `/api/users/:id/owner` | Grant/revoke owner status |
 | PATCH | `/api/users/:id/approve` | Approve/revoke user |
+| PATCH | `/api/users/:id/two-factor` | Admin toggle a user's email 2FA |
 | POST | `/api/users/:id/reset-password` | Reset user password |
 | DELETE | `/api/users/:id` | Delete user |
 

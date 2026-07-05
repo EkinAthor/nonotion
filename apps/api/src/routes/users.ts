@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { adminResetPasswordInputSchema, updateUserRoleInputSchema, approveUserInputSchema, updateOwnerInputSchema } from '@nonotion/shared';
+import { adminResetPasswordInputSchema, updateUserRoleInputSchema, approveUserInputSchema, updateOwnerInputSchema, adminSetTwoFactorInputSchema } from '@nonotion/shared';
 import * as userService from '../services/user-service.js';
 import * as authService from '../services/auth-service.js';
 import { authMiddleware, adminMiddleware, mustChangePasswordMiddleware } from '../middleware/auth.js';
@@ -172,6 +172,44 @@ export async function usersRoutes(fastify: FastifyInstance): Promise<void> {
         if (message.includes('Only owners') || message.includes('Cannot remove')) {
           return reply.status(403).send({
             error: { code: 'FORBIDDEN', message },
+            success: false,
+          });
+        }
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message },
+          success: false,
+        });
+      }
+    }
+  );
+
+  // PATCH /api/users/:id/two-factor - Admin override to enable/disable a user's email 2FA
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/users/:id/two-factor',
+    { preHandler: [adminMiddleware, mustChangePasswordMiddleware] },
+    async (request, reply) => {
+      const parsed = adminSetTwoFactorInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          success: false,
+        });
+      }
+
+      try {
+        const user = await userService.updateUserTwoFactor(request.params.id, parsed.data.enabled);
+        return reply.send({ data: user, success: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update two-factor status';
+        if (message.includes('not found')) {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message },
+            success: false,
+          });
+        }
+        if (message.includes('no password')) {
+          return reply.status(400).send({
+            error: { code: 'INVALID_OPERATION', message },
             success: false,
           });
         }

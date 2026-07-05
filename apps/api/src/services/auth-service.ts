@@ -1,10 +1,16 @@
+import { randomInt } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
-import type { User, PublicUser, RegisterInput, LoginInput, ChangePasswordInput, AuthMode } from '@nonotion/shared';
+import type { User, PublicUser, RegisterInput, LoginInput, ChangePasswordInput, AuthMode, TwoFactorCodePurpose } from '@nonotion/shared';
 import { generateUserId, now } from '@nonotion/shared';
 import { getUserStorage } from '../storage/storage-factory.js';
+import { sendTwoFactorCode } from './email-service.js';
 
 const SALT_ROUNDS = 10;
+
+// Email 2FA challenge configuration
+const TWO_FACTOR_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const TWO_FACTOR_MAX_ATTEMPTS = 5;
 
 // Lazy-initialized Google OAuth client
 let googleClient: OAuth2Client | null = null;
@@ -39,6 +45,8 @@ export function toPublicUser(user: User): PublicUser {
     role: user.role,
     isOwner: user.isOwner,
     approved: user.approved,
+    twoFactorEnabled: user.twoFactorEnabled,
+    hasPassword: hasPassword(user),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -88,6 +96,11 @@ export async function register(input: RegisterInput): Promise<User> {
     isOwner,
     mustChangePassword: false,
     approved,
+    twoFactorEnabled: false,
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -191,6 +204,11 @@ export async function googleLogin(credential: string): Promise<User> {
     isOwner,
     mustChangePassword: false,
     approved,
+    twoFactorEnabled: false,
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -260,6 +278,140 @@ export async function adminResetPassword(
 
 export async function getCurrentUser(userId: string): Promise<User | null> {
   return getUserStorage().getUser(userId);
+}
+
+// ============================================================================
+// Email two-factor authentication
+// ============================================================================
+
+/** Generate a cryptographically-random 6-digit numeric code (as a string). */
+export function generateTwoFactorCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
+}
+
+/**
+ * Generate a code, persist its hash + expiry on the user, and email it.
+ * `purpose` distinguishes a login challenge from an enable-confirmation.
+ */
+export async function issueTwoFactorChallenge(
+  user: User,
+  purpose: TwoFactorCodePurpose
+): Promise<void> {
+  if (!hasPassword(user)) {
+    throw new Error('This account has no password; email 2FA is unavailable.');
+  }
+
+  const code = generateTwoFactorCode();
+  const codeHash = await bcrypt.hash(code, SALT_ROUNDS);
+  const expiresAt = new Date(Date.now() + TWO_FACTOR_CODE_TTL_MS).toISOString();
+
+  await getUserStorage().updateUser(user.id, {
+    twoFactorCodeHash: codeHash,
+    twoFactorCodeExpiresAt: expiresAt,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: purpose,
+    updatedAt: now(),
+  });
+
+  // Send after persisting so a delivery failure surfaces to the caller.
+  await sendTwoFactorCode(user.email, code);
+}
+
+/**
+ * Verify a submitted code against the user's pending challenge for `purpose`.
+ * On success the challenge fields are cleared. On failure the attempt counter
+ * is incremented and a typed Error is thrown. Returns the (refreshed) user.
+ */
+export async function verifyTwoFactorCode(
+  userId: string,
+  code: string,
+  purpose: TwoFactorCodePurpose
+): Promise<User> {
+  const user = await getUserStorage().getUser(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (!user.twoFactorCodeHash || user.twoFactorCodePurpose !== purpose) {
+    throw new Error('No verification in progress');
+  }
+
+  if (!user.twoFactorCodeExpiresAt || new Date(user.twoFactorCodeExpiresAt).getTime() < Date.now()) {
+    await clearTwoFactorChallenge(userId);
+    throw new Error('Verification code expired');
+  }
+
+  if (user.twoFactorCodeAttempts >= TWO_FACTOR_MAX_ATTEMPTS) {
+    await clearTwoFactorChallenge(userId);
+    throw new Error('Too many attempts. Please sign in again.');
+  }
+
+  const isValid = await bcrypt.compare(code, user.twoFactorCodeHash);
+  if (!isValid) {
+    await getUserStorage().updateUser(userId, {
+      twoFactorCodeAttempts: user.twoFactorCodeAttempts + 1,
+      updatedAt: now(),
+    });
+    throw new Error('Invalid verification code');
+  }
+
+  const updated = await clearTwoFactorChallenge(userId);
+  return updated ?? user;
+}
+
+/** Clear all pending-challenge fields on a user. */
+async function clearTwoFactorChallenge(userId: string): Promise<User | null> {
+  return getUserStorage().updateUser(userId, {
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
+    updatedAt: now(),
+  });
+}
+
+/** Turn on 2FA for a user (called after an 'enable' code is verified). */
+export async function enableTwoFactor(userId: string): Promise<User> {
+  const updated = await getUserStorage().updateUser(userId, {
+    twoFactorEnabled: true,
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
+    updatedAt: now(),
+  });
+  if (!updated) {
+    throw new Error('User not found');
+  }
+  return updated;
+}
+
+/** Turn off 2FA. Requires the current password when the user has one. */
+export async function disableTwoFactor(userId: string, password: string): Promise<User> {
+  const user = await getUserStorage().getUser(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (hasPassword(user)) {
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPassword) {
+      throw new Error('Current password is incorrect');
+    }
+  }
+
+  const updated = await getUserStorage().updateUser(userId, {
+    twoFactorEnabled: false,
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
+    updatedAt: now(),
+  });
+  if (!updated) {
+    throw new Error('Failed to disable two-factor authentication');
+  }
+  return updated;
 }
 
 export async function ensureAdminPasswordReset(): Promise<void> {

@@ -28,6 +28,11 @@ function rowToUser(row: typeof users.$inferSelect): User {
     isOwner: row.isOwner,
     mustChangePassword: row.mustChangePassword,
     approved: row.approved,
+    twoFactorEnabled: row.twoFactorEnabled,
+    twoFactorCodeHash: row.twoFactorCodeHash ?? null,
+    twoFactorCodeExpiresAt: row.twoFactorCodeExpiresAt ?? null,
+    twoFactorCodeAttempts: row.twoFactorCodeAttempts,
+    twoFactorCodePurpose: (row.twoFactorCodePurpose as User['twoFactorCodePurpose']) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -236,6 +241,11 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
       isOwner: user.isOwner,
       mustChangePassword: user.mustChangePassword,
       approved: user.approved,
+      twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorCodeHash: user.twoFactorCodeHash,
+      twoFactorCodeExpiresAt: user.twoFactorCodeExpiresAt,
+      twoFactorCodeAttempts: user.twoFactorCodeAttempts,
+      twoFactorCodePurpose: user.twoFactorCodePurpose,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     }).run();
@@ -256,6 +266,11 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
     if (updates.mustChangePassword !== undefined) updateData.mustChangePassword = updates.mustChangePassword;
     if (updates.approved !== undefined) updateData.approved = updates.approved;
     if (updates.googleId !== undefined) updateData.googleId = updates.googleId;
+    if (updates.twoFactorEnabled !== undefined) updateData.twoFactorEnabled = updates.twoFactorEnabled;
+    if (updates.twoFactorCodeHash !== undefined) updateData.twoFactorCodeHash = updates.twoFactorCodeHash;
+    if (updates.twoFactorCodeExpiresAt !== undefined) updateData.twoFactorCodeExpiresAt = updates.twoFactorCodeExpiresAt;
+    if (updates.twoFactorCodeAttempts !== undefined) updateData.twoFactorCodeAttempts = updates.twoFactorCodeAttempts;
+    if (updates.twoFactorCodePurpose !== undefined) updateData.twoFactorCodePurpose = updates.twoFactorCodePurpose;
     if (updates.updatedAt !== undefined) updateData.updatedAt = updates.updatedAt;
 
     if (Object.keys(updateData).length > 0) {

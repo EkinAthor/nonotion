@@ -42,9 +42,13 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   `JWT_SECRET`: A secure random string (32+ characters). **Required** — the API will refuse to start without it.
     *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://your-nonotion-project-web.vercel.app`).
     *   `ADMIN_EMAIL`: Your initial admin email.
+    *   `RESEND_API_KEY` + `EMAIL_FROM`: Required only if you use email two-factor authentication (see the Resend note below).
 
 > [!NOTE]
 > Vercel sets `NODE_ENV=production` automatically for all deployments. The API requires `JWT_SECRET` in production and will throw a startup error if it is missing.
+
+> [!NOTE]
+> **Email 2FA (Resend).** The email two-factor auth feature sends codes via [Resend](https://resend.com), a native Vercel Marketplace integration. Install it from **Vercel → Marketplace → Resend** to auto-provision `RESEND_API_KEY` into your project, then set `EMAIL_FROM` to a Resend-verified sender address. Both are required for 2FA to work; without them, login for any 2FA-enabled account will fail at the code-sending step.
 
 > [!NOTE]
 > The API automatically runs Drizzle migrations on startup when `STORAGE_TYPE=postgres` is set.

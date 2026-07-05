@@ -86,6 +86,37 @@ export async function updateUserApproval(userId: string, approved: boolean): Pro
   return toPublicUser(updated);
 }
 
+/**
+ * Admin override to turn a user's email 2FA on or off directly (no email
+ * confirmation). Disabling doubles as a lockout safety valve and clears any
+ * pending challenge. Only available for password accounts.
+ */
+export async function updateUserTwoFactor(userId: string, enabled: boolean): Promise<PublicUser> {
+  const user = await getUserStorage().getUser(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (user.passwordHash === '') {
+    throw new Error('Account has no password; 2FA is unavailable');
+  }
+
+  const timestamp = now();
+  const updated = await getUserStorage().updateUser(userId, {
+    twoFactorEnabled: enabled,
+    // Always clear any in-flight challenge when an admin flips the flag
+    twoFactorCodeHash: null,
+    twoFactorCodeExpiresAt: null,
+    twoFactorCodeAttempts: 0,
+    twoFactorCodePurpose: null,
+    updatedAt: timestamp,
+  });
+  if (!updated) {
+    throw new Error('Failed to update two-factor status');
+  }
+  return toPublicUser(updated);
+}
+
 export async function deleteUser(
   userIdToDelete: string,
   requestingAdminId: string
