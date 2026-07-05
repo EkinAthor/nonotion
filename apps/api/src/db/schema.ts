@@ -11,6 +11,11 @@ export const users = sqliteTable('users', {
   isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
   mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
   approved: integer('approved', { mode: 'boolean' }).notNull().default(true),
+  twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).notNull().default(false),
+  twoFactorCodeHash: text('two_factor_code_hash'),
+  twoFactorCodeExpiresAt: text('two_factor_code_expires_at'),
+  twoFactorCodeAttempts: integer('two_factor_code_attempts').notNull().default(0),
+  twoFactorCodePurpose: text('two_factor_code_purpose', { enum: ['login', 'enable'] }),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

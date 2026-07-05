@@ -162,6 +162,19 @@ Disabled features: file upload, Notion import, sharing, user management, "Save a
 
 Types: `DatabaseViewType`, `KanbanConfig` in `packages/shared/src/types/database.ts`. Zod: `databaseViewTypeSchema`, `kanbanConfigSchema` in `packages/shared/src/schemas/database.ts`.
 
+### 16. Email Two-Factor Authentication
+Password-authenticated users can opt into email-based 2FA. When enabled, login requires the password **and then** a random 6-digit code emailed to the account address. The option is **hidden for Google-only accounts** (`hasPassword === false`); they delegate MFA to Google.
+
+- **Two-step login**: `POST /api/auth/login` verifies the password; if `twoFactorEnabled`, it emails a code (bcrypt-hashed on the user row with a 10-min expiry + attempt counter) and returns `{ twoFactorRequired: true, pendingToken }` (a short-lived JWT with a `twoFactorPending` claim) **instead of** a session token. `POST /api/auth/login/verify-2fa` exchanges `pendingToken` + code for the real JWT. `authMiddleware` **rejects** any token carrying `twoFactorPending`, so a pending token can't access protected routes.
+- **Self-service enable (with confirmation)**: `POST /api/auth/2fa/initiate` emails a code; `POST /api/auth/2fa/confirm` verifies it and sets `twoFactorEnabled = true` (confirming the mailbox is reachable, preventing lockout). `POST /api/auth/2fa/disable` turns it off and requires the current password. All three use `authMiddleware`. UI: `AccountSettingsModal` opened from `UserMenu` → "Account settings".
+- **Admin override**: `PATCH /api/users/:id/two-factor` (`adminMiddleware`, body `{ enabled }`) flips a user's flag directly (no email confirmation) — an administrative override and lockout safety valve; disabling clears any pending challenge. Rejected for password-less (Google-only) accounts. UI: "Enable/Disable 2FA" button + "2FA" status badge in `UserManagementPage`, shown only when `user.hasPassword`.
+- **Codes**: 6 digits, bcrypt-hashed, 10-min TTL, max 5 attempts. Verify endpoints use the **auth rate-limit tier**.
+- **Email transport**: `apps/api/src/services/email-service.ts` wraps the Resend SDK. `RESEND_API_KEY` + `EMAIL_FROM` are **required** (no fallback). Outside production the code is also `console.log`ged for local/automated testing (debug aid, not a delivery fallback). Resend is a native Vercel Marketplace integration that auto-provisions `RESEND_API_KEY`.
+- **Data model**: `User` gains `twoFactorEnabled` + ephemeral challenge fields (`twoFactorCodeHash`, `twoFactorCodeExpiresAt`, `twoFactorCodeAttempts`, `twoFactorCodePurpose`); `PublicUser` gains `twoFactorEnabled` + derived `hasPassword`. Columns added to both `db/schema.ts` (SQLite) and `db/pg-schema.ts` (Postgres) with migrations in `drizzle/` and `drizzle-pg/`.
+- **Store**: `authStore` adds transient `twoFactorPending`/`pendingToken` (not persisted — a refresh restarts login) and actions `verifyTwoFactor`, `cancelTwoFactor`, `initiateTwoFactor`, `confirmTwoFactor`, `disableTwoFactor`. `LoginPage` renders a code-entry step when `twoFactorPending`.
+- **Env vars**: `RESEND_API_KEY` (required for 2FA), `EMAIL_FROM` (sender address).
+
+Types: `TwoFactorCodePurpose`, `TwoFactorChallengeResponse`, `LoginResponse`, `Verify/Confirm/DisableTwoFactorInput`, `AdminSetTwoFactorInput` in `packages/shared/src/types/user.ts`. Zod: `verify/confirm/disableTwoFactorInputSchema`, `adminSetTwoFactorInputSchema` in `packages/shared/src/schemas/user.ts`.
 ### 16. Database Pagination
 Backend `getRows` supports `limit`/`offset` params. Table and kanban views paginate differently.
 
@@ -231,8 +244,10 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 | `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
 | `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add |
 | `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
-| `apps/api/src/services/auth-service.ts` | Auth service with email/password + Google login, auth mode helpers |
-| `apps/api/src/routes/auth.ts` | Auth routes including `GET /auth/config`, `POST /auth/google` |
+| `apps/api/src/services/auth-service.ts` | Auth service with email/password + Google login, auth mode helpers, email 2FA challenge/enable/disable |
+| `apps/api/src/services/email-service.ts` | Resend-backed email sender (`sendTwoFactorCode`) for 2FA codes |
+| `apps/api/src/routes/auth.ts` | Auth routes including `GET /auth/config`, `POST /auth/google`, 2FA login verify + enable/confirm/disable |
+| `apps/web/src/components/auth/AccountSettingsModal.tsx` | Account settings modal with the email 2FA toggle + change-password |
 | `apps/web/src/components/auth/AuthConfigProvider.tsx` | Fetches auth config, wraps app in GoogleOAuthProvider |
 | `apps/web/src/components/auth/GoogleLoginButton.tsx` | Google Sign-In button component |
 | `apps/web/src/components/layout/DemoBanner.tsx` | Demo mode banner (dismissible, sessionStorage) |

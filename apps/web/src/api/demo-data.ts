@@ -18,6 +18,8 @@ export const DEMO_USER = {
   avatarUrl: null,
   googleId: null,
   approved: true,
+  twoFactorEnabled: false,
+  hasPassword: true,
   createdAt: NOW,
   updatedAt: NOW,
 };

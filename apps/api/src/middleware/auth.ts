@@ -11,14 +11,22 @@ declare module 'fastify' {
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { userId: string; role: 'admin' | 'user'; isOwner: boolean };
-    user: { userId: string; role: 'admin' | 'user'; isOwner: boolean };
+    // `twoFactorPending` tokens are short-lived login-challenge tokens and must
+    // never be accepted as normal auth tokens (see authMiddleware guard below).
+    payload:
+      | { userId: string; role: 'admin' | 'user'; isOwner: boolean; twoFactorPending?: false }
+      | { userId: string; twoFactorPending: true };
+    user: { userId: string; role: 'admin' | 'user'; isOwner: boolean; twoFactorPending?: boolean };
   }
 }
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean }>();
+    // Reject login-challenge tokens — they are not a completed authentication.
+    if (decoded.twoFactorPending) {
+      throw new Error('Two-factor challenge not completed');
+    }
     request.userId = decoded.userId;
     request.userRole = decoded.role;
     request.isOwner = decoded.isOwner === true;
@@ -32,7 +40,10 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 
 export async function optionalAuthMiddleware(request: FastifyRequest): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean }>();
+    if (decoded.twoFactorPending) {
+      throw new Error('Two-factor challenge not completed');
+    }
     request.userId = decoded.userId;
     request.userRole = decoded.role;
     request.isOwner = decoded.isOwner === true;

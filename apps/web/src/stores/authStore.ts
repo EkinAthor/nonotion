@@ -12,9 +12,17 @@ interface AuthState {
   error: string | null;
   authConfig: AuthConfigResponse | null;
   authConfigLoading: boolean;
+  // Email 2FA login challenge (transient — not persisted)
+  twoFactorPending: boolean;
+  pendingToken: string | null;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
+  verifyTwoFactor: (code: string) => Promise<void>;
+  cancelTwoFactor: () => void;
+  initiateTwoFactor: () => Promise<void>;
+  confirmTwoFactor: (code: string) => Promise<void>;
+  disableTwoFactor: (password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
   googleLogin: (credential: string) => Promise<void>;
   fetchAuthConfig: () => Promise<void>;
@@ -43,16 +51,29 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       authConfig: null,
       authConfigLoading: false,
+      twoFactorPending: false,
+      pendingToken: null,
 
       login: async (email, password) => {
         set({ isLoading: true, error: null });
         try {
           const response = await authApi.login({ email, password });
+          // Email 2FA enabled — enter the code-entry challenge instead of session
+          if ('twoFactorRequired' in response) {
+            set({
+              twoFactorPending: true,
+              pendingToken: response.pendingToken,
+              isLoading: false,
+            });
+            return;
+          }
           set({
             user: response.user,
             token: response.token,
             mustChangePassword: response.mustChangePassword,
             pendingApproval: !response.user.approved,
+            twoFactorPending: false,
+            pendingToken: null,
             isLoading: false,
           });
         } catch (error) {
@@ -60,6 +81,68 @@ export const useAuthStore = create<AuthState>()(
             error: (error as Error).message,
             isLoading: false,
           });
+          throw error;
+        }
+      },
+
+      verifyTwoFactor: async (code) => {
+        const pendingToken = get().pendingToken;
+        if (!pendingToken) {
+          throw new Error('No sign-in in progress');
+        }
+        set({ isLoading: true, error: null });
+        try {
+          const response = await authApi.verifyTwoFactor({ pendingToken, code });
+          set({
+            user: response.user,
+            token: response.token,
+            mustChangePassword: response.mustChangePassword,
+            pendingApproval: !response.user.approved,
+            twoFactorPending: false,
+            pendingToken: null,
+            isLoading: false,
+          });
+        } catch (error) {
+          set({
+            error: (error as Error).message,
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      cancelTwoFactor: () => {
+        set({ twoFactorPending: false, pendingToken: null, error: null });
+      },
+
+      initiateTwoFactor: async () => {
+        set({ error: null });
+        try {
+          await authApi.initiateTwoFactor();
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        }
+      },
+
+      confirmTwoFactor: async (code) => {
+        set({ error: null });
+        try {
+          const updated = await authApi.confirmTwoFactor({ code });
+          set({ user: updated });
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        }
+      },
+
+      disableTwoFactor: async (password) => {
+        set({ error: null });
+        try {
+          const updated = await authApi.disableTwoFactor({ password });
+          set({ user: updated });
+        } catch (error) {
+          set({ error: (error as Error).message });
           throw error;
         }
       },
@@ -128,6 +211,8 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           mustChangePassword: false,
           pendingApproval: false,
+          twoFactorPending: false,
+          pendingToken: null,
           error: null,
         });
       },

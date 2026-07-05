@@ -34,6 +34,10 @@ import type {
   AdminResetPasswordInput,
   PageOrderSettings,
   UpdatePageOrderInput,
+  LoginResponse,
+  VerifyTwoFactorInput,
+  ConfirmTwoFactorInput,
+  DisableTwoFactorInput,
 } from '@nonotion/shared';
 import {
   generatePageId,
@@ -75,12 +79,29 @@ function saveDemoPageOrder(order: PageOrderSettings): void {
 // ============ AUTH API ============
 
 export const authApi = {
-  login: (_input: LoginInput): Promise<AuthResponse> =>
+  // Demo mode never challenges for 2FA (no backend/email)
+  login: (_input: LoginInput): Promise<LoginResponse> =>
     Promise.resolve({
       token: 'demo-token',
       user: { ...DEMO_USER },
       mustChangePassword: false,
     }),
+
+  verifyTwoFactor: (_input: VerifyTwoFactorInput): Promise<AuthResponse> =>
+    Promise.resolve({
+      token: 'demo-token',
+      user: { ...DEMO_USER },
+      mustChangePassword: false,
+    }),
+
+  initiateTwoFactor: (): Promise<{ sent: boolean }> =>
+    Promise.resolve({ sent: true }),
+
+  confirmTwoFactor: (_input: ConfirmTwoFactorInput): Promise<PublicUser> =>
+    Promise.resolve({ ...DEMO_USER }),
+
+  disableTwoFactor: (_input: DisableTwoFactorInput): Promise<PublicUser> =>
+    Promise.resolve({ ...DEMO_USER }),
 
   register: (_input: RegisterInput): Promise<AuthResponse> =>
     Promise.resolve({
@@ -121,6 +142,8 @@ export const usersApi = {
   approve: (_id: string, _approved: boolean): Promise<PublicUser> =>
     Promise.resolve({ ...DEMO_USER }),
   updateOwner: (_id: string, _isOwner: boolean): Promise<PublicUser> =>
+    Promise.resolve({ ...DEMO_USER }),
+  updateTwoFactor: (_id: string, _enabled: boolean): Promise<PublicUser> =>
     Promise.resolve({ ...DEMO_USER }),
 };
 

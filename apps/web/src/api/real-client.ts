@@ -27,6 +27,10 @@ import type {
   AuthConfigResponse,
   PageOrderSettings,
   UpdatePageOrderInput,
+  LoginResponse,
+  VerifyTwoFactorInput,
+  ConfirmTwoFactorInput,
+  DisableTwoFactorInput,
 } from '@nonotion/shared';
 import { getClientId } from '@/lib/realtime/client-id';
 
@@ -97,10 +101,36 @@ async function request<T>(
 // Auth API
 export const authApi = {
   login: (input: LoginInput) =>
-    request<AuthResponse>('/auth/login', {
+    request<LoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(input),
       skipAuth: true,
+    }),
+
+  // Exchange a 2FA pending token + emailed code for a real session
+  verifyTwoFactor: (input: VerifyTwoFactorInput) =>
+    request<AuthResponse>('/auth/login/verify-2fa', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      skipAuth: true,
+    }),
+
+  // Email a confirmation code to begin enabling 2FA (authenticated)
+  initiateTwoFactor: () =>
+    request<{ sent: boolean }>('/auth/2fa/initiate', { method: 'POST' }),
+
+  // Confirm the emailed code and turn 2FA on (authenticated)
+  confirmTwoFactor: (input: ConfirmTwoFactorInput) =>
+    request<PublicUser>('/auth/2fa/confirm', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  // Disable 2FA — requires current password (authenticated)
+  disableTwoFactor: (input: DisableTwoFactorInput) =>
+    request<PublicUser>('/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
 
   register: (input: RegisterInput) =>
@@ -167,6 +197,12 @@ export const usersApi = {
     request<PublicUser>(`/users/${id}/owner`, {
       method: 'PATCH',
       body: JSON.stringify({ isOwner }),
+    }),
+
+  updateTwoFactor: (id: string, enabled: boolean) =>
+    request<PublicUser>(`/users/${id}/two-factor`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
     }),
 };
 

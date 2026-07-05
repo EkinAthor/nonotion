@@ -345,6 +345,11 @@ async function seed(): Promise<void> {
       isOwner: true,
       mustChangePassword: false,
       approved: true,
+      twoFactorEnabled: false,
+      twoFactorCodeHash: null,
+      twoFactorCodeExpiresAt: null,
+      twoFactorCodeAttempts: 0,
+      twoFactorCodePurpose: null,
       createdAt: NOW,
       updatedAt: NOW,
     });

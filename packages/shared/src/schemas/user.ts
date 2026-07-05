@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const userRoleSchema = z.enum(['admin', 'user']);
 
+export const twoFactorCodePurposeSchema = z.enum(['login', 'enable']);
+
 export const userSchema = z.object({
   id: z.string().startsWith('usr_'),
   email: z.string().email(),
@@ -13,6 +15,11 @@ export const userSchema = z.object({
   isOwner: z.boolean(),
   mustChangePassword: z.boolean(),
   approved: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+  twoFactorCodeHash: z.string().nullable(),
+  twoFactorCodeExpiresAt: z.string().datetime().nullable(),
+  twoFactorCodeAttempts: z.number().int().nonnegative(),
+  twoFactorCodePurpose: twoFactorCodePurposeSchema.nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -26,6 +33,8 @@ export const publicUserSchema = z.object({
   role: userRoleSchema,
   isOwner: z.boolean(),
   approved: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+  hasPassword: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -87,3 +96,30 @@ export const googleLoginInputSchema = z.object({
 });
 
 export type GoogleLoginInputSchema = z.infer<typeof googleLoginInputSchema>;
+
+// Email 2FA input schemas
+const twoFactorCodeSchema = z
+  .string()
+  .regex(/^\d{6}$/, 'Code must be 6 digits');
+
+export const verifyTwoFactorInputSchema = z.object({
+  pendingToken: z.string().min(1, 'Pending token is required'),
+  code: twoFactorCodeSchema,
+});
+
+export const confirmTwoFactorInputSchema = z.object({
+  code: twoFactorCodeSchema,
+});
+
+export const disableTwoFactorInputSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
+
+export const adminSetTwoFactorInputSchema = z.object({
+  enabled: z.boolean(),
+});
+
+export type VerifyTwoFactorInputSchema = z.infer<typeof verifyTwoFactorInputSchema>;
+export type ConfirmTwoFactorInputSchema = z.infer<typeof confirmTwoFactorInputSchema>;
+export type DisableTwoFactorInputSchema = z.infer<typeof disableTwoFactorInputSchema>;
+export type AdminSetTwoFactorInputSchema = z.infer<typeof adminSetTwoFactorInputSchema>;

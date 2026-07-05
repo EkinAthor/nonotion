@@ -42,6 +42,8 @@ This guide covers deploying Nonotion using Docker and Docker Compose.
 | `CORS_ORIGINS` | `http://localhost,http://localhost:80` | Allowed CORS origins (comma-separated) |
 | `PORT` | `3001` | Internal API port |
 | `API_UPSTREAM` | `api:3001` | API upstream for nginx proxy |
+| `RESEND_API_KEY` | - | Resend API key — required for email two-factor authentication |
+| `EMAIL_FROM` | - | Sender address for 2FA verification emails (Resend-verified) |
 
 ## Deployment Scenarios
  
