@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { createStore, type StoreApi } from 'zustand';
 import { useStore } from 'zustand';
 import type {
@@ -18,6 +18,10 @@ import type {
 } from '@nonotion/shared';
 import { databaseApi, pagesApi } from '@/api/client';
 import { usePageStore } from '@/stores/pageStore';
+
+const PAGE_SIZE = 50;
+const KANBAN_COLUMN_PAGE_SIZE = 30;
+const KANBAN_FETCH_LIMIT = 10000;
 
 interface ViewConfig {
   viewType: DatabaseViewType;
@@ -57,10 +61,17 @@ export interface DatabaseInstanceState {
   rows: DatabaseRow[];
   total: number;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
 
   // View configuration
   viewConfig: ViewConfig;
+
+  // Kanban per-column display limits (client-side pagination)
+  kanbanColumnLimits: Record<string, number>;
+
+  // IDs of rows added during this session (for kanban pagination visibility)
+  newlyAddedRowIds: Set<string>;
 
   // Kanban card order (server-persisted)
   kanbanCardOrder: KanbanCardOrder;
@@ -68,6 +79,8 @@ export interface DatabaseInstanceState {
   // Actions
   loadDatabase: (page: Page) => void;
   fetchRows: (options?: { sort?: string; filter?: string }) => Promise<void>;
+  loadMore: () => Promise<void>;
+  loadMoreInColumn: (columnKey: string) => void;
   updateSchema: (input: UpdateSchemaInput) => Promise<Page | null>;
   updateRowProperties: (rowId: string, properties: Record<string, PropertyValue>) => void;
   updateRowTitle: (rowId: string, title: string) => void;
@@ -106,6 +119,10 @@ export interface DatabaseInstanceState {
   getAllPropertiesOrdered: () => PropertyDefinition[];
   hasDefaultConfig: () => boolean;
   clearDatabase: () => void;
+
+  // Remote update actions (called by RealtimeManager, never trigger API calls)
+  applyRemoteRowUpdate: (rowId: string, properties: Record<string, PropertyValue>, title?: string) => void;
+  applyRemoteCardMove: (kanbanCardOrder?: Record<string, string[]>) => void;
 }
 
 /** Order properties: title always first, then by view-local order (fallback to schema order). */
@@ -130,6 +147,25 @@ function getOrderedProperties(
   return sorted;
 }
 
+/** Shallow compare two property bags by key. */
+function propertiesChanged(
+  rowProps: Record<string, PropertyValue> | undefined,
+  pageProps: Record<string, PropertyValue> | undefined,
+): boolean {
+  if (rowProps === pageProps) return false;
+  if (!rowProps || !pageProps) return rowProps !== pageProps;
+  const keys = new Set([...Object.keys(rowProps), ...Object.keys(pageProps)]);
+  for (const k of keys) {
+    const rv = rowProps[k];
+    const pv = pageProps[k];
+    if (rv === pv) continue;
+    if (!rv || !pv) return true;
+    if (rv.type !== pv.type) return true;
+    if (JSON.stringify(rv) !== JSON.stringify(pv)) return true;
+  }
+  return false;
+}
+
 export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<DatabaseInstanceState> {
   // Load saved config from localStorage if key provided
   const savedConfig = persistenceKey ? loadViewConfig(persistenceKey) : null;
@@ -151,14 +187,17 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     }
   }
 
-  return createStore<DatabaseInstanceState>((set, get) => ({
+  const store = createStore<DatabaseInstanceState>((set, get) => ({
     activeDatabaseId: null,
     schema: null,
     rows: [],
     total: 0,
     isLoading: false,
+    isLoadingMore: false,
     error: null,
     viewConfig: initialViewConfig,
+    kanbanColumnLimits: {},
+    newlyAddedRowIds: new Set(),
     kanbanCardOrder: {},
 
     loadDatabase: (page) => {
@@ -205,7 +244,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const { activeDatabaseId, viewConfig } = get();
       if (!activeDatabaseId) return;
 
-      set({ isLoading: true, error: null });
+      const isKanban = viewConfig.viewType === 'kanban';
+      set({ isLoading: true, error: null, ...(isKanban ? { kanbanColumnLimits: {}, newlyAddedRowIds: new Set() } : {}) });
 
       try {
         let sort = options.sort;
@@ -221,11 +261,63 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
             .join('|');
         }
 
-        const result = await databaseApi.getRows(activeDatabaseId, { sort, filter });
+        const result = await databaseApi.getRows(activeDatabaseId, {
+          sort,
+          filter,
+          limit: isKanban ? KANBAN_FETCH_LIMIT : PAGE_SIZE,
+          offset: 0,
+        });
         set({ rows: result.rows, total: result.total, isLoading: false });
       } catch (error) {
         set({ error: (error as Error).message, isLoading: false });
       }
+    },
+
+    loadMore: async () => {
+      const { activeDatabaseId, viewConfig, rows, total, isLoadingMore } = get();
+      if (!activeDatabaseId || isLoadingMore || rows.length >= total) return;
+
+      set({ isLoadingMore: true });
+
+      try {
+        let sort: string | undefined;
+        let filter: string | undefined;
+
+        if (viewConfig.sort) {
+          sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
+        }
+
+        if (viewConfig.filters.length > 0) {
+          filter = viewConfig.filters
+            .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
+            .join('|');
+        }
+
+        const result = await databaseApi.getRows(activeDatabaseId, {
+          sort,
+          filter,
+          limit: PAGE_SIZE,
+          offset: rows.length,
+        });
+
+        // Deduplicate in case optimistic adds overlap with server results
+        const existingIds = new Set(rows.map((r) => r.id));
+        const newRows = result.rows.filter((r) => !existingIds.has(r.id));
+
+        set({
+          rows: [...rows, ...newRows],
+          total: result.total,
+          isLoadingMore: false,
+        });
+      } catch (error) {
+        set({ error: (error as Error).message, isLoadingMore: false });
+      }
+    },
+
+    loadMoreInColumn: (columnKey) => {
+      const { kanbanColumnLimits } = get();
+      const current = kanbanColumnLimits[columnKey] ?? KANBAN_COLUMN_PAGE_SIZE;
+      set({ kanbanColumnLimits: { ...kanbanColumnLimits, [columnKey]: current + KANBAN_COLUMN_PAGE_SIZE } });
     },
 
     updateSchema: async (input) => {
@@ -323,6 +415,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       set((state) => ({
         rows: [...state.rows, row],
         total: state.total + 1,
+        newlyAddedRowIds: new Set(state.newlyAddedRowIds).add(row.id),
       }));
     },
 
@@ -356,14 +449,14 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
     setSort: (sort) => {
       const newConfig = { ...get().viewConfig, sort };
-      set({ viewConfig: newConfig });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
 
     setFilters: (filters) => {
       const newConfig = { ...get().viewConfig, filters };
-      set({ viewConfig: newConfig });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -410,16 +503,18 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       }
 
       const newConfig = { ...viewConfig, viewType, kanban };
-      set({ viewConfig: newConfig });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
+      get().fetchRows();
     },
 
     setKanbanGroupBy: (propertyId) => {
       const { viewConfig } = get();
       const kanban: KanbanConfig = { groupByPropertyId: propertyId, hiddenOptionIds: [] };
       const newConfig = { ...viewConfig, kanban };
-      set({ viewConfig: newConfig });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
+      get().fetchRows();
     },
 
     toggleKanbanColumnVisibility: (optionId) => {
@@ -602,7 +697,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         propertyOrder: def.propertyOrder,
         kanban: def.kanban,
       };
-      set({ viewConfig: newConfig });
+      set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
       get().fetchRows();
     },
@@ -638,12 +733,40 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         rows: [],
         total: 0,
         isLoading: false,
+        isLoadingMore: false,
         error: null,
+        kanbanColumnLimits: {},
+        newlyAddedRowIds: new Set(),
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef
       });
     },
+
+    // ─── Remote update actions (realtime) ─────────────────────────────
+
+    applyRemoteRowUpdate: (rowId, properties, title) => {
+      set((state) => {
+        const index = state.rows.findIndex((r) => r.id === rowId);
+        if (index === -1) return state;
+
+        const updatedRows = [...state.rows];
+        updatedRows[index] = {
+          ...updatedRows[index],
+          properties: { ...updatedRows[index].properties, ...properties },
+          ...(title !== undefined ? { title } : {}),
+          updatedAt: new Date().toISOString(),
+        };
+        return { rows: updatedRows };
+      });
+    },
+
+    applyRemoteCardMove: (kanbanCardOrder) => {
+      if (!kanbanCardOrder) return;
+      set({ kanbanCardOrder: kanbanCardOrder as KanbanCardOrder });
+    },
   }));
+
+  return store;
 }
 
 const DatabaseInstanceContext = createContext<StoreApi<DatabaseInstanceState> | null>(null);
@@ -669,4 +792,48 @@ export function useDatabaseInstance<T>(selector?: (state: DatabaseInstanceState)
     throw new Error('useDatabaseInstance must be used within a DatabaseInstanceProvider');
   }
   return useStore(store, selector as (state: DatabaseInstanceState) => T);
+}
+
+/**
+ * Subscribe to pageStore changes and sync matching row data into the database
+ * instance store. Must be called inside a DatabaseInstanceProvider.
+ * Uses useEffect so React StrictMode properly manages the subscription lifecycle.
+ */
+export function useSyncWithPageStore() {
+  const store = useContext(DatabaseInstanceContext);
+
+  useEffect(() => {
+    if (!store) return;
+
+    const unsubscribe = usePageStore.subscribe((pageState) => {
+      const { rows, activeDatabaseId } = store.getState();
+      if (!activeDatabaseId || rows.length === 0) return;
+
+      let changed = false;
+      const updatedRows = rows.map((row) => {
+        const page = pageState.pages.get(row.id);
+        if (!page) return row;
+
+        const titleChanged = page.title !== row.title;
+        const iconChanged = (page.icon ?? null) !== (row.icon ?? null);
+        const propsChanged = propertiesChanged(row.properties, page.properties);
+
+        if (!titleChanged && !iconChanged && !propsChanged) return row;
+
+        changed = true;
+        return {
+          ...row,
+          ...(titleChanged ? { title: page.title } : {}),
+          ...(iconChanged ? { icon: page.icon } : {}),
+          ...(propsChanged ? { properties: { ...row.properties, ...page.properties } } : {}),
+        };
+      });
+
+      if (changed) {
+        store.setState({ rows: updatedRows });
+      }
+    });
+
+    return unsubscribe;
+  }, [store]);
 }

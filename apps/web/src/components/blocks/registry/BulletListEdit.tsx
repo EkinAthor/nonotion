@@ -15,7 +15,7 @@ interface BulletListEditProps {
 }
 
 export default function BulletListEdit({ block, readOnly = false }: BulletListEditProps) {
-  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
+  const { changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock, updateBlock } = useBlockStore();
 
   const content = block.content as BulletListContent;
@@ -63,24 +63,22 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
         { text: textAfterCursor, indent },
         currentOrder + 1
       );
-      setFocusBlock(newBlock.id);
+      setFocusBlock(newBlock.id, 'start');
     },
     onChangeBlockType: changeBlockType,
     onFocusPreviousBlock: focusPreviousBlock,
     onFocusNextBlock: focusNextBlock,
     onPasteMultipleBlocks: pasteMultipleBlocks,
     onDeleteAndMergeToPrevious: async (currentText: string) => {
-      // If empty and indented, outdent instead of merging
+      // If empty and indented, outdent first
       if (!currentText.trim() && indent > 0) {
         await handleOutdent();
         return;
       }
-      // If empty at root level, convert to paragraph
-      if (!currentText.trim()) {
-        await changeBlockType('paragraph', currentText);
-        return;
-      }
-      await deleteAndMergeToPrevious(currentText);
+      // Otherwise: backspace at start of a bullet list converts to paragraph
+      // (preserving content). A subsequent backspace will then merge into the
+      // previous block via the paragraph's own handler.
+      await changeBlockType('paragraph', currentText, undefined, { cursorPosition: 'start' });
     },
     onIndent: handleIndent,
     onOutdent: handleOutdent,
@@ -110,7 +108,7 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
 
   return (
     <div className="flex items-start gap-2" style={{ paddingLeft: `${indent * 24}px` }}>
-      <span className="text-notion-text select-none mt-0.5 w-4 text-center">{getBulletChar(indent)}</span>
+      <span className="text-notion-text select-none w-4 text-center text-xl leading-none mt-1">{getBulletChar(indent)}</span>
       <div className="flex-1 min-w-0 text-base text-notion-text leading-relaxed relative">
         <EditorContent editor={editor} />
         {editor && !readOnly && <FormatToolbar editor={editor} />}

@@ -2,6 +2,7 @@ import { useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { IS_DEMO_MODE } from '@/api/client';
+import { initRealtimeManager } from '@/lib/realtime';
 import ChangePasswordModal from './ChangePasswordModal';
 import PendingApprovalPage from './PendingApprovalPage';
 
@@ -25,6 +26,16 @@ function AuthGuardInner({ children }: AuthGuardProps) {
     // Verify token is still valid on mount
     fetchCurrentUser();
   }, [fetchCurrentUser]);
+
+  // Initialize realtime after authentication is confirmed.
+  // The manager itself is idempotent — safe to call multiple times.
+  // We intentionally DO NOT disconnect in cleanup to avoid StrictMode double-init loops.
+  // Disconnect happens explicitly on logout (see authStore.logout).
+  useEffect(() => {
+    if (!isLoading && isAuthenticated()) {
+      initRealtimeManager();
+    }
+  }, [isLoading, isAuthenticated]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated()) {

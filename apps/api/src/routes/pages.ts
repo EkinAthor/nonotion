@@ -3,6 +3,7 @@ import { createPageInputSchema, updatePageInputSchema, updateSchemaInputSchema, 
 import * as pageService from '../services/page-service.js';
 import * as databaseService from '../services/database-service.js';
 import * as permissionService from '../services/permission-service.js';
+import { getBroadcaster } from '../realtime/realtime-factory.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
 
 export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
@@ -183,6 +184,9 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
         success: false,
       });
     }
+    getBroadcaster().broadcastToDatabase(request.params.id, 'schema_update', {
+      databaseId: request.params.id, schema: page.databaseSchema, userId: request.userId, clientId: request.clientId,
+    }).catch(err => fastify.log.warn(err, 'Failed to broadcast schema_update'));
     return reply.send({ data: page, success: true });
   });
 
@@ -210,6 +214,13 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
         error: { code: 'NOT_FOUND', message: 'Page not found' },
         success: false,
       });
+    }
+    if (page.parentId) {
+      getBroadcaster().broadcastToDatabase(page.parentId, 'row_update', {
+        rowId: request.params.id, databaseId: page.parentId,
+        properties: parsed.data.properties, title: page.title,
+        userId: request.userId, clientId: request.clientId,
+      }).catch(err => fastify.log.warn(err, 'Failed to broadcast row_update'));
     }
     return reply.send({ data: page, success: true });
   });

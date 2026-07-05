@@ -4,7 +4,7 @@ import type { Block, DatabaseViewContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { usePageStore } from '@/stores/pageStore';
 import { useBlockContext } from '@/contexts/BlockContext';
-import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
+import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInstance, useSyncWithPageStore } from '@/contexts/DatabaseInstanceContext';
 import TableView from '@/components/database/TableView';
 import KanbanView from '@/components/database/KanbanView';
 import DatabaseToolbar from '@/components/database/DatabaseToolbar';
@@ -304,6 +304,7 @@ function InlineDatabaseDisplay({ block, readOnly }: DatabaseViewEditProps) {
 
 function InlineDatabaseContent({ readOnly }: { readOnly: boolean }) {
   const { isLoading, error, viewConfig } = useDatabaseInstance();
+  useSyncWithPageStore();
   const canEdit = !readOnly;
 
   if (error) {

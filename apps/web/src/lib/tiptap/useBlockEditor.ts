@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { useEditor, Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
+import { getRealtimeManager } from '@/lib/realtime';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DOMSerializer } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
@@ -57,7 +58,13 @@ interface UseBlockEditorOptions {
   headingLevel?: 1 | 2 | 3;
   readOnly?: boolean;
   onCreateBlockBelow?: (textAfterCursor: string) => Promise<void>;
-  onChangeBlockType?: (newType: BlockType, newText?: string, action?: string) => Promise<void>;
+  onSplitBlockAtStart?: () => unknown | Promise<unknown>;
+  onChangeBlockType?: (
+    newType: BlockType,
+    newText?: string,
+    action?: string,
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+  ) => Promise<void>;
   onFocusPreviousBlock?: () => void;
   onFocusNextBlock?: () => void;
   onPasteMultipleBlocks?: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
@@ -80,6 +87,7 @@ export function useBlockEditor({
   headingLevel,
   readOnly = false,
   onCreateBlockBelow,
+  onSplitBlockAtStart,
   onChangeBlockType,
   onFocusPreviousBlock,
   onFocusNextBlock,
@@ -178,6 +186,7 @@ export function useBlockEditor({
   const pendingSavesRef = useRef<Set<string>>(new Set());
   // Refs for callbacks - handling things like preserving position of block indent
   const createCallbackRef = useRef(onCreateBlockBelow);
+  const splitAtStartCallbackRef = useRef(onSplitBlockAtStart);
   const focusPrevCallbackRef = useRef(onFocusPreviousBlock);
   const focusNextCallbackRef = useRef(onFocusNextBlock);
 
@@ -209,6 +218,10 @@ export function useBlockEditor({
   useEffect(() => {
     createCallbackRef.current = onCreateBlockBelow;
   }, [onCreateBlockBelow]);
+
+  useEffect(() => {
+    splitAtStartCallbackRef.current = onSplitBlockAtStart;
+  }, [onSplitBlockAtStart]);
 
   useEffect(() => {
     focusPrevCallbackRef.current = onFocusPreviousBlock;
@@ -477,6 +490,14 @@ export function useBlockEditor({
           const { from } = editor.state.selection;
           const docEnd = editor.state.doc.content.size - 1;
 
+          // Opt-in: when cursor is at the very start of a non-empty block, hand off
+          // to the host (e.g. headings) to insert an empty block above instead of
+          // splitting content into a new block below.
+          if (splitAtStartCallbackRef.current && from === 1 && docEnd > 1) {
+            splitAtStartCallbackRef.current();
+            return true;
+          }
+
           let htmlAfter = '';
           if (from < docEnd) {
             // Extract the content after cursor as a slice
@@ -669,6 +690,27 @@ export function useBlockEditor({
         return;
       }
 
+      // Markdown shortcuts: '- ' -> bullet list, 'N. ' -> numbered list. Paragraph only.
+      // Keep cursor at start of the converted block since the user typed the prefix
+      // at the beginning — the rest of the text was already there before them.
+      if (blockRef.current.type === 'paragraph') {
+        const bulletMatch = text.match(/^- (.*)$/);
+        if (bulletMatch) {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = undefined;
+          changeBlockTypeRef.current?.('bullet_list', bulletMatch[1], undefined, { cursorPosition: 'start' });
+          return;
+        }
+        const numMatch = text.match(/^(\d+)\. (.*)$/);
+        if (numMatch) {
+          const start = parseInt(numMatch[1], 10);
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = undefined;
+          changeBlockTypeRef.current?.('numbered_list', numMatch[2], undefined, { startNumber: start, cursorPosition: 'start' });
+          return;
+        }
+      }
+
       // Check for slash command using plain text
       const { from } = editor.state.selection;
 
@@ -698,6 +740,12 @@ export function useBlockEditor({
           });
         }
       }
+    },
+    onFocus: () => {
+      getRealtimeManager()?.updateActiveBlock(block.id);
+    },
+    onBlur: () => {
+      getRealtimeManager()?.updateActiveBlock(null);
     },
     editorProps: {
       attributes: {

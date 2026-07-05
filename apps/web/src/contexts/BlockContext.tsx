@@ -10,7 +10,13 @@ export interface BlockContextValue {
   pageId: string;
   blockId: string;
   createBlockBelow: (initialText?: string) => Promise<string>;
-  changeBlockType: (newType: BlockType, newText?: string, action?: string) => Promise<void>;
+  insertParagraphAbove: () => Promise<string>;
+  changeBlockType: (
+    newType: BlockType,
+    newText?: string,
+    action?: string,
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+  ) => Promise<void>;
   focusPreviousBlock: () => void;
   focusNextBlock: () => void;
   pasteMultipleBlocks: (blocks: PasteBlockData[], textAfterCursor: string) => Promise<void>;
