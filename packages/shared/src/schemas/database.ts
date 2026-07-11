@@ -10,6 +10,7 @@ export const propertyTypeSchema = z.enum([
   'person',
   'url',
   'checkbox',
+  'reference',
 ]);
 
 // Select colors
@@ -41,6 +42,7 @@ export const propertyDefinitionSchema = z.object({
   order: z.number().int().min(0),
   width: z.number().int().min(50).max(1000).optional(),
   options: z.array(selectOptionSchema).optional(),
+  referencedDatabaseId: z.string().startsWith('pg_').optional(),
 });
 
 // Filter operator schema
@@ -141,6 +143,11 @@ export const checkboxValueSchema = z.object({
   value: z.boolean(),
 });
 
+export const referenceValueSchema = z.object({
+  type: z.literal('reference'),
+  value: z.array(z.string()), // array of referenced row page ids
+});
+
 export const propertyValueSchema = z.discriminatedUnion('type', [
   titleValueSchema,
   textValueSchema,
@@ -150,6 +157,7 @@ export const propertyValueSchema = z.discriminatedUnion('type', [
   personValueSchema,
   urlValueSchema,
   checkboxValueSchema,
+  referenceValueSchema,
 ]);
 
 // API Input schemas
@@ -164,6 +172,7 @@ export const addPropertyInputSchema = z.object({
       })
     )
     .optional(),
+  referencedDatabaseId: z.string().startsWith('pg_').optional(),
 });
 
 export const updatePropertyInputSchema = z.object({

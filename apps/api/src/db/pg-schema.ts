@@ -112,6 +112,23 @@ export const permissions = pgTable(
   ]
 );
 
+// Page references index table (write-through, derived from reference property values).
+// Denormalized junction used for indexed cascade cleanup and future reverse lookups.
+// Canonical source of truth remains the JSON `properties` blob on pages.
+export const pageReferences = pgTable(
+  'page_references',
+  {
+    sourceRowId: text('source_row_id').notNull(),
+    propertyId: text('property_id').notNull(),
+    targetRowId: text('target_row_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.sourceRowId, table.propertyId, table.targetRowId] }),
+    index('idx_page_references_target').on(table.targetRowId),
+    index('idx_page_references_source').on(table.sourceRowId),
+  ]
+);
+
 // Custom type for bytea columns
 const bytea = customType<{ data: Buffer }>({
   dataType() {
@@ -146,6 +163,8 @@ export type BlockRow = typeof blocks.$inferSelect;
 export type NewBlockRow = typeof blocks.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type NewPermissionRow = typeof permissions.$inferInsert;
+export type PageReferenceRow = typeof pageReferences.$inferSelect;
+export type NewPageReferenceRow = typeof pageReferences.$inferInsert;
 export type FileRow = typeof files.$inferSelect;
 export type NewFileRow = typeof files.$inferInsert;
 export type SettingRow = typeof settings.$inferSelect;

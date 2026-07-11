@@ -20,6 +20,12 @@ export interface StorageAdapter {
   // Settings
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // Reference index (write-through junction, derived from reference property values)
+  setRowReferences(sourceRowId: string, propertyId: string, targetRowIds: string[]): Promise<void>;
+  getReferencesToTarget(targetRowId: string): Promise<Array<{ sourceRowId: string; propertyId: string }>>;
+  deleteReferencesBySource(sourceRowId: string): Promise<void>;
+  deleteReferencesByTarget(targetRowId: string): Promise<void>;
 }
 
 export interface UserStorageAdapter {

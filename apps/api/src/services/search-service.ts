@@ -104,7 +104,16 @@ export async function search(query: string, userId: string, options?: Permission
     if (!page.properties) continue;
     // Skip if already matched by title
     for (const [, propValue] of Object.entries(page.properties)) {
-      const text = getPropertyText(propValue);
+      // Reference values are searched by the referenced row's name, but only for
+      // referenced rows the viewer can access (present in pageMap). Redacted
+      // references (#ref) are not searchable.
+      const text =
+        propValue.type === 'reference'
+          ? propValue.value
+              .map((id) => pageMap.get(id)?.title)
+              .filter((t): t is string => !!t)
+              .join(', ')
+          : getPropertyText(propValue);
       if (text && text.toLowerCase().includes(lowerQuery)) {
         consider(page.id, {
           type: 'property',

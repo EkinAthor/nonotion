@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { PropertyDefinition, FilterRule, SelectOption, PublicUser } from '@nonotion/shared';
+import type { PropertyDefinition, FilterRule, SelectOption, PublicUser, DatabaseRow } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
-import { usersApi } from '@/api/client';
+import { usersApi, databaseApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 
 interface FilterPopoverProps {
@@ -108,6 +108,8 @@ function FilterPropertyRow({ property, filters, onUpdate }: FilterPropertyRowPro
       return <TagFilterInput property={property} rules={currentRules} onUpdate={onUpdate} mode="multi_select" />;
     case 'person':
       return <PersonFilterInput property={property} rules={currentRules} onUpdate={onUpdate} />;
+    case 'reference':
+      return <ReferenceFilterInput property={property} rules={currentRules} onUpdate={onUpdate} />;
     case 'checkbox':
       return <CheckboxFilterInput property={property} rules={currentRules} onUpdate={onUpdate} />;
     default:
@@ -506,6 +508,126 @@ function PersonFilterInput({
   );
 }
 
+// Reference filter: pick referenced records (searched by name), matched with 'any'.
+// Disabled when the referenced database is inaccessible (#ref cannot be filtered).
+function ReferenceFilterInput({
+  property,
+  rules,
+  onUpdate,
+}: {
+  property: PropertyDefinition;
+  rules: FilterRule[];
+  onUpdate: (rules: FilterRule[]) => void;
+}) {
+  const [rows, setRows] = useState<DatabaseRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [accessError, setAccessError] = useState(false);
+  const [search, setSearch] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const rule = rules.find((r) => r.operator === 'any' || r.operator === 'in');
+  const selectedIds = rule?.value ? rule.value.split(',').filter(Boolean) : [];
+
+  useEffect(() => {
+    if (isOpen && !loaded && property.referencedDatabaseId) {
+      databaseApi
+        .getRows(property.referencedDatabaseId, { limit: 1000 })
+        .then((r) => { setRows(r.rows); setLoaded(true); })
+        .catch(() => { setAccessError(true); setLoaded(true); });
+    }
+  }, [isOpen, loaded, property.referencedDatabaseId]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const titleFor = (id: string) => rows.find((r) => r.id === id)?.title || id;
+
+  const filteredRows = search
+    ? rows.filter((r) => (r.title || 'Untitled').toLowerCase().includes(search.toLowerCase()))
+    : rows;
+
+  const setSelected = (newIds: string[]) => {
+    if (newIds.length === 0) onUpdate([]);
+    else onUpdate([{ propertyId: property.id, operator: 'any', value: newIds.join(',') }]);
+  };
+
+  const toggle = (id: string) => {
+    setSelected(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  return (
+    <div ref={containerRef}>
+      <div className="text-xs font-medium text-notion-text-secondary mb-1">{property.name}</div>
+      <div
+        className="flex flex-wrap items-center gap-1 px-2 py-1 border border-gray-200 rounded cursor-text min-h-[30px] focus-within:border-blue-400"
+        onClick={() => { inputRef.current?.focus(); setIsOpen(true); }}
+      >
+        {selectedIds.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-xs font-medium bg-blue-100 text-blue-700"
+          >
+            {titleFor(id)}
+            <button
+              onClick={(e) => { e.stopPropagation(); toggle(id); }}
+              className="hover:opacity-70 ml-0.5"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setIsOpen(true); }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={selectedIds.length === 0 ? 'Select records...' : ''}
+          className="flex-1 min-w-[60px] text-xs outline-none bg-transparent py-0.5"
+        />
+      </div>
+
+      {isOpen && (
+        <div className="mt-1 border border-gray-200 rounded bg-white shadow-sm max-h-[150px] overflow-y-auto">
+          {!loaded ? (
+            <div className="text-xs text-notion-text-secondary px-2 py-2">Loading...</div>
+          ) : accessError ? (
+            <div className="text-xs text-notion-text-secondary px-2 py-2">No access to referenced database</div>
+          ) : filteredRows.length === 0 ? (
+            <div className="text-xs text-notion-text-secondary px-2 py-2">No matching records</div>
+          ) : (
+            filteredRows.map((r) => (
+              <label
+                key={r.id}
+                className="flex items-center gap-2 px-2 py-1 hover:bg-notion-hover cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(r.id)}
+                  onChange={() => toggle(r.id)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs truncate">{r.title || 'Untitled'}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Checkbox filter: three-state (Any / Checked / Unchecked)
 function CheckboxFilterInput({
   property,
@@ -606,6 +728,10 @@ export function getFilterSummary(
     }
     case 'any': {
       const ids = rule.value?.split(',') ?? [];
+      // Reference records have no option names to resolve here; show a count.
+      if (prop.type === 'reference') {
+        return `${propName}: ${ids.length} selected`;
+      }
       const names = ids.map((id) => prop.options?.find((o) => o.id === id)?.name || id);
       return `${propName} has any: ${names.join(', ')}`;
     }

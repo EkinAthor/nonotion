@@ -57,6 +57,13 @@
       "when": 1783181136816,
       "tag": "0007_acoustic_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1783788671199,
+      "tag": "0008_jittery_gertrude_yorkes",
+      "breakpoints": true
     }
   ]
 }

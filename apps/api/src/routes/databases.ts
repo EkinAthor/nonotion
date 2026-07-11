@@ -33,7 +33,10 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     try {
-      const result = await databaseService.getRows(request.params.id, parsed.data);
+      const result = await databaseService.getRows(request.params.id, parsed.data, {
+        userId: request.userId!,
+        isOwner: request.isOwner === true,
+      });
       return reply.send({
         data: result,
         success: true,

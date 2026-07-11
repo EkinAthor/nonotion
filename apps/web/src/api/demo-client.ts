@@ -302,7 +302,8 @@ export const pagesApi = {
     order.starredPageOrder = order.starredPageOrder.filter((pid) => pid !== id);
     saveDemoPageOrder(order);
 
-    // Recursively delete children
+    // Recursively delete children, collecting all removed ids for reference cleanup
+    const deletedIds: string[] = [];
     const deleteRecursive = (pageId: string) => {
       const p = storage.getPage(pageId);
       if (p) {
@@ -311,10 +312,30 @@ export const pagesApi = {
         }
         storage.deleteBlocksByPage(pageId);
         storage.deletePage(pageId);
+        deletedIds.push(pageId);
       }
     };
 
     deleteRecursive(id);
+
+    // Cascade: strip deleted ids from every reference property (single blob scan).
+    const deletedSet = new Set(deletedIds);
+    for (const p of storage.getAllPages()) {
+      if (!p.properties) continue;
+      let changed = false;
+      const newProps = { ...p.properties };
+      for (const [propId, val] of Object.entries(newProps)) {
+        if (val.type === 'reference') {
+          const remaining = val.value.filter((rid) => !deletedSet.has(rid));
+          if (remaining.length !== val.value.length) {
+            newProps[propId] = { type: 'reference', value: remaining };
+            changed = true;
+          }
+        }
+      }
+      if (changed) storage.updatePage(p.id, { properties: newProps });
+    }
+
     return Promise.resolve();
   },
 
@@ -475,7 +496,10 @@ function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSch
       }
       case 'all': {
         if (!propValue) return false;
-        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+        if (
+          (propValue.type === 'multi_select' || propValue.type === 'reference') &&
+          Array.isArray(propValue.value)
+        ) {
           const ids = value.split(',');
           return ids.every((id) => (propValue.value as string[]).includes(id));
         }
@@ -483,7 +507,10 @@ function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSch
       }
       case 'any': {
         if (!propValue) return false;
-        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+        if (
+          (propValue.type === 'multi_select' || propValue.type === 'reference') &&
+          Array.isArray(propValue.value)
+        ) {
           const ids = value.split(',');
           return ids.some((id) => (propValue.value as string[]).includes(id));
         }
@@ -540,6 +567,10 @@ function createPropertyDefinition(input: AddPropertyInput, order: number): Prope
     order,
   };
 
+  if (input.type === 'reference' && input.referencedDatabaseId) {
+    prop.referencedDatabaseId = input.referencedDatabaseId;
+  }
+
   if (input.type === 'select') {
     if (input.options && input.options.length > 0) {
       prop.options = input.options.map((opt: { name: string; color: SelectColor }) => ({
@@ -590,14 +621,37 @@ export const databaseApi = {
     const limit = options.limit ?? 50;
     rows = rows.slice(offset, offset + limit);
 
-    const databaseRows: DatabaseRow[] = rows.map((page) => ({
-      id: page.id,
-      title: page.title,
-      icon: page.icon,
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-      properties: page.properties ?? {},
-    }));
+    // Resolve reference display names. Demo mode has no permissions — everything
+    // is accessible — so we always resolve titles from local storage.
+    const refProps = (database.databaseSchema?.properties ?? []).filter(
+      (p) => p.type === 'reference'
+    );
+    const pagesById = new Map(allPages.map((p) => [p.id, p]));
+
+    const databaseRows: DatabaseRow[] = rows.map((page) => {
+      const row: DatabaseRow = {
+        id: page.id,
+        title: page.title,
+        icon: page.icon,
+        createdAt: page.createdAt,
+        updatedAt: page.updatedAt,
+        properties: page.properties ?? {},
+      };
+      if (refProps.length > 0) {
+        row.referenceData = {};
+        for (const prop of refProps) {
+          const val = page.properties?.[prop.id];
+          const ids = val && val.type === 'reference' ? val.value : [];
+          row.referenceData[prop.id] = {
+            accessible: true,
+            items: ids
+              .map((id) => (pagesById.has(id) ? { id, name: pagesById.get(id)!.title } : null))
+              .filter((x): x is { id: string; name: string } => x !== null),
+          };
+        }
+      }
+      return row;
+    });
 
     return Promise.resolve({ rows: databaseRows, total });
   },
@@ -798,6 +852,31 @@ export const searchApi = {
 
       for (const pv of Object.values(page.properties)) {
         const val = pv as PropertyValue;
+        // Reference: search by referenced record names (demo has no permissions).
+        const refText =
+          val.type === 'reference'
+            ? val.value
+                .map((id) => storage.getPage(id)?.title)
+                .filter((t): t is string => !!t)
+                .join(', ')
+            : null;
+        if (val.type === 'reference') {
+          if (refText && refText.toLowerCase().includes(q)) {
+            seenPageIds.add(page.id);
+            const parentDb = page.parentId ? storage.getPage(page.parentId) : null;
+            results.push({
+              type: 'property',
+              pageId: parentDb?.id ?? page.id,
+              pageTitle: parentDb?.title ?? page.title,
+              pageIcon: parentDb?.icon ?? page.icon,
+              pageType: parentDb?.type ?? page.type,
+              matchText: `${page.title}: ${refText}`,
+              isStarred: parentDb?.isStarred ?? page.isStarred,
+            });
+            break;
+          }
+          continue;
+        }
         if (val.type === 'title' || val.type === 'text' || val.type === 'url') {
           if (typeof val.value === 'string' && val.value.toLowerCase().includes(q)) {
             seenPageIds.add(page.id);

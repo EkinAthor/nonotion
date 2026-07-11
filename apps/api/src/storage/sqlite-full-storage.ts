@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users, permissions, pages, blocks, files, settings } from '../db/schema.js';
+import { users, permissions, pages, blocks, files, settings, pageReferences } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import type {
   Page,
@@ -435,5 +435,37 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
         set: { value, updatedAt: now },
       })
       .run();
+  }
+
+  // ==================== Reference index ====================
+
+  async setRowReferences(sourceRowId: string, propertyId: string, targetRowIds: string[]): Promise<void> {
+    // Replace all index rows for this (source, property)
+    db.delete(pageReferences)
+      .where(and(eq(pageReferences.sourceRowId, sourceRowId), eq(pageReferences.propertyId, propertyId)))
+      .run();
+    const unique = Array.from(new Set(targetRowIds));
+    if (unique.length > 0) {
+      db.insert(pageReferences)
+        .values(unique.map((targetRowId) => ({ sourceRowId, propertyId, targetRowId })))
+        .run();
+    }
+  }
+
+  async getReferencesToTarget(targetRowId: string): Promise<Array<{ sourceRowId: string; propertyId: string }>> {
+    const rows = db
+      .select({ sourceRowId: pageReferences.sourceRowId, propertyId: pageReferences.propertyId })
+      .from(pageReferences)
+      .where(eq(pageReferences.targetRowId, targetRowId))
+      .all();
+    return rows;
+  }
+
+  async deleteReferencesBySource(sourceRowId: string): Promise<void> {
+    db.delete(pageReferences).where(eq(pageReferences.sourceRowId, sourceRowId)).run();
+  }
+
+  async deleteReferencesByTarget(targetRowId: string): Promise<void> {
+    db.delete(pageReferences).where(eq(pageReferences.targetRowId, targetRowId)).run();
   }
 }
