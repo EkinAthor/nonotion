@@ -193,10 +193,45 @@ export async function deletePage(id: string): Promise<boolean> {
     await deletePage(childId);
   }
 
+  // Remove this page from any reference property that points at it (cascade cleanup)
+  await cleanupReferencesTo(id);
+
   // Delete all blocks for this page
   await getStorage().deleteBlocksByPage(id);
 
   return getStorage().deletePage(id);
+}
+
+/**
+ * Remove a deleted page id from every `reference` property that points at it.
+ * Uses the page_references index for an O(refs) reverse lookup instead of scanning
+ * all pages, then keeps both the canonical JSON blob and the index in sync.
+ */
+export async function cleanupReferencesTo(deletedPageId: string): Promise<void> {
+  const storage = getStorage();
+  const affected = await storage.getReferencesToTarget(deletedPageId);
+
+  for (const { sourceRowId, propertyId } of affected) {
+    if (sourceRowId === deletedPageId) continue; // self, being deleted
+    const source = await storage.getPage(sourceRowId);
+    if (!source?.properties) continue;
+    const value = source.properties[propertyId];
+    if (!value || value.type !== 'reference') continue;
+
+    const remaining = value.value.filter((rid) => rid !== deletedPageId);
+    if (remaining.length === value.value.length) continue; // nothing to strip
+
+    await storage.updatePage(sourceRowId, {
+      properties: { ...source.properties, [propertyId]: { type: 'reference', value: remaining } },
+      updatedAt: now(),
+      version: source.version + 1,
+    });
+    await storage.setRowReferences(sourceRowId, propertyId, remaining);
+  }
+
+  // Purge the deleted node's own index rows (both directions).
+  await storage.deleteReferencesByTarget(deletedPageId);
+  await storage.deleteReferencesBySource(deletedPageId);
 }
 
 export async function getPagesByOwner(ownerId: string): Promise<Page[]> {

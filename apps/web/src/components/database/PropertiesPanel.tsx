@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { PropertyDefinition, PropertyType, AddPropertyInput } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
+import { usePageStore } from '@/stores/pageStore';
 
 const PROPERTY_TYPES: { type: PropertyType; label: string; icon: string }[] = [
   { type: 'text', label: 'Text', icon: 'T' },
@@ -27,6 +28,7 @@ const PROPERTY_TYPES: { type: PropertyType; label: string; icon: string }[] = [
   { type: 'checkbox', label: 'Checkbox', icon: '☐' },
   { type: 'url', label: 'URL', icon: '🔗' },
   { type: 'person', label: 'Person', icon: '👤' },
+  { type: 'reference', label: 'Reference', icon: '↗' },
 ];
 
 function getTypeIcon(type: string): string {
@@ -39,6 +41,7 @@ function getTypeIcon(type: string): string {
     case 'checkbox': return '☐';
     case 'url': return '🔗';
     case 'person': return '👤';
+    case 'reference': return '↗';
     default: return '•';
   }
 }
@@ -56,7 +59,14 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
     viewConfig,
     togglePropertyVisibility,
     setPropertyOrder,
+    activeDatabaseId,
   } = useDatabaseInstance();
+  const pageMap = usePageStore((s) => s.pages);
+  const referenceableDatabases = Array.from(pageMap.values()).filter(
+    (p) => p.type === 'database' && p.id !== activeDatabaseId
+  );
+  // When a reference type is picked, we need a target database before adding.
+  const [pickingReferenceTarget, setPickingReferenceTarget] = useState(false);
 
   const properties = getAllPropertiesOrdered();
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -134,14 +144,23 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
     updateSchema({ removePropertyIds: [id] });
   }, [updateSchema]);
 
-  const handleAddProperty = async (type: PropertyType) => {
+  const handleAddProperty = async (type: PropertyType, referencedDatabaseId?: string) => {
+    // Reference properties need a target database first.
+    if (type === 'reference' && !referencedDatabaseId) {
+      setPickingReferenceTarget(true);
+      return;
+    }
+
     const name = type === 'text' ? 'Text' :
                  type === 'select' ? 'Status' :
                  type === 'multi_select' ? 'Tags' :
                  type === 'date' ? 'Date' :
                  type === 'checkbox' ? 'Done' :
                  type === 'url' ? 'URL' :
-                 type === 'person' ? 'Assignee' : 'Property';
+                 type === 'person' ? 'Assignee' :
+                 type === 'reference'
+                   ? (pageMap.get(referencedDatabaseId!)?.title || 'Reference')
+                   : 'Property';
 
     const input: AddPropertyInput = { name, type };
 
@@ -153,12 +172,17 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
       ];
     }
 
+    if (type === 'reference') {
+      input.referencedDatabaseId = referencedDatabaseId;
+    }
+
     setIsAdding(true);
     try {
       await updateSchema({ addProperties: [input] });
     } finally {
       setIsAdding(false);
       setShowTypePicker(false);
+      setPickingReferenceTarget(false);
     }
   };
 
@@ -209,9 +233,6 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
         <div className="border-t border-notion-border p-1">
           {showTypePicker ? (
             <div>
-              <div className="px-2 py-1 text-xs font-medium text-notion-text-secondary uppercase">
-                Property type
-              </div>
               {isAdding ? (
                 <div className="flex items-center gap-2 px-3 py-2 text-sm text-notion-text-secondary">
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -220,17 +241,55 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
                   </svg>
                   Adding...
                 </div>
+              ) : pickingReferenceTarget ? (
+                <div>
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <button
+                      onClick={() => setPickingReferenceTarget(false)}
+                      className="text-notion-text-secondary hover:text-notion-text"
+                      aria-label="Back"
+                    >
+                      ←
+                    </button>
+                    <span className="text-xs font-medium text-notion-text-secondary uppercase">
+                      Reference database
+                    </span>
+                  </div>
+                  {referenceableDatabases.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-notion-text-secondary">
+                      No other databases available
+                    </div>
+                  ) : (
+                    <div className="max-h-[220px] overflow-y-auto">
+                      {referenceableDatabases.map((db) => (
+                        <button
+                          key={db.id}
+                          onClick={() => handleAddProperty('reference', db.id)}
+                          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-notion-hover rounded"
+                        >
+                          <span className="w-5 text-center">{db.icon || '🗂'}</span>
+                          <span className="truncate">{db.title || 'Untitled'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
-                PROPERTY_TYPES.map((pt) => (
-                  <button
-                    key={pt.type}
-                    onClick={() => handleAddProperty(pt.type)}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-notion-hover rounded"
-                  >
-                    <span className="w-5 text-center">{pt.icon}</span>
-                    {pt.label}
-                  </button>
-                ))
+                <>
+                  <div className="px-2 py-1 text-xs font-medium text-notion-text-secondary uppercase">
+                    Property type
+                  </div>
+                  {PROPERTY_TYPES.map((pt) => (
+                    <button
+                      key={pt.type}
+                      onClick={() => handleAddProperty(pt.type)}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-notion-hover rounded"
+                    >
+                      <span className="w-5 text-center">{pt.icon}</span>
+                      {pt.label}
+                    </button>
+                  ))}
+                </>
               )}
             </div>
           ) : (

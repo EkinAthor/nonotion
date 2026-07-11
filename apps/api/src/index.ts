@@ -72,6 +72,14 @@ if (getStorageType() === 'postgres') {
   }
 }
 
+// Rebuild the derived page_references index from canonical JSON blobs (idempotent).
+try {
+  const { backfillReferenceIndex } = await import('./services/reference-service.js');
+  await backfillReferenceIndex();
+} catch (error) {
+  console.error('Reference index backfill error:', error);
+}
+
 // Initialize realtime broadcaster
 const realtimeConfig = loadRealtimeConfig();
 await initializeBroadcaster(realtimeConfig);

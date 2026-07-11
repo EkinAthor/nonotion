@@ -175,6 +175,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                     onChange={(value) => handleCellChange(row.id, prop.id, value)}
                     canEdit={canEdit}
                     rowId={row.id}
+                    referenceResolved={row.referenceData?.[prop.id]}
                   />
                 </td>
               ))}
@@ -258,6 +259,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                           onChange={() => {}}
                           canEdit={false}
                           rowId={activeRow.id}
+                          referenceResolved={activeRow.referenceData?.[prop.id]}
                         />
                       </td>
                     ))}
@@ -361,6 +363,7 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
             onChange={(value) => onCellChange(row.id, prop.id, value)}
             canEdit={canEdit}
             rowId={row.id}
+            referenceResolved={row.referenceData?.[prop.id]}
           />
         </td>
       ))}

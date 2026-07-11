@@ -496,4 +496,46 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
         set: { value, updatedAt: now },
       });
   }
+
+  // ==================== Reference index ====================
+
+  async setRowReferences(sourceRowId: string, propertyId: string, targetRowIds: string[]): Promise<void> {
+    await this.db
+      .delete(pgSchema.pageReferences)
+      .where(
+        and(
+          eq(pgSchema.pageReferences.sourceRowId, sourceRowId),
+          eq(pgSchema.pageReferences.propertyId, propertyId)
+        )
+      );
+    const unique = Array.from(new Set(targetRowIds));
+    if (unique.length > 0) {
+      await this.db
+        .insert(pgSchema.pageReferences)
+        .values(unique.map((targetRowId) => ({ sourceRowId, propertyId, targetRowId })));
+    }
+  }
+
+  async getReferencesToTarget(targetRowId: string): Promise<Array<{ sourceRowId: string; propertyId: string }>> {
+    const rows = await this.db
+      .select({
+        sourceRowId: pgSchema.pageReferences.sourceRowId,
+        propertyId: pgSchema.pageReferences.propertyId,
+      })
+      .from(pgSchema.pageReferences)
+      .where(eq(pgSchema.pageReferences.targetRowId, targetRowId));
+    return rows;
+  }
+
+  async deleteReferencesBySource(sourceRowId: string): Promise<void> {
+    await this.db
+      .delete(pgSchema.pageReferences)
+      .where(eq(pgSchema.pageReferences.sourceRowId, sourceRowId));
+  }
+
+  async deleteReferencesByTarget(targetRowId: string): Promise<void> {
+    await this.db
+      .delete(pgSchema.pageReferences)
+      .where(eq(pgSchema.pageReferences.targetRowId, targetRowId));
+  }
 }

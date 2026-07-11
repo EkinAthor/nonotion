@@ -211,6 +211,19 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 - **Env vars**: `REALTIME_ENABLED`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_PRIVATE_KEY`, `SUPABASE_JWT_KID`. Uses modern Supabase primitives (publishable/secret API keys + ES256 JWT signing key) — legacy anon/service_role/HS256 not supported.
 - **Key generator**: `apps/api/scripts/generate-jwt-signing-key.mjs` is a Node.js helper that generates an ES256 key pair using `jose.generateKeyPair()`, exports PKCS#8 PEM, and walks the user through the Supabase import + rotate flow. Cross-platform, no openssl dependency.
 
+### 19. Database References
+A `reference` property type links records to rows in **another** database (many-to-many, one-directional). The cell displays each referenced row's title and is clickable → navigates to `/page/:id`.
+
+- **Canonical value**: `{ type: 'reference'; value: string[] }` — an array of referenced row page ids — stored in the row's `properties` JSON blob (mirrors `multi_select`). The property definition carries `referencedDatabaseId` (the target database page id). Types/Zod in `packages/shared/src/{types,schemas}/database.ts` (`referenceValueSchema`, `ResolvedReference`).
+- **Write-through index** (`page_references` table — `references` is a SQL reserved word): a denormalized junction `(sourceRowId, propertyId, targetRowId)`, indexed on both ends, kept in sync on every reference write via `StorageAdapter.setRowReferences`. Derived data — the JSON blob stays the source of truth. Used only for indexed cascade cleanup and future reverse lookups; never read on the getRows hot path. Rebuildable via `backfillReferenceIndex()` (runs at boot in `index.ts`). Storage methods: `setRowReferences`/`getReferencesToTarget`/`deleteReferencesBySource`/`deleteReferencesByTarget` in `sqlite-full-storage.ts` + `postgres-storage.ts`.
+- **Per-viewer resolution + `#ref` redaction**: `reference-service.ts` `resolveReferencesForRows` populates `DatabaseRow.referenceData` (`Record<propId, { accessible, items:[{id,name}] }>`). Access is decided once per referenced database via `permissionService.canRead(referencedDatabaseId)`. If the viewer can't read it, the property is redacted (`accessible: false`) and the frontend (`ReferenceCell.tsx`) renders non-clickable `#ref` chips that can't be searched/filtered. `getRows` takes a `viewer` param; the databases route passes `{ userId, isOwner }`.
+- **Search** (`search-service.ts`): reference values are searched by referenced row name, but only for rows present in the viewer's `accessiblePages` (redacted refs are not searchable — reuses `getUserAccessiblePages`).
+- **Filter**: pick referenced records from a searchable list (`FilterPopover.tsx` `ReferenceFilterInput`), emitting `any`/`all` with comma-joined ids; `applySingleFilter` handles reference arrays alongside `multi_select`. Disabled when the referenced DB is inaccessible.
+- **Cascade cleanup**: deleting a row/database calls `page-service.ts` `cleanupReferencesTo` inside recursive `deletePage`, using the index for an O(refs) reverse lookup, stripping the id from every referencing row's blob (version bump) and keeping the index in sync.
+- **Add property**: `PropertiesPanel.tsx` offers a `Reference` type → second step picks the target database (from `pageStore`, `type === 'database'`).
+- **Export-compat (future)**: value stays IDs-only; `referenceData` resolves `{ id, name }` — the shape a future export serializes (name + referenced record id).
+- **Demo mode**: no permissions/SQL — `demo-client.ts` resolves names from localStorage (`accessible: true` always), replicates the `any`/`all` filter, name search, and blob-scan cascade on delete.
+
 ## Critical Files
 
 | File | Purpose |
@@ -242,7 +255,10 @@ Supabase Realtime-powered presence and live editing. Enabled via `REALTIME_ENABL
 | `apps/web/src/components/layout/ImportDialog.tsx` | Import dialog with drag-and-drop ZIP upload |
 | `apps/api/src/services/search-service.ts` | Server-side search across pages, blocks, and properties |
 | `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
-| `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add |
+| `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add (incl. reference target-DB picker) |
+| `apps/api/src/services/reference-service.ts` | Per-viewer reference name resolution + `#ref` redaction + `page_references` backfill |
+| `apps/web/src/components/database/cells/ReferenceCell.tsx` | Reference cell: clickable name chips, `#ref` redaction, multi-select editor |
+| `apps/api/src/db/schema.ts` / `pg-schema.ts` | Includes `page_references` write-through index table |
 | `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
 | `apps/api/src/services/auth-service.ts` | Auth service with email/password + Google login, auth mode helpers, email 2FA challenge/enable/disable |
 | `apps/api/src/services/email-service.ts` | Resend-backed email sender (`sendTwoFactorCode`) for 2FA codes |

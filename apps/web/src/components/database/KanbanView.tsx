@@ -17,7 +17,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { DatabaseRow, PropertyDefinition, PropertyValue, SelectOption, PublicUser } from '@nonotion/shared';
+import type { DatabaseRow, PropertyDefinition, PropertyValue, SelectOption, PublicUser, ResolvedReference } from '@nonotion/shared';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -489,6 +489,7 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }
               rowId={row.id}
               canEdit={canEdit}
               onChange={(value) => handleCellChange(prop.id, value)}
+              referenceResolved={row.referenceData?.[prop.id]}
             />
           ))}
         </div>
@@ -504,12 +505,14 @@ function CardEditableProperty({
   rowId,
   canEdit,
   onChange,
+  referenceResolved,
 }: {
   property: PropertyDefinition;
   value: PropertyValue | undefined;
   rowId: string;
   canEdit: boolean;
   onChange: (value: PropertyValue) => void;
+  referenceResolved?: ResolvedReference;
 }) {
   return (
     <div
@@ -524,6 +527,7 @@ function CardEditableProperty({
         onChange={onChange}
         canEdit={canEdit}
         rowId={rowId}
+        referenceResolved={referenceResolved}
       />
     </div>
   );

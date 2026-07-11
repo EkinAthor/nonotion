@@ -11,6 +11,7 @@ import type {
 } from '@nonotion/shared';
 import { generatePropertyId, generateOptionId, now } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
+import { resolveReferencesForRows, type ReferenceViewer } from './reference-service.js';
 
 export interface GetRowsOptions {
   sort?: string;
@@ -20,11 +21,14 @@ export interface GetRowsOptions {
 }
 
 /**
- * Get rows for a database page with optional sorting and filtering
+ * Get rows for a database page with optional sorting and filtering.
+ * When `viewer` is provided, `reference` properties are resolved to display
+ * names (respecting the viewer's read access to referenced databases).
  */
 export async function getRows(
   databaseId: string,
-  options: GetRowsOptions = {}
+  options: GetRowsOptions = {},
+  viewer?: ReferenceViewer
 ): Promise<{ rows: DatabaseRow[]; total: number }> {
   const database = await getStorage().getPage(databaseId);
   if (!database || database.type !== 'database') {
@@ -68,6 +72,12 @@ export async function getRows(
     updatedAt: page.updatedAt,
     properties: page.properties ?? {},
   }));
+
+  // Resolve reference display names (permission-aware) for the paginated rows only.
+  if (viewer) {
+    const pagesById = new Map(allPages.map((p) => [p.id, p]));
+    await resolveReferencesForRows(databaseRows, database.databaseSchema, viewer, pagesById);
+  }
 
   return { rows: databaseRows, total };
 }
@@ -202,12 +212,21 @@ export async function updateRowProperties(
     }
   }
 
-  return getStorage().updatePage(rowId, {
+  const updated = await getStorage().updatePage(rowId, {
     ...titleUpdate,
     properties: { ...existingProps, ...properties },
     updatedAt: timestamp,
     version: row.version + 1,
   });
+
+  // Write-through the reference index for any reference property that was written.
+  for (const [propId, value] of Object.entries(properties)) {
+    if (value.type === 'reference') {
+      await getStorage().setRowReferences(rowId, propId, value.value);
+    }
+  }
+
+  return updated;
 }
 
 /**
@@ -238,6 +257,10 @@ function createPropertyDefinition(
     type: input.type,
     order,
   };
+
+  if (input.type === 'reference' && input.referencedDatabaseId) {
+    prop.referencedDatabaseId = input.referencedDatabaseId;
+  }
 
   if (input.type === 'select') {
     // Select properties get default options if none provided
@@ -362,21 +385,27 @@ function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSch
       }
 
       case 'all': {
-        // multi_select AND — row must contain ALL listed IDs
+        // multi_select / reference AND — row must contain ALL listed IDs
         if (!propValue) return false;
-        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+        if (
+          (propValue.type === 'multi_select' || propValue.type === 'reference') &&
+          Array.isArray(propValue.value)
+        ) {
           const ids = value.split(',');
-          return ids.every((id) => propValue.value.includes(id));
+          return ids.every((id) => (propValue.value as string[]).includes(id));
         }
         return false;
       }
 
       case 'any': {
-        // multi_select OR — row must contain ANY listed ID
+        // multi_select / reference OR — row must contain ANY listed ID
         if (!propValue) return false;
-        if (propValue.type === 'multi_select' && Array.isArray(propValue.value)) {
+        if (
+          (propValue.type === 'multi_select' || propValue.type === 'reference') &&
+          Array.isArray(propValue.value)
+        ) {
           const ids = value.split(',');
-          return ids.some((id) => propValue.value.includes(id));
+          return ids.some((id) => (propValue.value as string[]).includes(id));
         }
         return false;
       }

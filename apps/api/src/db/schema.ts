@@ -51,6 +51,19 @@ export const pages = sqliteTable('pages', {
   index('idx_pages_type').on(table.type),
 ]);
 
+// Page references index table (write-through, derived from reference property values).
+// Denormalized junction used for indexed cascade cleanup and future reverse lookups.
+// Canonical source of truth remains the JSON `properties` blob on pages.
+export const pageReferences = sqliteTable('page_references', {
+  sourceRowId: text('source_row_id').notNull(), // row holding the reference property
+  propertyId: text('property_id').notNull(),    // the reference property id
+  targetRowId: text('target_row_id').notNull(), // referenced row page id
+}, (table) => [
+  primaryKey({ columns: [table.sourceRowId, table.propertyId, table.targetRowId] }),
+  index('idx_page_references_target').on(table.targetRowId),
+  index('idx_page_references_source').on(table.sourceRowId),
+]);
+
 // Blocks table
 export const blocks = sqliteTable('blocks', {
   id: text('id').primaryKey(), // blk_xxx
@@ -103,6 +116,8 @@ export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type NewPermissionRow = typeof permissions.$inferInsert;
+export type PageReferenceRow = typeof pageReferences.$inferSelect;
+export type NewPageReferenceRow = typeof pageReferences.$inferInsert;
 export type PageRow = typeof pages.$inferSelect;
 export type NewPageRow = typeof pages.$inferInsert;
 export type BlockRow = typeof blocks.$inferSelect;

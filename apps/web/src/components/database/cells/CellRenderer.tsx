@@ -1,4 +1,4 @@
-import type { PropertyDefinition, PropertyValue } from '@nonotion/shared';
+import type { PropertyDefinition, PropertyValue, ResolvedReference } from '@nonotion/shared';
 import TitleCell from './TitleCell';
 import TextCell from './TextCell';
 import CheckboxCell from './CheckboxCell';
@@ -7,6 +7,7 @@ import MultiSelectCell from './MultiSelectCell';
 import DateCell from './DateCell';
 import UrlCell from './UrlCell';
 import PersonCell from './PersonCell';
+import ReferenceCell from './ReferenceCell';
 
 interface CellRendererProps {
   property: PropertyDefinition;
@@ -14,6 +15,7 @@ interface CellRendererProps {
   onChange: (value: PropertyValue) => void;
   canEdit: boolean;
   rowId: string;
+  referenceResolved?: ResolvedReference;
 }
 
 export default function CellRenderer({
@@ -22,6 +24,7 @@ export default function CellRenderer({
   onChange,
   canEdit,
   rowId,
+  referenceResolved,
 }: CellRendererProps) {
   const commonProps = { canEdit, rowId };
 
@@ -98,6 +101,17 @@ export default function CellRenderer({
         <PersonCell
           value={(value as { type: 'person'; value: string | null })?.value ?? null}
           onChange={(v) => onChange({ type: 'person', value: v })}
+          {...commonProps}
+        />
+      );
+
+    case 'reference':
+      return (
+        <ReferenceCell
+          value={(value as { type: 'reference'; value: string[] })?.value ?? []}
+          resolved={referenceResolved}
+          referencedDatabaseId={property.referencedDatabaseId}
+          onChange={(v) => onChange({ type: 'reference', value: v })}
           {...commonProps}
         />
       );

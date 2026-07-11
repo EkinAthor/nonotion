@@ -7,7 +7,8 @@ export type PropertyType =
   | 'date'
   | 'person'
   | 'url'
-  | 'checkbox';
+  | 'checkbox'
+  | 'reference';
 
 // Colors for select/multi-select options
 export type SelectColor =
@@ -37,6 +38,7 @@ export interface PropertyDefinition {
   order: number;
   width?: number;
   options?: SelectOption[]; // For select/multi_select
+  referencedDatabaseId?: string; // For 'reference' — the target database page id ("pg_...")
 }
 
 // Sort configuration for database views
@@ -84,13 +86,15 @@ export type PropertyValue =
   | { type: 'date'; value: string | null } // ISO 8601 or null
   | { type: 'person'; value: string | null } // user id or null
   | { type: 'url'; value: string }
-  | { type: 'checkbox'; value: boolean };
+  | { type: 'checkbox'; value: boolean }
+  | { type: 'reference'; value: string[] }; // array of referenced row page ids ("pg_...")
 
 // Input types for API operations
 export interface AddPropertyInput {
   name: string;
   type: PropertyType;
   options?: Array<{ name: string; color: SelectColor }>;
+  referencedDatabaseId?: string; // For 'reference' — the target database page id ("pg_...")
 }
 
 export interface UpdatePropertyInput {
@@ -144,6 +148,13 @@ export interface DatabaseRowsQuery {
   offset?: number;
 }
 
+// Resolved display data for a 'reference' property, computed server-side per viewer.
+// The canonical value (row IDs) stays in properties; this carries names + access.
+export interface ResolvedReference {
+  accessible: boolean; // whether the viewer can read the referenced database
+  items: Array<{ id: string; name: string }>; // resolved referenced titles; empty when !accessible
+}
+
 // Database row (a page with its property values resolved)
 export interface DatabaseRow {
   id: string;
@@ -152,4 +163,5 @@ export interface DatabaseRow {
   createdAt: string;
   updatedAt: string;
   properties: Record<string, PropertyValue>;
+  referenceData?: Record<string, ResolvedReference>; // keyed by reference property id
 }
