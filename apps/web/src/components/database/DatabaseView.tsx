@@ -6,6 +6,7 @@ import { getRealtimeManager } from '@/lib/realtime';
 import TableView from './TableView';
 import KanbanView from './KanbanView';
 import DatabaseToolbar from './DatabaseToolbar';
+import DatabaseSelectionBar from './DatabaseSelectionBar';
 
 interface DatabaseViewProps {
   page: Page;
@@ -60,18 +61,21 @@ function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
     );
   }
 
+  const isTableView = viewConfig.viewType !== 'kanban';
+
   return (
     <div className="database-view">
       <DatabaseToolbar canEdit={canEdit} />
+      {isTableView && <DatabaseSelectionBar />}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8 text-notion-text-secondary">
           Loading...
         </div>
-      ) : viewConfig.viewType === 'kanban' ? (
-        <KanbanView canEdit={canEdit} />
-      ) : (
+      ) : isTableView ? (
         <TableView canEdit={canEdit} />
+      ) : (
+        <KanbanView canEdit={canEdit} />
       )}
     </div>
   );

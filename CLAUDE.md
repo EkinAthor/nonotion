@@ -224,6 +224,14 @@ A `reference` property type links records to rows in **another** database (many-
 - **Export-compat (future)**: value stays IDs-only; `referenceData` resolves `{ id, name }` — the shape a future export serializes (name + referenced record id).
 - **Demo mode**: no permissions/SQL — `demo-client.ts` resolves names from localStorage (`accessible: true` always), replicates the `any`/`all` filter, name search, and blob-scan cascade on delete.
 
+### 20. Deleting Pages (Database View + Page View)
+Two entry points for deleting pages, both guarded by a shared confirmation modal (`apps/web/src/components/common/ConfirmDialog.tsx` — generic controlled `{ isOpen, title, message, confirmLabel, destructive, busy, onConfirm, onCancel }`, Esc/backdrop cancel). Database rows *are* pages, so both flows ultimately hit `pagesApi.delete` → backend `pageService.deletePage`, which already cascades to children and calls `cleanupReferencesTo`. **No backend/shared changes** — demo mode works automatically.
+
+- **Bulk delete from the table view** (table view only, not Kanban): a selection checkbox column is prepended in `TableView.tsx` (header select-all + per-row checkboxes, shown only when `canEdit`). Selection state lives in the `DatabaseInstanceContext` store: `selectedRowIds: Set<string>` and `selectAllAcross: boolean` (the header checkbox escalates to "all rows matching the current filter, including non-loaded pages"). Actions: `toggleRowSelection`, `toggleSelectAll`, `clearSelection`, `deleteSelectedRows`. Selection is cleared by every view-reset action (`fetchRows`, `clearDatabase`, and transitively `setSort`/`setFilters`/`setViewType`/`revertToDefault`).
+- **`deleteSelectedRows`**: resolves target IDs (for `selectAllAcross`, fetches all matching IDs via `databaseApi.getRows` with a large limit + the current filter, reusing the `buildQueryStrings` helper), optimistically drops rows + decrements `total`, closes the peek panel if it shows a deleted row, then fires `pagesApi.delete` per id with bounded concurrency (`runWithConcurrency`, limit 8); reverts `rows`/`total` on failure.
+- **Selection bar** (`DatabaseSelectionBar.tsx`): rendered by `DatabaseView.tsx` between the toolbar and the view when the table view is active and a selection exists. Shows the count, a "Select all {total}" escalation link (when all loaded rows are picked but more pages exist), a red Delete button (→ `ConfirmDialog`), and a clear (✕) button. Future bulk actions (move, export) belong here.
+- **Delete from the page view** (`PageContent.tsx`): a trash button next to the star in the top bar, shown when `canEdit`. On confirm calls `pageStore.deletePage`; **full view** → `navigate('/')` (welcome/empty state), **peek/split view** → `onClose()` (returns to the full page behind the single-level peek panel).
+
 ## Critical Files
 
 | File | Purpose |
@@ -256,6 +264,9 @@ A `reference` property type links records to rows in **another** database (many-
 | `apps/api/src/services/search-service.ts` | Server-side search across pages, blocks, and properties |
 | `apps/api/src/routes/search.ts` | `GET /api/search?q=...` endpoint with auth |
 | `apps/web/src/components/database/PropertiesPanel.tsx` | Properties panel with drag reorder, rename, visibility, delete, add (incl. reference target-DB picker) |
+| `apps/web/src/components/common/ConfirmDialog.tsx` | Reusable confirmation modal for destructive actions (page/row deletion) |
+| `apps/web/src/components/database/DatabaseSelectionBar.tsx` | Bulk-action bar for selected table rows (count, select-all escalation, delete) |
+| `apps/web/src/components/database/TableView.tsx` | Table view with row selection checkboxes, drag reorder, cell rendering |
 | `apps/api/src/services/reference-service.ts` | Per-viewer reference name resolution + `#ref` redaction + `page_references` backfill |
 | `apps/web/src/components/database/cells/ReferenceCell.tsx` | Reference cell: clickable name chips, `#ref` redaction, multi-select editor |
 | `apps/api/src/db/schema.ts` / `pg-schema.ts` | Includes `page_references` write-through index table |

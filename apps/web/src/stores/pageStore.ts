@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Page, CreatePageInput, UpdatePageInput, PageTreeNode, UpdatePageOrderInput } from '@nonotion/shared';
 import { pagesApi } from '@/api/client';
+import { getDatabaseInstance } from './databaseInstanceRegistry';
 
 const EXPANDED_NODES_KEY = 'nonotion_expanded_nodes';
 const STARRED_EXPANDED_NODES_KEY = 'nonotion_starred_expanded_nodes';
@@ -214,6 +215,15 @@ export const usePageStore = create<PageState>((set, get) => ({
         starredPageOrder: state.starredPageOrder.filter((pid) => !deletedIds.has(pid)),
       };
     });
+
+    // If this page is a row in a database that is currently open, drop it from
+    // that database instance store so the table/kanban view updates immediately.
+    if (page.parentId) {
+      const dbStore = getDatabaseInstance(page.parentId);
+      if (dbStore && dbStore.getState().rows.some((r) => r.id === id)) {
+        dbStore.getState().removeRow(id);
+      }
+    }
 
     // 3. Fire API delete in background
     pagesApi.delete(id).catch((error) => {

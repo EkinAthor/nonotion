@@ -18,10 +18,46 @@ import type {
 } from '@nonotion/shared';
 import { databaseApi, pagesApi } from '@/api/client';
 import { usePageStore } from '@/stores/pageStore';
+import { useUiStore } from '@/stores/uiStore';
 
 const PAGE_SIZE = 50;
 const KANBAN_COLUMN_PAGE_SIZE = 30;
 const KANBAN_FETCH_LIMIT = 10000;
+/** Upper bound when resolving all matching row IDs for "select all across pages". */
+const SELECT_ALL_FETCH_LIMIT = 10000;
+/** Max concurrent delete requests when bulk-deleting rows. */
+const DELETE_CONCURRENCY = 8;
+
+/** Build the sort/filter query strings from a view config (shared by fetch + select-all). */
+function buildQueryStrings(viewConfig: ViewConfig): { sort?: string; filter?: string } {
+  let sort: string | undefined;
+  let filter: string | undefined;
+  if (viewConfig.sort) {
+    sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
+  }
+  if (viewConfig.filters.length > 0) {
+    filter = viewConfig.filters
+      .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
+      .join('|');
+  }
+  return { sort, filter };
+}
+
+/** Run async tasks with bounded concurrency; rejects if any task rejects. */
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await task(item);
+    }
+  });
+  await Promise.all(workers);
+}
 
 interface ViewConfig {
   viewType: DatabaseViewType;
@@ -76,6 +112,10 @@ export interface DatabaseInstanceState {
   // Kanban card order (server-persisted)
   kanbanCardOrder: KanbanCardOrder;
 
+  // Row selection (table view multi-select for bulk actions)
+  selectedRowIds: Set<string>;
+  selectAllAcross: boolean;
+
   // Actions
   loadDatabase: (page: Page) => void;
   fetchRows: (options?: { sort?: string; filter?: string }) => Promise<void>;
@@ -87,6 +127,12 @@ export interface DatabaseInstanceState {
   addRow: (row: DatabaseRow) => void;
   removeRow: (rowId: string) => void;
   reorderRows: (rowIds: string[]) => void;
+
+  // Selection actions
+  toggleRowSelection: (rowId: string) => void;
+  toggleSelectAll: () => void;
+  clearSelection: () => void;
+  deleteSelectedRows: () => Promise<void>;
 
   // View config actions
   setSort: (sort: SortConfig | undefined) => void;
@@ -199,6 +245,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     kanbanColumnLimits: {},
     newlyAddedRowIds: new Set(),
     kanbanCardOrder: {},
+    selectedRowIds: new Set(),
+    selectAllAcross: false,
 
     loadDatabase: (page) => {
       if (page.type !== 'database' || !page.databaseSchema) {
@@ -245,21 +293,18 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       if (!activeDatabaseId) return;
 
       const isKanban = viewConfig.viewType === 'kanban';
-      set({ isLoading: true, error: null, ...(isKanban ? { kanbanColumnLimits: {}, newlyAddedRowIds: new Set() } : {}) });
+      set({
+        isLoading: true,
+        error: null,
+        selectedRowIds: new Set(),
+        selectAllAcross: false,
+        ...(isKanban ? { kanbanColumnLimits: {}, newlyAddedRowIds: new Set() } : {}),
+      });
 
       try {
-        let sort = options.sort;
-        let filter = options.filter;
-
-        if (!sort && viewConfig.sort) {
-          sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
-        }
-
-        if (!filter && viewConfig.filters.length > 0) {
-          filter = viewConfig.filters
-            .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
-            .join('|');
-        }
+        const built = buildQueryStrings(viewConfig);
+        const sort = options.sort ?? built.sort;
+        const filter = options.filter ?? built.filter;
 
         const result = await databaseApi.getRows(activeDatabaseId, {
           sort,
@@ -280,18 +325,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       set({ isLoadingMore: true });
 
       try {
-        let sort: string | undefined;
-        let filter: string | undefined;
-
-        if (viewConfig.sort) {
-          sort = `${viewConfig.sort.propertyId}:${viewConfig.sort.direction}`;
-        }
-
-        if (viewConfig.filters.length > 0) {
-          filter = viewConfig.filters
-            .map((f) => `${f.propertyId}:${f.operator}${f.value ? `:${f.value}` : ''}`)
-            .join('|');
-        }
+        const { sort, filter } = buildQueryStrings(viewConfig);
 
         const result = await databaseApi.getRows(activeDatabaseId, {
           sort,
@@ -445,6 +479,85 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         console.error('Failed to reorder rows:', error);
         set({ rows: previousRows });
       });
+    },
+
+    // ─── Selection (table view multi-select) ──────────────────────────
+
+    toggleRowSelection: (rowId) => {
+      set((state) => {
+        const selectedRowIds = new Set(state.selectedRowIds);
+        if (selectedRowIds.has(rowId)) {
+          selectedRowIds.delete(rowId);
+        } else {
+          selectedRowIds.add(rowId);
+        }
+        // Any explicit toggle drops the "all across pages" escalation.
+        return { selectedRowIds, selectAllAcross: false };
+      });
+    },
+
+    toggleSelectAll: () => {
+      const { rows, selectedRowIds, selectAllAcross } = get();
+      const allLoadedSelected = rows.length > 0 && rows.every((r) => selectedRowIds.has(r.id));
+      if (selectAllAcross || allLoadedSelected) {
+        // Everything is selected → clear.
+        set({ selectedRowIds: new Set(), selectAllAcross: false });
+      } else {
+        // Select all loaded rows and escalate to all matching rows across pages.
+        set({ selectedRowIds: new Set(rows.map((r) => r.id)), selectAllAcross: true });
+      }
+    },
+
+    clearSelection: () => {
+      set({ selectedRowIds: new Set(), selectAllAcross: false });
+    },
+
+    deleteSelectedRows: async () => {
+      const { activeDatabaseId, selectedRowIds, selectAllAcross, viewConfig, rows, total } = get();
+      if (!activeDatabaseId) return;
+
+      // 1. Resolve the set of row IDs to delete.
+      let idsToDelete: string[];
+      if (selectAllAcross) {
+        const { filter } = buildQueryStrings(viewConfig);
+        const result = await databaseApi.getRows(activeDatabaseId, {
+          filter,
+          limit: SELECT_ALL_FETCH_LIMIT,
+          offset: 0,
+        });
+        idsToDelete = result.rows.map((r) => r.id);
+      } else {
+        idsToDelete = [...selectedRowIds];
+      }
+      if (idsToDelete.length === 0) {
+        set({ selectedRowIds: new Set(), selectAllAcross: false });
+        return;
+      }
+
+      // 2. Optimistically drop rows and clear selection.
+      const deleteSet = new Set(idsToDelete);
+      const previousRows = rows;
+      const previousTotal = total;
+      set({
+        rows: rows.filter((r) => !deleteSet.has(r.id)),
+        total: Math.max(0, total - idsToDelete.length),
+        selectedRowIds: new Set(),
+        selectAllAcross: false,
+      });
+
+      // Close the peek panel if it is showing one of the deleted rows.
+      const peekPageId = useUiStore.getState().peekPageId;
+      if (peekPageId && deleteSet.has(peekPageId)) {
+        useUiStore.getState().closePeekPanel();
+      }
+
+      // 3. Fire the deletes with bounded concurrency; revert on failure.
+      try {
+        await runWithConcurrency(idsToDelete, DELETE_CONCURRENCY, (id) => pagesApi.delete(id));
+      } catch (error) {
+        console.error('Failed to delete rows:', error);
+        set({ rows: previousRows, total: previousTotal, error: (error as Error).message });
+      }
     },
 
     setSort: (sort) => {
@@ -737,6 +850,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         error: null,
         kanbanColumnLimits: {},
         newlyAddedRowIds: new Set(),
+        selectedRowIds: new Set(),
+        selectAllAcross: false,
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef
       });

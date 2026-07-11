@@ -8,6 +8,7 @@ import { createDatabaseInstanceStore, DatabaseInstanceProvider, useDatabaseInsta
 import TableView from '@/components/database/TableView';
 import KanbanView from '@/components/database/KanbanView';
 import DatabaseToolbar from '@/components/database/DatabaseToolbar';
+import DatabaseSelectionBar from '@/components/database/DatabaseSelectionBar';
 
 interface DatabaseViewEditProps {
   block: Block;
@@ -315,17 +316,20 @@ function InlineDatabaseContent({ readOnly }: { readOnly: boolean }) {
     );
   }
 
+  const isTableView = viewConfig.viewType !== 'kanban';
+
   return (
     <div>
       <DatabaseToolbar canEdit={canEdit} />
+      {isTableView && <DatabaseSelectionBar />}
       {isLoading ? (
         <div className="flex items-center justify-center py-8 text-notion-text-secondary">
           Loading...
         </div>
-      ) : viewConfig.viewType === 'kanban' ? (
-        <KanbanView canEdit={canEdit} />
-      ) : (
+      ) : isTableView ? (
         <TableView canEdit={canEdit} />
+      ) : (
+        <KanbanView canEdit={canEdit} />
       )}
     </div>
   );

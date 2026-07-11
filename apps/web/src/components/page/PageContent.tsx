@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useBlockStore } from '@/stores/blockStore';
 import { pagesApi } from '@/api/client';
@@ -11,6 +12,7 @@ import PageProperties from './PageProperties';
 import BlockCanvas from '../blocks/BlockCanvas';
 import DatabaseView from '../database/DatabaseView';
 import ShareModal from '@/components/sharing/ShareModal';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 type PermissionLevel = 'owner' | 'full_access' | 'editor' | 'viewer';
 
@@ -22,11 +24,13 @@ interface PageContentProps {
 }
 
 export default function PageContent({ pageId, variant = 'full', onClose, onOpenFullPage }: PageContentProps) {
-  const { pages, updatePage } = usePageStore();
+  const navigate = useNavigate();
+  const { pages, updatePage, deletePage } = usePageStore();
   const { fetchBlocks, getBlocksForPage } = useBlockStore();
   const [permission, setPermission] = useState<PermissionLevel | null>(null);
   const [permissionLoading, setPermissionLoading] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const realtimeConnected = usePresenceStore((s) => s.connected);
 
   const page = pages.get(pageId);
@@ -77,6 +81,18 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
     updatePage(page.id, { isStarred: !page.isStarred });
   };
 
+  const handleConfirmDelete = () => {
+    deletePage(page.id);
+    setShowDeleteConfirm(false);
+    if (isPeek) {
+      // Split view: closing returns to the full page behind the panel.
+      onClose?.();
+    } else {
+      // Full view: no page is selected anymore — go to the welcome/empty state.
+      navigate('/');
+    }
+  };
+
   return (
     <div className="min-h-full">
       {/* Top bar */}
@@ -118,6 +134,17 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
                 />
               </svg>
             </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-1.5 rounded hover:bg-red-50 text-notion-text-secondary hover:text-red-600"
+                title="Delete page"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
             {canShare && (
               <button
                 onClick={() => setShowShareModal(true)}
@@ -173,6 +200,21 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
         onClose={() => setShowShareModal(false)}
         pageId={page.id}
         pageTitle={page.title || 'Untitled'}
+      />
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete page?"
+        message={
+          <>
+            This permanently deletes <span className="font-medium text-notion-text">{page.title || 'Untitled'}</span> and
+            all its sub-pages. This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </div>
   );
