@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { databaseApi } from '@/api/client';
 import type { DatabaseRow, ResolvedReference } from '@nonotion/shared';
@@ -25,7 +26,9 @@ export default function ReferenceCell({
   const [candidates, setCandidates] = useState<DatabaseRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [accessError, setAccessError] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchCandidates = () => {
     if (!referencedDatabaseId || candidates || loading) return;
@@ -44,9 +47,14 @@ export default function ReferenceCell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved, referencedDatabaseId]);
 
+  // Close on outside click (accounts for the portal-rendered dropdown).
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -54,24 +62,61 @@ export default function ReferenceCell({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
+  // Position the portal dropdown as fixed relative to the cell so it is never
+  // clipped by the (possibly short) database view container.
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dropdownHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      left: rect.left,
+      minWidth: Math.max(240, rect.width),
+      zIndex: 50,
+    };
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+      style.bottom = window.innerHeight - rect.top + 4;
+    } else {
+      style.top = rect.bottom + 4;
+    }
+    setDropdownStyle(style);
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) updatePosition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Reposition while the database view scrolls.
+  useEffect(() => {
+    if (!isOpen) return;
+    const main = document.querySelector('main');
+    const handleScroll = () => updatePosition();
+    main?.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      main?.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Whether the viewer lacks access to the referenced database → render #ref.
   const redacted = resolved ? !resolved.accessible : accessError;
 
-  // Names to display for the current value.
+  // Names to display, always derived from the current `value` so edits (adding
+  // or removing a reference) are reflected immediately without a refetch.
   const displayItems = useMemo<Array<{ id: string; name: string }>>(() => {
     if (redacted) return value.map((id) => ({ id, name: '#ref' }));
-    // Prefer freshly-loaded candidates (reflects just-edited value); fall back to
-    // the server-resolved names (table/kanban initial render).
-    if (candidates) {
-      const byId = new Map(candidates.map((r) => [r.id, r.title]));
-      const resolvedById = new Map((resolved?.items ?? []).map((i) => [i.id, i.name]));
-      return value.map((id) => ({
-        id,
-        name: byId.get(id) || resolvedById.get(id) || 'Untitled',
-      }));
-    }
-    if (resolved?.accessible) return resolved.items;
-    return value.map((id) => ({ id, name: '…' }));
+    const byId = candidates ? new Map(candidates.map((r) => [r.id, r.title])) : null;
+    const resolvedById = new Map((resolved?.items ?? []).map((i) => [i.id, i.name]));
+    const haveNames = !!candidates || !!resolved;
+    return value.map((id) => ({
+      id,
+      name: byId?.get(id) || resolvedById.get(id) || (haveNames ? 'Untitled' : '…'),
+    }));
   }, [redacted, resolved, candidates, value]);
 
   const toggle = (id: string) => {
@@ -165,41 +210,47 @@ export default function ReferenceCell({
         )}
       </div>
 
-      {isOpen && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-notion-border rounded-md shadow-lg z-20 min-w-[240px] max-h-[260px] overflow-hidden flex flex-col">
-          <input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            placeholder="Search records..."
-            className="px-2 py-1.5 text-sm border-b border-notion-border outline-none"
-          />
-          <div className="overflow-y-auto">
-            {loading ? (
-              <div className="px-2 py-2 text-sm text-notion-text-secondary">Loading...</div>
-            ) : filteredCandidates.length === 0 ? (
-              <div className="px-2 py-2 text-sm text-notion-text-secondary">No records</div>
-            ) : (
-              filteredCandidates.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggle(r.id);
-                  }}
-                  className={`w-full px-2 py-1 flex items-center gap-2 text-left hover:bg-notion-hover ${
-                    value.includes(r.id) ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  <span className="w-4 text-blue-600">{value.includes(r.id) ? '✓' : ''}</span>
-                  <span className="text-sm truncate flex-1">{r.title || 'Untitled'}</span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={dropdownStyle}
+            className="bg-white border border-notion-border rounded-md shadow-lg max-h-[280px] overflow-hidden flex flex-col"
+          >
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="Search records..."
+              className="px-2 py-1.5 text-sm border-b border-notion-border outline-none"
+            />
+            <div className="overflow-y-auto">
+              {loading ? (
+                <div className="px-2 py-2 text-sm text-notion-text-secondary">Loading...</div>
+              ) : filteredCandidates.length === 0 ? (
+                <div className="px-2 py-2 text-sm text-notion-text-secondary">No records</div>
+              ) : (
+                filteredCandidates.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(r.id);
+                    }}
+                    className={`w-full px-2 py-1 flex items-center gap-2 text-left hover:bg-notion-hover ${
+                      value.includes(r.id) ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <span className="w-4 text-blue-600">{value.includes(r.id) ? '✓' : ''}</span>
+                    <span className="text-sm truncate flex-1">{r.title || 'Untitled'}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
