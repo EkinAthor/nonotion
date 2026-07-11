@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -28,7 +28,7 @@ interface TableViewProps {
 
 export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
-  const { rows, total, isLoadingMore, loadMore, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties, reorderRows } = useDatabaseInstance();
+  const { rows, total, isLoadingMore, loadMore, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties, reorderRows, selectedRowIds, selectAllAcross, toggleRowSelection, toggleSelectAll } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -41,6 +41,14 @@ export default function TableView({ canEdit }: TableViewProps) {
   const properties = getVisibleProperties();
   const hasSortActive = !!viewConfig.sort;
   const canDragRows = canEdit && !hasSortActive;
+
+  // Selection column shown to editors only.
+  const showSelect = canEdit;
+  const allLoadedSelected = rows.length > 0 && rows.every((r) => selectedRowIds.has(r.id));
+  const selectAllChecked = selectAllAcross || allLoadedSelected;
+  const selectAllIndeterminate = !selectAllChecked && selectedRowIds.size > 0;
+  // Extra leading columns before property columns (drag handle + selection checkbox).
+  const leadingCols = (canDragRows ? 1 : 0) + (showSelect ? 1 : 0);
 
   const handleCellChange = (rowId: string, propertyId: string, value: PropertyValue) => {
     updateRowProperties(rowId, { [propertyId]: value });
@@ -109,6 +117,16 @@ export default function TableView({ canEdit }: TableViewProps) {
           {canDragRows && (
             <th className="w-6 px-0 py-1" />
           )}
+          {showSelect && (
+            <th className="w-8 px-2 py-1">
+              <SelectionCheckbox
+                checked={selectAllChecked}
+                indeterminate={selectAllIndeterminate}
+                onChange={toggleSelectAll}
+                title="Select all rows"
+              />
+            </th>
+          )}
           {properties.map((prop) => (
             <TableHeader
               key={prop.id}
@@ -135,6 +153,9 @@ export default function TableView({ canEdit }: TableViewProps) {
                 onCellChange={handleCellChange}
                 onRowClick={handleRowClick}
                 onPeekOpen={openPeekPanel}
+                showSelect={showSelect}
+                selected={selectedRowIds.has(row.id)}
+                onToggleSelect={toggleRowSelection}
               />
             ))}
           </SortableContext>
@@ -144,6 +165,15 @@ export default function TableView({ canEdit }: TableViewProps) {
               key={row.id}
               className="border-b border-notion-border hover:bg-notion-hover cursor-pointer group/row"
             >
+              {showSelect && (
+                <td className="w-8 px-2 py-1">
+                  <SelectionCheckbox
+                    checked={selectedRowIds.has(row.id)}
+                    onChange={() => toggleRowSelection(row.id)}
+                    title="Select row"
+                  />
+                </td>
+              )}
               {properties.map((prop, index) => (
                 <td
                   key={prop.id}
@@ -186,7 +216,7 @@ export default function TableView({ canEdit }: TableViewProps) {
         {/* New Row Button */}
         {canEdit && (
           <tr>
-            <td colSpan={properties.length + (canDragRows ? 1 : 0)} className="px-2 py-1">
+            <td colSpan={properties.length + leadingCols} className="px-2 py-1">
               <button
                 onClick={handleAddRow}
                 disabled={isAddingRow}
@@ -211,7 +241,7 @@ export default function TableView({ canEdit }: TableViewProps) {
         {/* Load More */}
         {rows.length < total && (
           <tr>
-            <td colSpan={properties.length + (canDragRows ? 1 : 0)} className="px-2 py-1">
+            <td colSpan={properties.length + leadingCols} className="px-2 py-1">
               <button
                 onClick={loadMore}
                 disabled={isLoadingMore}
@@ -248,6 +278,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                 <tbody>
                   <tr>
                     <td className="w-6 px-0 py-1" />
+                    {showSelect && <td className="w-8 px-2 py-1" />}
                     {properties.map((prop) => (
                       <td key={prop.id} className="px-2 py-1 text-sm">
                         <CellRenderer
@@ -289,9 +320,12 @@ interface SortableRowProps {
   onCellChange: (rowId: string, propertyId: string, value: PropertyValue) => void;
   onRowClick: (rowId: string) => void;
   onPeekOpen: (rowId: string) => void;
+  showSelect: boolean;
+  selected: boolean;
+  onToggleSelect: (rowId: string) => void;
 }
 
-function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPeekOpen }: SortableRowProps) {
+function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPeekOpen, showSelect, selected, onToggleSelect }: SortableRowProps) {
   const {
     attributes,
     listeners,
@@ -332,6 +366,15 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
           </svg>
         </button>
       </td>
+      {showSelect && (
+        <td className="w-8 px-2 py-1">
+          <SelectionCheckbox
+            checked={selected}
+            onChange={() => onToggleSelect(row.id)}
+            title="Select row"
+          />
+        </td>
+      )}
       {properties.map((prop, index) => (
         <td
           key={prop.id}
@@ -424,5 +467,33 @@ function TableHeader({ property, sortConfig, onSort }: TableHeaderProps) {
         )}
       </div>
     </th>
+  );
+}
+
+interface SelectionCheckboxProps {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  title?: string;
+}
+
+/** Checkbox for row selection. Supports the indeterminate state for the header. */
+function SelectionCheckbox({ checked, indeterminate = false, onChange, title }: SelectionCheckboxProps) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      title={title}
+      className="w-4 h-4 cursor-pointer accent-blue-600 align-middle"
+    />
   );
 }

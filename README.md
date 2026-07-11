@@ -17,6 +17,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Slash commands for block type changes
 - Auto-save with debounce
 - Star/unstar pages
+- Delete pages from the page view (full-screen or split view) and bulk-delete rows from the database table view (multi-select with select-all across pages), each with a confirmation prompt
 - Multi-user authentication with JWT (email/password)
 - Google OAuth support (optional)
 - Email two-factor authentication (opt-in for password accounts; admin can toggle per user)
