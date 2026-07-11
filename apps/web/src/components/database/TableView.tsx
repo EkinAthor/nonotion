@@ -111,7 +111,7 @@ export default function TableView({ canEdit }: TableViewProps) {
   const activeRow = activeRowId ? rows.find((r) => r.id === activeRowId) : null;
 
   const tableContent = (
-    <table className="w-full border-collapse">
+    <table className="w-full border-collapse group/dbtable">
       <thead>
         <tr className="border-b border-notion-border">
           {canDragRows && (
@@ -124,6 +124,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                 indeterminate={selectAllIndeterminate}
                 onChange={toggleSelectAll}
                 title="Select all rows"
+                className={selectAllChecked || selectAllIndeterminate ? '' : HEADER_CHECKBOX_HIDDEN}
               />
             </th>
           )}
@@ -171,6 +172,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                     checked={selectedRowIds.has(row.id)}
                     onChange={() => toggleRowSelection(row.id)}
                     title="Select row"
+                    className={selectedRowIds.has(row.id) ? '' : ROW_CHECKBOX_HIDDEN}
                   />
                 </td>
               )}
@@ -372,6 +374,7 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
             checked={selected}
             onChange={() => onToggleSelect(row.id)}
             title="Select row"
+            className={selected ? '' : ROW_CHECKBOX_HIDDEN}
           />
         </td>
       )}
@@ -475,10 +478,11 @@ interface SelectionCheckboxProps {
   indeterminate?: boolean;
   onChange: () => void;
   title?: string;
+  className?: string;
 }
 
 /** Checkbox for row selection. Supports the indeterminate state for the header. */
-function SelectionCheckbox({ checked, indeterminate = false, onChange, title }: SelectionCheckboxProps) {
+function SelectionCheckbox({ checked, indeterminate = false, onChange, title, className = '' }: SelectionCheckboxProps) {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -493,7 +497,12 @@ function SelectionCheckbox({ checked, indeterminate = false, onChange, title }: 
       onChange={onChange}
       onClick={(e) => e.stopPropagation()}
       title={title}
-      className="w-4 h-4 cursor-pointer accent-blue-600 align-middle"
+      className={`w-4 h-4 cursor-pointer accent-blue-600 align-middle ${className}`}
     />
   );
 }
+
+// Hover-reveal classes for selection checkboxes — hidden until row/table hover,
+// always shown when active. Full literal strings so Tailwind's JIT emits the rules.
+const ROW_CHECKBOX_HIDDEN = 'opacity-0 group-hover/row:opacity-100 transition-opacity';
+const HEADER_CHECKBOX_HIDDEN = 'opacity-0 group-hover/dbtable:opacity-100 transition-opacity';
