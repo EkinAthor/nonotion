@@ -33,6 +33,10 @@ New block types are added as plugins in `apps/web/src/components/blocks/registry
 ### 2. Storage Adapter Pattern
 `apps/api/src/storage/storage-adapter.ts` defines the `StorageAdapter` and `UserStorageAdapter` interfaces. `apps/api/src/storage/file-storage-adapter.ts` defines the `FileStorageAdapter` interface for file/image BLOB storage. All three are implemented by `SqliteFullStorage` (default, single `nonotion.db` file) and `PostgresStorage`. The storage factory (`storage-factory.ts`) selects the backend based on `STORAGE_TYPE` env var.
 
+Targeted page queries: `getPagesByParent(parentId)` (children of one page/database, uses `idx_pages_parent_id`) and `getPagesByIds(ids)` (bulk fetch, chunked on SQLite). **Never call `getAllPages()` in request hot paths** — it scans the whole workspace; use the targeted methods.
+
+**Optional SQL fast-path methods** (the optional method itself is the capability flag — Postgres implements them, SQLite/JSON storage omit them and services fall back to the JS path): `queryDatabaseRows(query)` (see Performance Patterns) and `findNearestPermission(pageId, userId)` (recursive-CTE permission lookup). When adding one, keep the JS fallback behaviorally identical — demo-client mirrors the JS semantics.
+
 ### 3. Entity IDs
 All entities use prefixed IDs for type safety:
 - Pages: `pg_xxxxxxxxxxxx`
@@ -242,6 +246,19 @@ Two entry points for deleting pages, both guarded by a shared confirmation modal
 ### 21. New Page from Database Toolbar
 `DatabaseToolbar.tsx` renders a top-level **New** button (editor-only, left of the view switcher, shared by table + kanban). `handleNewPage` mirrors `TableView.handleAddRow` — `createPage({ title: 'Untitled', parentId: activeDatabaseId })` (pageStore) → `addRow(...)` (optimistic insert) — then calls `openPeekPanel(page.id)` (`uiStore`) to open the new page in split view immediately. No backend/store changes; works in demo mode. In kanban the new row has no select value and lands in the "No Value" column.
 
+### 23. Performance Patterns (Storage Hot Paths)
+Postgres-first optimizations behind optional adapter methods; SQLite keeps the JS paths (correct, slower). All were measured against `seed:perf` data (~5.6k pages, 2000-row database).
+
+- **`getRows` SQL fast path vs JS path** (`database-service.ts`): when there is **no sort** and the filter is **absent or exactly one `contains` on the title property** (the shape of every default table/kanban fetch and of the reference-picker keystroke search), `storage.queryDatabaseRows()` runs one PG query — `WHERE parent_id = $db [AND title ILIKE $pattern]` with childIds ordering via `LEFT JOIN unnest($childIds) WITH ORDINALITY` (hash join — do NOT use `array_position()`, it rescans the array per row), `COUNT(*) OVER()`, `LIMIT/OFFSET`. LIKE metacharacters (`% _ \`) are escaped (JS treats them literally). Any other filter/sort → JS path over `getPagesByParent()` (semantics unchanged, mirrored by demo-client).
+- **Permission lookup**: `getEffectivePermission` checks a request-scoped cache, then `findNearestPermission` (PG recursive CTE anchored on the literal pageId, `ORDER BY depth LIMIT 1` = nearest-ancestor-wins, depth cap 64), then falls back to the per-level JS walk (SQLite).
+- **Request-scoped permission memoization** (`apps/api/src/services/request-context.ts`): `AsyncLocalStorage<Map<pageId:userId, level|null>>` installed by an `onRequest` hook in `index.ts`. Permission mutations (`sharePage`, `unshare`, `createOwnerPermission`, `deletePagePermissions`, `inheritParentPermissions`) call `clearPermissionCache()`. Code outside requests (scripts/seed) has no store — lookups just hit storage.
+- **`getUserAccessiblePages`**: Map-based parent lookup + per-node accessibility memoization (shared ancestor chains walked once). Was O(N²·depth) via `allPages.find()`.
+- **Reference title resolution** (`reference-service.ts`): referenced row ids are collected from the current page of rows and bulk-fetched via `getPagesByIds` — never resolve from a full-workspace map.
+- **Batched block reorder**: `updateBlockOrders(pageId, orders)` — single `unnest`-driven UPDATE on PG, one transaction on SQLite. Used by `reorderBlocks`, `deleteBlock` renumbering, and mid-page inserts in `block-service.ts`.
+- **Perf dataset**: `pnpm --filter @nonotion/api seed:perf` seeds ~3.1k document pages + a 2000-row database (all property types incl. references into a 500-row second database) + `perf-user@example.com` (password `perfperf`) with one inherited grant. Idempotent (`_perf_` id infix, marker setting); `-- --clean` removes everything, `-- --force` re-runs past the marker. Never part of demo data.
+
+Deferred (assessed, not implemented): full jsonb filter/sort push-down (revisit >5-10k rows/database with active filters), GIN index on `properties` (rejected — queries are parent_id-bounded and GIN wouldn't serve path-extraction predicates), accessible-pages CTE (JS fix sufficient <50k pages).
+
 ## Critical Files
 
 | File | Purpose |
@@ -278,6 +295,9 @@ Two entry points for deleting pages, both guarded by a shared confirmation modal
 | `apps/web/src/components/database/DatabaseSelectionBar.tsx` | Bulk-action bar for selected table rows (count, select-all escalation, delete) |
 | `apps/web/src/components/database/TableView.tsx` | Table view with row selection checkboxes, drag reorder, cell rendering |
 | `apps/api/src/services/reference-service.ts` | Per-viewer reference name resolution + `#ref` redaction + `page_references` backfill |
+| `apps/api/src/services/request-context.ts` | Request-scoped permission cache (AsyncLocalStorage) |
+| `apps/api/src/scripts/seed-perf-data.ts` | Synthetic perf dataset seeder (`seed:perf`, `--clean`/`--force` flags) |
+| `apps/api/src/storage/storage-adapter.ts` | Storage interfaces incl. optional SQL fast-path methods (`queryDatabaseRows`, `findNearestPermission`) |
 | `apps/web/src/components/database/cells/ReferenceCell.tsx` | Reference cell: clickable chips, `#ref` redaction, server-side search + create-page editor (via `OptionPickerMenu`) |
 | `apps/web/src/components/database/cells/MultiSelectCell.tsx` | Multi_select cell: color-badge tags, rename/delete, search + create-and-select editor (via `OptionPickerMenu`) |
 | `apps/web/src/components/database/cells/OptionPickerMenu.tsx` | Shared search-first, keyboard-navigable dropdown shell for the multi_select + reference editors |
@@ -322,6 +342,7 @@ VITE_DEMO_MODE=true pnpm --filter @nonotion/web build  # Demo mode (no backend)
 
 # Seed
 pnpm --filter @nonotion/api seed:demo  # Seed demo data into backend
+pnpm --filter @nonotion/api seed:perf  # Seed large synthetic dataset for perf testing (-- --clean to remove)
 
 # Test
 pnpm --filter @nonotion/e2e test:e2e  # Run Playwright tests

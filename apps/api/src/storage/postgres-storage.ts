@@ -1,18 +1,19 @@
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import type {
   Page,
   Block,
   User,
   PagePermission,
+  PermissionLevel,
   UserRole,
   BlockContent,
   DatabaseSchema,
   PropertyValue,
   PageType,
 } from '@nonotion/shared';
-import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
+import type { StorageAdapter, UserStorageAdapter, DatabaseRowsQuery } from './storage-adapter.js';
 import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
 import * as pgSchema from '../db/pg-schema.js';
 
@@ -56,6 +57,30 @@ function rowToPage(row: pgSchema.PageRow): Page {
   };
   if (row.databaseSchema) {
     page.databaseSchema = row.databaseSchema as DatabaseSchema;
+  }
+  if (row.properties) {
+    page.properties = row.properties as Record<string, PropertyValue>;
+  }
+  return page;
+}
+
+// Maps a raw `SELECT p.*` pg result row (snake_case columns) to a Page.
+function rawToPage(row: Record<string, unknown>): Page {
+  const page: Page = {
+    id: row.id as string,
+    title: row.title as string,
+    type: row.type as PageType,
+    ownerId: row.owner_id as string,
+    parentId: (row.parent_id as string | null) ?? null,
+    childIds: (row.child_ids as string[] | null) ?? [],
+    icon: (row.icon as string | null) ?? null,
+    isStarred: row.is_starred as boolean,
+    createdAt: (row.created_at as Date).toISOString(),
+    updatedAt: (row.updated_at as Date).toISOString(),
+    version: row.version as number,
+  };
+  if (row.database_schema) {
+    page.databaseSchema = row.database_schema as DatabaseSchema;
   }
   if (row.properties) {
     page.properties = row.properties as Record<string, PropertyValue>;
@@ -107,6 +132,57 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
   async getPage(id: string): Promise<Page | null> {
     const rows = await this.db.select().from(pgSchema.pages).where(eq(pgSchema.pages.id, id));
     return rows.length > 0 ? rowToPage(rows[0]) : null;
+  }
+
+  async getPagesByParent(parentId: string): Promise<Page[]> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.pages)
+      .where(eq(pgSchema.pages.parentId, parentId));
+    return rows.map(rowToPage);
+  }
+
+  async getPagesByIds(ids: string[]): Promise<Page[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.select().from(pgSchema.pages).where(inArray(pgSchema.pages.id, ids));
+    return rows.map(rowToPage);
+  }
+
+  async queryDatabaseRows(query: DatabaseRowsQuery): Promise<{ pages: Page[]; total: number }> {
+    const { databaseId, titleContains, childIdsOrder, limit, offset } = query;
+
+    // Escape LIKE metacharacters — the JS filter treats them literally.
+    const pattern =
+      titleContains !== null ? `%${titleContains.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+
+    // childIds ordering via a hash join (O(rows + ids)) — array_position()
+    // would rescan the whole array per row.
+    const result = await this.pool.query(
+      `SELECT p.*, count(*) over() AS __total
+       FROM pages p
+       LEFT JOIN unnest($1::text[]) WITH ORDINALITY AS o(id, pos) ON o.id = p.id
+       WHERE p.parent_id = $2${pattern !== null ? ' AND p.title ILIKE $5' : ''}
+       ORDER BY o.pos NULLS LAST, p.id
+       LIMIT $3 OFFSET $4`,
+      pattern !== null
+        ? [childIdsOrder, databaseId, limit, offset, pattern]
+        : [childIdsOrder, databaseId, limit, offset]
+    );
+
+    if (result.rows.length > 0) {
+      const total = Number(result.rows[0].__total);
+      return { pages: result.rows.map(rawToPage), total };
+    }
+    // Empty page of results at offset > 0 — count separately.
+    if (offset > 0) {
+      const counted = await this.pool.query(
+        `SELECT count(*) AS total FROM pages p
+         WHERE p.parent_id = $1${pattern !== null ? ' AND p.title ILIKE $2' : ''}`,
+        pattern !== null ? [databaseId, pattern] : [databaseId]
+      );
+      return { pages: [], total: Number(counted.rows[0]?.total ?? 0) };
+    }
+    return { pages: [], total: 0 };
   }
 
   async createPage(page: Page): Promise<Page> {
@@ -218,6 +294,18 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
     return rows.map(rowToBlock);
   }
 
+  async updateBlockOrders(pageId: string, orders: Array<{ id: string; order: number }>): Promise<void> {
+    if (orders.length === 0) return;
+    const ids = orders.map((o) => o.id);
+    const ords = orders.map((o) => o.order);
+    await this.db.execute(sql`
+      UPDATE blocks b
+      SET "order" = v.ord, version = b.version + 1
+      FROM unnest(${sql.param(ids)}::text[], ${sql.param(ords)}::int[]) AS v(id, ord)
+      WHERE b.id = v.id AND b.page_id = ${pageId} AND b."order" IS DISTINCT FROM v.ord
+    `);
+  }
+
   // ==================== UserStorageAdapter: Users ====================
 
   async getAllUsers(): Promise<User[]> {
@@ -312,6 +400,29 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
   }
 
   // ==================== UserStorageAdapter: Permissions ====================
+
+  async findNearestPermission(pageId: string, userId: string): Promise<PermissionLevel | null> {
+    // Nearest-ancestor-wins, matching permission-service's JS walk. Anchoring
+    // on the literal pageId (not a pages lookup) preserves the behavior that a
+    // direct permission wins even when the page row itself is missing.
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE chain AS (
+        SELECT ${pageId}::text AS id, 0 AS depth
+        UNION ALL
+        SELECT p.parent_id, c.depth + 1
+        FROM pages p
+        JOIN chain c ON p.id = c.id
+        WHERE p.parent_id IS NOT NULL AND c.depth < 64
+      )
+      SELECT perm.level
+      FROM chain
+      JOIN permissions perm ON perm.page_id = chain.id AND perm.user_id = ${userId}
+      ORDER BY chain.depth
+      LIMIT 1
+    `);
+    const rows = result.rows as Array<{ level: PermissionLevel }>;
+    return rows.length > 0 ? rows[0].level : null;
+  }
 
   async getPagePermissions(pageId: string): Promise<PagePermission[]> {
     const rows = await this.db

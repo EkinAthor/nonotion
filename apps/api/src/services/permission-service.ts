@@ -1,24 +1,52 @@
 import type { Page, PagePermission, PermissionLevel } from '@nonotion/shared';
 import { now } from '@nonotion/shared';
 import { getStorage, getUserStorage } from '../storage/storage-factory.js';
+import { getPermissionCache, clearPermissionCache, type PermissionCache } from './request-context.js';
 
 export async function getEffectivePermission(
   pageId: string,
   userId: string
 ): Promise<PermissionLevel | null> {
+  const cache = getPermissionCache();
+  const key = `${pageId}:${userId}`;
+  const cached = cache?.get(key);
+  if (cached !== undefined) return cached;
+
+  const userStorage = getUserStorage();
+  const level = userStorage.findNearestPermission
+    ? // Single-query nearest-ancestor lookup (recursive CTE)
+      await userStorage.findNearestPermission(pageId, userId)
+    : await walkEffectivePermission(pageId, userId, cache);
+
+  cache?.set(key, level);
+  return level;
+}
+
+/** Per-level walk fallback for backends without findNearestPermission. */
+async function walkEffectivePermission(
+  pageId: string,
+  userId: string,
+  cache: PermissionCache | undefined
+): Promise<PermissionLevel | null> {
+  const key = `${pageId}:${userId}`;
+  const cached = cache?.get(key);
+  if (cached !== undefined) return cached;
+
   // First check direct permission on this page
   const permission = await getUserStorage().getPermission(pageId, userId);
+  let level: PermissionLevel | null = null;
   if (permission) {
-    return permission.level;
+    level = permission.level;
+  } else {
+    // Check inherited permission from parent pages
+    const page = await getStorage().getPage(pageId);
+    if (page?.parentId) {
+      level = await walkEffectivePermission(page.parentId, userId, cache);
+    }
   }
 
-  // Check inherited permission from parent pages
-  const page = await getStorage().getPage(pageId);
-  if (page?.parentId) {
-    return getEffectivePermission(page.parentId, userId);
-  }
-
-  return null;
+  cache?.set(key, level);
+  return level;
 }
 
 export interface PermissionOptions {
@@ -58,6 +86,7 @@ export async function createOwnerPermission(pageId: string, userId: string): Pro
     grantedBy: userId,
     grantedAt: timestamp,
   };
+  clearPermissionCache();
   return getUserStorage().createPermission(permission);
 }
 
@@ -88,6 +117,7 @@ export async function sharePage(
   }
 
   const timestamp = now();
+  clearPermissionCache();
 
   // Share the main page
   const mainPermission = await sharePageDirect(pageId, targetUserId, level, grantedBy, timestamp);
@@ -152,6 +182,7 @@ export async function unshare(pageId: string, userId: string): Promise<boolean> 
   }
 
   // Unshare from this page
+  clearPermissionCache();
   const result = await getUserStorage().deletePermission(pageId, userId);
 
   // Also remove from all descendants (unless they have owner permission there)
@@ -171,6 +202,7 @@ export async function getPagePermissions(pageId: string): Promise<PagePermission
 }
 
 export async function deletePagePermissions(pageId: string): Promise<void> {
+  clearPermissionCache();
   return getUserStorage().deletePagePermissions(pageId);
 }
 
@@ -186,36 +218,44 @@ export async function getUserAccessiblePages(userId: string, options?: Permissio
 
   // Get all pages and filter to accessible ones
   const allPages = await getStorage().getAllPages();
+  const pagesById = new Map(allPages.map((p) => [p.id, p]));
 
-  // A page is accessible if user has direct permission OR if any ancestor has permission
-  const accessiblePages: Page[] = [];
-
-  for (const page of allPages) {
-    // Check direct permission first
-    if (pageIds.has(page.id)) {
-      accessiblePages.push(page);
-      continue;
-    }
-
-    // Check if any ancestor has permission (inherited access)
-    let currentParentId = page.parentId;
-    while (currentParentId) {
-      if (pageIds.has(currentParentId)) {
-        accessiblePages.push(page);
+  // A page is accessible if user has direct permission OR if any ancestor has
+  // permission. Memoize per-node accessibility so shared ancestor chains are
+  // walked once.
+  const accessible = new Map<string, boolean>();
+  const isAccessible = (pageId: string): boolean => {
+    const cached = accessible.get(pageId);
+    if (cached !== undefined) return cached;
+    // Walk up until a permission, a memoized answer, or the root.
+    const chain: string[] = [];
+    let currentId: string | null = pageId;
+    let result = false;
+    while (currentId) {
+      const memo = accessible.get(currentId);
+      if (memo !== undefined) {
+        result = memo;
         break;
       }
-      const parent = allPages.find(p => p.id === currentParentId);
-      currentParentId = parent?.parentId ?? null;
+      if (pageIds.has(currentId)) {
+        result = true;
+        break;
+      }
+      chain.push(currentId);
+      currentId = pagesById.get(currentId)?.parentId ?? null;
     }
-  }
+    for (const id of chain) accessible.set(id, result);
+    return result;
+  };
 
-  return accessiblePages;
+  return allPages.filter((page) => isAccessible(page.id));
 }
 
 // Copy permissions from parent page to child page (for newly created pages)
 export async function inheritParentPermissions(childPageId: string, parentPageId: string): Promise<void> {
   const parentPermissions = await getUserStorage().getPagePermissions(parentPageId);
   const timestamp = now();
+  clearPermissionCache();
 
   for (const parentPerm of parentPermissions) {
     // Skip owner - child gets its own owner

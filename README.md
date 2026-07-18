@@ -192,6 +192,18 @@ This creates:
 
 The script is idempotent — safe to run multiple times. Existing data is skipped.
 
+### Loading Performance Test Data (Backend)
+
+For performance testing on a local environment, a separate script seeds a large synthetic dataset (~3,100 document pages in a deep hierarchy, a 2,000-row database with all property types including references into a second 500-row database, and a `perf-user@example.com` account with inherited permissions):
+
+```bash
+pnpm --filter @nonotion/api seed:perf            # seed (idempotent)
+pnpm --filter @nonotion/api seed:perf -- --clean # remove all perf data
+pnpm --filter @nonotion/api seed:perf -- --force # re-run entity checks even if already seeded
+```
+
+All perf entities carry a `_perf_` id infix, so `--clean` can never touch real data. This dataset is **not** part of the demo data.
+
 ---
 
 ## Environment Variables

@@ -18,14 +18,10 @@ export async function createBlock(input: CreateBlockInput): Promise<Block> {
 
   // Shift existing blocks if inserting in the middle
   if (order < existingBlocks.length) {
-    for (const block of existingBlocks) {
-      if (block.order >= order) {
-        await getStorage().updateBlock(block.id, {
-          order: block.order + 1,
-          version: block.version + 1,
-        });
-      }
-    }
+    const shifts = existingBlocks
+      .filter((block) => block.order >= order)
+      .map((block) => ({ id: block.id, order: block.order + 1 }));
+    await getStorage().updateBlockOrders(input.pageId, shifts);
   }
 
   const block: Block = {
@@ -70,14 +66,11 @@ export async function deleteBlock(id: string): Promise<boolean> {
 
   // Reorder remaining blocks
   const remainingBlocks = await getStorage().getBlocksByPage(block.pageId);
-  for (let i = 0; i < remainingBlocks.length; i++) {
-    if (remainingBlocks[i].order !== i) {
-      await getStorage().updateBlock(remainingBlocks[i].id, {
-        order: i,
-        version: remainingBlocks[i].version + 1,
-      });
-    }
-  }
+  const renumbered = remainingBlocks
+    .map((b, i) => ({ id: b.id, order: i, changed: b.order !== i }))
+    .filter((b) => b.changed)
+    .map(({ id, order }) => ({ id, order }));
+  await getStorage().updateBlockOrders(block.pageId, renumbered);
 
   return true;
 }
@@ -93,17 +86,12 @@ export async function reorderBlocks(pageId: string, input: ReorderBlocksInput): 
     }
   }
 
-  // Update order for each block
-  for (let i = 0; i < input.blockIds.length; i++) {
-    const blockId = input.blockIds[i];
-    const block = existingBlocks.find((b) => b.id === blockId);
-    if (block && block.order !== i) {
-      await getStorage().updateBlock(blockId, {
-        order: i,
-        version: block.version + 1,
-      });
-    }
-  }
+  // Batch-update changed orders atomically
+  const blocksById = new Map(existingBlocks.map((b) => [b.id, b]));
+  const changes = input.blockIds
+    .map((id, i) => ({ id, order: i }))
+    .filter(({ id, order }) => blocksById.get(id)!.order !== order);
+  await getStorage().updateBlockOrders(pageId, changes);
 
   return getStorage().getBlocksByPage(pageId);
 }

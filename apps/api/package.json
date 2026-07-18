@@ -16,7 +16,8 @@
     "db:studio:pg": "drizzle-kit studio --config=drizzle.pg.config.ts",
     "migrate:multiuser": "tsx src/scripts/migrate-to-multiuser.ts",
     "migrate:to-postgres": "tsx src/scripts/migrate-to-postgres.ts",
-    "seed:demo": "tsx src/scripts/seed-demo-data.ts"
+    "seed:demo": "tsx src/scripts/seed-demo-data.ts",
+    "seed:perf": "tsx src/scripts/seed-perf-data.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
