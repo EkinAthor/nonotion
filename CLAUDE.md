@@ -232,6 +232,9 @@ Two entry points for deleting pages, both guarded by a shared confirmation modal
 - **Selection bar** (`DatabaseSelectionBar.tsx`): rendered by `DatabaseView.tsx` between the toolbar and the view when the table view is active and a selection exists. Shows the count, a "Select all {total}" escalation link (when all loaded rows are picked but more pages exist), a red Delete button (→ `ConfirmDialog`), and a clear (✕) button. Future bulk actions (move, export) belong here.
 - **Delete from the page view** (`PageContent.tsx`): a trash button next to the star in the top bar, shown when `canEdit`. On confirm calls `pageStore.deletePage`; **full view** → `navigate('/')` (welcome/empty state), **peek/split view** → `onClose()` (returns to the full page behind the single-level peek panel).
 
+### 21. New Page from Database Toolbar
+`DatabaseToolbar.tsx` renders a top-level **New** button (editor-only, left of the view switcher, shared by table + kanban). `handleNewPage` mirrors `TableView.handleAddRow` — `createPage({ title: 'Untitled', parentId: activeDatabaseId })` (pageStore) → `addRow(...)` (optimistic insert) — then calls `openPeekPanel(page.id)` (`uiStore`) to open the new page in split view immediately. No backend/store changes; works in demo mode. In kanban the new row has no select value and lands in the "No Value" column.
+
 ## Critical Files
 
 | File | Purpose |
