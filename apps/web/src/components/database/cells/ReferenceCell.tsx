@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { databaseApi } from '@/api/client';
+import { databaseApi, pagesApi } from '@/api/client';
+import { usePageStore } from '@/stores/pageStore';
 import type { DatabaseRow, ResolvedReference } from '@nonotion/shared';
+import OptionPickerMenu, { type OptionPickerItem } from './OptionPickerMenu';
 
 interface ReferenceCellProps {
   value: string[]; // referenced row ids
@@ -26,109 +27,149 @@ export default function ReferenceCell({
   const [candidates, setCandidates] = useState<DatabaseRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [accessError, setAccessError] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [titlePropId, setTitlePropId] = useState<string | null>(null);
+  const [schemaLoaded, setSchemaLoaded] = useState(false);
+  // Accumulating id → name map so selected chips keep their names even when the
+  // current (server-filtered) result set doesn't include them.
+  const [nameCache, setNameCache] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const reqIdRef = useRef(0);
 
-  const fetchCandidates = () => {
-    if (!referencedDatabaseId || candidates || loading) return;
-    setLoading(true);
-    databaseApi
-      .getRows(referencedDatabaseId, { limit: 1000 })
-      .then((r) => setCandidates(r.rows))
-      .catch(() => setAccessError(true))
-      .finally(() => setLoading(false));
+  const redacted = resolved ? !resolved.accessible : accessError;
+
+  const mergeNames = (rows: Array<{ id: string; title?: string }>) => {
+    setNameCache((prev) => {
+      const next = { ...prev };
+      for (const r of rows) next[r.id] = r.title ?? '';
+      return next;
+    });
   };
 
-  // When no server-resolved data is available (e.g. row-detail page), fetch
-  // candidates so we can display referenced names.
+  // Seed names from server-resolved data (table/kanban views).
   useEffect(() => {
-    if (!resolved && referencedDatabaseId) fetchCandidates();
+    if (!resolved?.items?.length) return;
+    setNameCache((prev) => {
+      const next = { ...prev };
+      for (const it of resolved.items) next[it.id] = it.name;
+      return next;
+    });
+  }, [resolved]);
+
+  // When there is no server-resolved data (e.g. row-detail page), best-effort
+  // fetch names for display without loading the whole database.
+  useEffect(() => {
+    if (resolved || !referencedDatabaseId || value.length === 0) return;
+    databaseApi
+      .getRows(referencedDatabaseId, { limit: 100 })
+      .then((r) => mergeNames(r.rows))
+      .catch(() => setAccessError(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved, referencedDatabaseId]);
 
-  // Close on outside click (accounts for the portal-rendered dropdown).
+  // Resolve the referenced DB's title property id once (for server-side search).
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        containerRef.current && !containerRef.current.contains(target) &&
-        dropdownRef.current && !dropdownRef.current.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
-
-  // Position the portal dropdown as fixed relative to the cell so it is never
-  // clipped by the (possibly short) database view container.
-  const updatePosition = () => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const dropdownHeight = 280;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const style: React.CSSProperties = {
-      position: 'fixed',
-      left: rect.left,
-      minWidth: Math.max(240, rect.width),
-      zIndex: 50,
-    };
-    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-      style.bottom = window.innerHeight - rect.top + 4;
-    } else {
-      style.top = rect.bottom + 4;
-    }
-    setDropdownStyle(style);
-  };
-
-  useLayoutEffect(() => {
-    if (isOpen) updatePosition();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  // Reposition while the database view scrolls.
-  useEffect(() => {
-    if (!isOpen) return;
-    const main = document.querySelector('main');
-    const handleScroll = () => updatePosition();
-    main?.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
+    if (!isOpen || schemaLoaded || !referencedDatabaseId) return;
+    let cancelled = false;
+    pagesApi
+      .get(referencedDatabaseId)
+      .then((page) => {
+        if (cancelled) return;
+        const titleProp = page.databaseSchema?.properties.find((p) => p.type === 'title');
+        setTitlePropId(titleProp?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAccessError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setSchemaLoaded(true);
+      });
     return () => {
-      main?.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
+      cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, schemaLoaded, referencedDatabaseId]);
 
-  // Whether the viewer lacks access to the referenced database → render #ref.
-  const redacted = resolved ? !resolved.accessible : accessError;
+  // Server-side search: fetch matching rows as the user types (debounced).
+  useEffect(() => {
+    if (!isOpen || !referencedDatabaseId || !schemaLoaded) return;
+    const q = search.trim();
+    const reqId = ++reqIdRef.current;
+    setLoading(true);
+    const t = setTimeout(
+      () => {
+        const opts =
+          q && titlePropId
+            ? { filter: `${titlePropId}:contains:${q}`, limit: 100 }
+            : { limit: 100 };
+        databaseApi
+          .getRows(referencedDatabaseId, opts)
+          .then((r) => {
+            if (reqId !== reqIdRef.current) return; // ignore stale response
+            setCandidates(r.rows);
+            mergeNames(r.rows);
+          })
+          .catch(() => {
+            if (reqId === reqIdRef.current) setAccessError(true);
+          })
+          .finally(() => {
+            if (reqId === reqIdRef.current) setLoading(false);
+          });
+      },
+      q ? 200 : 0
+    );
+    return () => clearTimeout(t);
+  }, [isOpen, search, schemaLoaded, titlePropId, referencedDatabaseId]);
 
-  // Names to display, always derived from the current `value` so edits (adding
-  // or removing a reference) are reflected immediately without a refetch.
   const displayItems = useMemo<Array<{ id: string; name: string }>>(() => {
     if (redacted) return value.map((id) => ({ id, name: '#ref' }));
-    const byId = candidates ? new Map(candidates.map((r) => [r.id, r.title])) : null;
-    const resolvedById = new Map((resolved?.items ?? []).map((i) => [i.id, i.name]));
-    const haveNames = !!candidates || !!resolved;
+    const haveNames = Object.keys(nameCache).length > 0 || !!resolved;
     return value.map((id) => ({
       id,
-      name: byId?.get(id) || resolvedById.get(id) || (haveNames ? 'Untitled' : '…'),
+      name: nameCache[id] || (haveNames ? 'Untitled' : '…'),
     }));
-  }, [redacted, resolved, candidates, value]);
+  }, [redacted, resolved, nameCache, value]);
 
   const toggle = (id: string) => {
     if (value.includes(id)) onChange(value.filter((v) => v !== id));
     else onChange([...value, id]);
   };
 
-  const filteredCandidates = useMemo(() => {
-    if (!candidates) return [];
-    const q = search.toLowerCase();
-    return candidates.filter((r) => (r.title || 'Untitled').toLowerCase().includes(q));
-  }, [candidates, search]);
+  const handleCreatePage = async (text: string) => {
+    if (!referencedDatabaseId) return;
+    const title = text.trim();
+    if (!title) return;
+    const page = await usePageStore.getState().createPage({ title, parentId: referencedDatabaseId });
+    const newRow: DatabaseRow = {
+      id: page.id,
+      title: page.title,
+      icon: page.icon,
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
+      properties: {},
+    };
+    setCandidates((prev) => (prev ? [...prev, newRow] : [newRow]));
+    mergeNames([newRow]);
+    onChange([...value, page.id]); // create + select
+  };
+
+  // When we couldn't resolve a title property id, filter client-side as a fallback.
+  const q = search.trim().toLowerCase();
+  const listRows = (candidates ?? []).filter((r) =>
+    !titlePropId && q ? (r.title || 'Untitled').toLowerCase().includes(q) : true
+  );
+
+  const exactMatch = listRows.some((r) => (r.title || '').toLowerCase() === q);
+  const createText = referencedDatabaseId && q && !exactMatch ? search.trim() : null;
+
+  const items: OptionPickerItem[] = listRows.map((r) => ({
+    id: r.id,
+    isSelected: value.includes(r.id),
+    render: () => (
+      <div className="px-2 py-1 flex items-center gap-2 text-left">
+        <span className="w-4 text-blue-600">{value.includes(r.id) ? '✓' : ''}</span>
+        <span className="text-sm truncate flex-1">{r.title || 'Untitled'}</span>
+      </div>
+    ),
+  }));
 
   const chip = (item: { id: string; name: string }, clickable: boolean) => (
     <span
@@ -173,7 +214,6 @@ export default function ReferenceCell({
         onClick={(e) => {
           e.stopPropagation();
           setIsOpen(!isOpen);
-          fetchCandidates();
         }}
         className="py-0.5 px-1 min-h-[24px] cursor-pointer hover:bg-gray-100 rounded flex flex-wrap gap-1"
       >
@@ -210,47 +250,30 @@ export default function ReferenceCell({
         )}
       </div>
 
-      {isOpen &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            style={dropdownStyle}
-            className="bg-white border border-notion-border rounded-md shadow-lg max-h-[280px] overflow-hidden flex flex-col"
-          >
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="Search records..."
-              className="px-2 py-1.5 text-sm border-b border-notion-border outline-none"
-            />
-            <div className="overflow-y-auto">
-              {loading ? (
-                <div className="px-2 py-2 text-sm text-notion-text-secondary">Loading...</div>
-              ) : filteredCandidates.length === 0 ? (
-                <div className="px-2 py-2 text-sm text-notion-text-secondary">No records</div>
-              ) : (
-                filteredCandidates.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggle(r.id);
-                    }}
-                    className={`w-full px-2 py-1 flex items-center gap-2 text-left hover:bg-notion-hover ${
-                      value.includes(r.id) ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <span className="w-4 text-blue-600">{value.includes(r.id) ? '✓' : ''}</span>
-                    <span className="text-sm truncate flex-1">{r.title || 'Untitled'}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>,
-          document.body
+      <OptionPickerMenu
+        open={isOpen}
+        anchorRef={containerRef}
+        onClose={() => {
+          setIsOpen(false);
+          setSearch('');
+        }}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search or create a record..."
+        items={items}
+        onSelect={toggle}
+        loading={loading}
+        createText={createText}
+        onCreate={handleCreatePage}
+        createLabel={(text) => (
+          <>
+            <span className="text-notion-text-secondary">Create page</span>
+            <span className="font-medium truncate">&quot;{text}&quot;</span>
+          </>
         )}
+        emptyLabel="No records"
+        minWidth={240}
+      />
     </div>
   );
 }

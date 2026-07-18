@@ -232,6 +232,14 @@ Two entry points for deleting pages, both guarded by a shared confirmation modal
 - **Selection bar** (`DatabaseSelectionBar.tsx`): rendered by `DatabaseView.tsx` between the toolbar and the view when the table view is active and a selection exists. Shows the count, a "Select all {total}" escalation link (when all loaded rows are picked but more pages exist), a red Delete button (→ `ConfirmDialog`), and a clear (✕) button. Future bulk actions (move, export) belong here.
 - **Delete from the page view** (`PageContent.tsx`): a trash button next to the star in the top bar, shown when `canEdit`. On confirm calls `pageStore.deletePage`; **full view** → `navigate('/')` (welcome/empty state), **peek/split view** → `onClose()` (returns to the full page behind the single-level peek panel).
 
+### 22. Unified Option Picker (multi_select + reference cells)
+`apps/web/src/components/database/cells/OptionPickerMenu.tsx` is a shared dropdown shell that gives the `multi_select` and `reference` cell editors a consistent, search-first, keyboard-navigable UI. It owns the portal + fixed positioning (flip-above, `main`-scroll/`window`-resize reposition), click-outside, the auto-focused search input, keyboard navigation, the inline "Create new" row, and clear-search-and-refocus-on-select. Parents own filtering, item rendering, and the select/create handlers, so the shell stays generic. **No backend/shared/`CellRenderer` changes** — both cells keep the `value: string[]` / `onChange(value: string[])` contract, so demo mode works unchanged.
+
+- **Behavior**: search on top (auto-focused); below it a live-filtered, `maxRendered`-capped list; below that a "Create *<text>*" row shown only when the trimmed search is non-empty and the parent reports no exact match (`createText = null` hides it). ArrowDown from the input moves the highlight into the list (create row is the last navigable entry), Enter activates the highlighted row (or the top row when highlight is `-1`), Escape closes. Selecting a row (Enter/click) clears the search and refocuses it, keeping the menu open (multi-value semantics; `closeOnSelect` reserved for future single-select adoption).
+- **Props**: `open`, `anchorRef`, `onClose`, `search`/`onSearchChange`, `items: OptionPickerItem[]` (`{ id, render(state), isSelected?, disabledNav? }`), `onSelect`, `createText`/`onCreate`/`createLabel`, `loading`, `emptyLabel`, `maxRendered` (100), `minWidth`.
+- **`MultiSelectCell.tsx`**: filters `options` by name client-side, renders color badges + hover rename/delete (isDefault-locked); the search doubles as the create source. **Create now also selects** (`updatePropertyOptions(...)` then `onChange([...value, newId])`). The editing row is `disabledNav` so inline-rename keystrokes don't hit shell nav.
+- **`ReferenceCell.tsx`**: **server-side search** — resolves the referenced DB's title property id once via `pagesApi.get(referencedDatabaseId)`, then debounced (~200ms) `databaseApi.getRows(refDbId, { filter: `${titlePropId}:contains:${q}`, limit: 100 })` (unfiltered when `q` empty); a request-id ref drops stale responses. A `nameCache` (id→name) accumulates from `resolved.items` + every fetched candidate so selected chips keep their names outside the current result set. "Create page *<text>*" calls `pageStore.createPage({ title, parentId: referencedDatabaseId })`, seeds the cache, and selects the new page. Redaction (`#ref`) and clickable navigate-chips unchanged.
+
 ## Critical Files
 
 | File | Purpose |
@@ -268,7 +276,9 @@ Two entry points for deleting pages, both guarded by a shared confirmation modal
 | `apps/web/src/components/database/DatabaseSelectionBar.tsx` | Bulk-action bar for selected table rows (count, select-all escalation, delete) |
 | `apps/web/src/components/database/TableView.tsx` | Table view with row selection checkboxes, drag reorder, cell rendering |
 | `apps/api/src/services/reference-service.ts` | Per-viewer reference name resolution + `#ref` redaction + `page_references` backfill |
-| `apps/web/src/components/database/cells/ReferenceCell.tsx` | Reference cell: clickable name chips, `#ref` redaction, multi-select editor |
+| `apps/web/src/components/database/cells/ReferenceCell.tsx` | Reference cell: clickable chips, `#ref` redaction, server-side search + create-page editor (via `OptionPickerMenu`) |
+| `apps/web/src/components/database/cells/MultiSelectCell.tsx` | Multi_select cell: color-badge tags, rename/delete, search + create-and-select editor (via `OptionPickerMenu`) |
+| `apps/web/src/components/database/cells/OptionPickerMenu.tsx` | Shared search-first, keyboard-navigable dropdown shell for the multi_select + reference editors |
 | `apps/api/src/db/schema.ts` / `pg-schema.ts` | Includes `page_references` write-through index table |
 | `apps/web/src/components/layout/SearchModal.tsx` | Ctrl+K command-palette modal with keyboard navigation |
 | `apps/api/src/services/auth-service.ts` | Auth service with email/password + Google login, auth mode helpers, email 2FA challenge/enable/disable |
