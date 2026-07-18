@@ -15,6 +15,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
+import { usePageStore } from '@/stores/pageStore';
+import { useUiStore } from '@/stores/uiStore';
 import { IS_DEMO_MODE } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 import FilterPopover, { getFilterSummary } from './FilterPopover';
@@ -38,7 +40,12 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     setKanbanColumnOrder,
     getSelectProperties,
     schema,
+    activeDatabaseId,
+    addRow,
   } = useDatabaseInstance();
+  const { createPage } = usePageStore();
+  const { openPeekPanel } = useUiStore();
+  const [isCreating, setIsCreating] = useState(false);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
   const [showGroupByDropdown, setShowGroupByDropdown] = useState(false);
@@ -71,9 +78,43 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     setFilters([]);
   };
 
+  const handleNewPage = async () => {
+    if (!activeDatabaseId || isCreating) return;
+    setIsCreating(true);
+    try {
+      const page = await createPage({ title: 'Untitled', parentId: activeDatabaseId });
+      addRow({
+        id: page.id,
+        title: page.title,
+        icon: page.icon,
+        createdAt: page.createdAt,
+        updatedAt: page.updatedAt,
+        properties: {},
+      });
+      openPeekPanel(page.id);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center gap-2 px-2 py-2 border-b border-notion-border">
+        {/* New page button — creates a page in this database and opens it in split view */}
+        {canEdit && (
+          <button
+            onClick={handleNewPage}
+            disabled={isCreating}
+            className="flex items-center gap-1 px-2 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            title="Create a new page and open it in split view"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {isCreating ? 'Creating...' : 'New'}
+          </button>
+        )}
+
         {/* View type switcher */}
         <div className="flex items-center border border-notion-border rounded">
           {/* Table view button */}
