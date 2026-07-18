@@ -16,6 +16,7 @@ import { searchRoutes } from './routes/search.js';
 import { realtimeRoutes } from './routes/realtime.js';
 import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
+import { runWithRequestContext } from './services/request-context.js';
 import { registerRateLimit } from './config/rate-limit.js';
 import { loadRealtimeConfig } from './config/realtime.js';
 import { initializeBroadcaster } from './realtime/realtime-factory.js';
@@ -118,6 +119,12 @@ await registerRateLimit(fastify);
 
 // Populate request.clientId from X-Client-Id header for every request
 fastify.addHook('onRequest', clientIdMiddleware);
+
+// Request-scoped permission cache (AsyncLocalStorage) — the rest of the
+// request lifecycle runs inside this context.
+fastify.addHook('onRequest', (_request, _reply, done) => {
+  runWithRequestContext(done);
+});
 
 // Register routes
 await fastify.register(authRoutes);

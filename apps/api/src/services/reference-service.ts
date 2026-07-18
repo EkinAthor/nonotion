@@ -13,14 +13,13 @@ export interface ReferenceViewer {
  * if the viewer cannot read the referenced database, the property is redacted
  * (accessible: false) and the frontend renders it as `#ref`.
  *
- * Mutates the rows in place. `pagesById` should contain all pages (reused from the
- * caller's getAllPages() to avoid a second scan).
+ * Mutates the rows in place. Referenced row titles are bulk-fetched by id —
+ * only the handful of rows actually referenced from this page of results.
  */
 export async function resolveReferencesForRows(
   rows: DatabaseRow[],
   schema: DatabaseSchema | undefined,
-  viewer: ReferenceViewer,
-  pagesById: Map<string, Page>
+  viewer: ReferenceViewer
 ): Promise<void> {
   const refProps = (schema?.properties ?? []).filter(
     (p) => p.type === 'reference' && p.referencedDatabaseId
@@ -36,6 +35,20 @@ export async function resolveReferencesForRows(
       accessByDb.set(dbId, await canRead(dbId, viewer.userId, opts));
     }
   }
+
+  // Bulk-fetch every referenced row from accessible databases.
+  const referencedIds = new Set<string>();
+  for (const row of rows) {
+    for (const prop of refProps) {
+      if (!accessByDb.get(prop.referencedDatabaseId!)) continue;
+      const value = row.properties?.[prop.id];
+      if (value && value.type === 'reference') {
+        for (const id of value.value) referencedIds.add(id);
+      }
+    }
+  }
+  const referencedPages = await getStorage().getPagesByIds([...referencedIds]);
+  const pagesById = new Map<string, Page>(referencedPages.map((p) => [p.id, p]));
 
   for (const row of rows) {
     for (const prop of refProps) {

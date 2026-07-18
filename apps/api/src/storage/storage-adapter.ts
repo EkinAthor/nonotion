@@ -1,12 +1,36 @@
-import type { Page, Block, User, PagePermission } from '@nonotion/shared';
+import type { Page, Block, User, PagePermission, PermissionLevel } from '@nonotion/shared';
+
+/**
+ * Parameters for the optional SQL fast path serving database-row fetches.
+ * Only the title-contains filter is SQL-translated; anything else must go
+ * through the JS filter/sort path in database-service.
+ */
+export interface DatabaseRowsQuery {
+  databaseId: string;
+  /** Case-insensitive substring match against page titles, or null for no filter. */
+  titleContains: string | null;
+  /** The database page's childIds — defines row order (missing ids sort last). */
+  childIdsOrder: string[];
+  limit: number;
+  offset: number;
+}
 
 export interface StorageAdapter {
   // Pages
   getAllPages(): Promise<Page[]>;
   getPage(id: string): Promise<Page | null>;
+  getPagesByParent(parentId: string): Promise<Page[]>;
+  getPagesByIds(ids: string[]): Promise<Page[]>;
   createPage(page: Page): Promise<Page>;
   updatePage(id: string, updates: Partial<Page>): Promise<Page | null>;
   deletePage(id: string): Promise<boolean>;
+
+  /**
+   * Optional SQL fast path for database rows: filter/order/paginate/count in
+   * one query. Backends that don't implement it (SQLite) fall back to the JS
+   * path in database-service, which must stay behaviorally identical.
+   */
+  queryDatabaseRows?(query: DatabaseRowsQuery): Promise<{ pages: Page[]; total: number }>;
 
   // Blocks
   getBlocksByPage(pageId: string): Promise<Block[]>;
@@ -16,6 +40,8 @@ export interface StorageAdapter {
   deleteBlock(id: string): Promise<boolean>;
   deleteBlocksByPage(pageId: string): Promise<void>;
   getBlocksByPages(pageIds: string[]): Promise<Block[]>;
+  /** Batch-update block orders (bumping versions) atomically — one statement/transaction. */
+  updateBlockOrders(pageId: string, orders: Array<{ id: string; order: number }>): Promise<void>;
 
   // Settings
   getSetting(key: string): Promise<string | null>;
@@ -40,6 +66,13 @@ export interface UserStorageAdapter {
   countUsers(): Promise<number>;
 
   // Permissions
+  /**
+   * Optional single-query nearest-ancestor permission lookup (recursive CTE).
+   * Semantics must match permission-service's JS walk: a direct permission on
+   * pageId wins, then the closest ancestor with one. Backends without it
+   * (SQLite) fall back to the per-level JS walk.
+   */
+  findNearestPermission?(pageId: string, userId: string): Promise<PermissionLevel | null>;
   getPagePermissions(pageId: string): Promise<PagePermission[]>;
   getUserPermissions(userId: string): Promise<PagePermission[]>;
   getPermission(pageId: string, userId: string): Promise<PagePermission | null>;

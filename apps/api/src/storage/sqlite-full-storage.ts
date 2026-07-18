@@ -1,6 +1,6 @@
 import { db } from '../db/index.js';
 import { users, permissions, pages, blocks, files, settings, pageReferences } from '../db/schema.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import type {
   Page,
   Block,
@@ -93,6 +93,23 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
   async getPage(id: string): Promise<Page | null> {
     const rows = db.select().from(pages).where(eq(pages.id, id)).all();
     return rows.length > 0 ? rowToPage(rows[0]) : null;
+  }
+
+  async getPagesByParent(parentId: string): Promise<Page[]> {
+    const rows = db.select().from(pages).where(eq(pages.parentId, parentId)).all();
+    return rows.map(rowToPage);
+  }
+
+  async getPagesByIds(ids: string[]): Promise<Page[]> {
+    if (ids.length === 0) return [];
+    // Chunk to stay under SQLite's bound-variable limit.
+    const result: Page[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const rows = db.select().from(pages).where(inArray(pages.id, chunk)).all();
+      result.push(...rows.map(rowToPage));
+    }
+    return result;
   }
 
   async createPage(page: Page): Promise<Page> {
@@ -205,6 +222,18 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
     if (pageIds.length === 0) return [];
     const rows = db.select().from(blocks).where(inArray(blocks.pageId, pageIds)).all();
     return rows.map(rowToBlock);
+  }
+
+  async updateBlockOrders(pageId: string, orders: Array<{ id: string; order: number }>): Promise<void> {
+    if (orders.length === 0) return;
+    db.transaction((tx) => {
+      for (const { id, order } of orders) {
+        tx.update(blocks)
+          .set({ order, version: sql`${blocks.version} + 1` })
+          .where(and(eq(blocks.id, id), eq(blocks.pageId, pageId)))
+          .run();
+      }
+    });
   }
 
   // ==================== UserStorageAdapter: Users ====================

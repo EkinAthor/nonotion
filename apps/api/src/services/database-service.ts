@@ -25,43 +25,83 @@ export interface GetRowsOptions {
  * When `viewer` is provided, `reference` properties are resolved to display
  * names (respecting the viewer's read access to referenced databases).
  */
+/**
+ * When the filter is absent or consists of exactly one `contains` on the
+ * title property, it can be served by the SQL fast path. Returns the search
+ * term (`null` for "no filter"), or `undefined` when the filter needs the
+ * JS path.
+ */
+function extractTitleOnlyContains(
+  filterStr: string | undefined,
+  schema?: DatabaseSchema
+): string | null | undefined {
+  if (!filterStr) return null;
+  const segments = filterStr.split('|').filter(Boolean);
+  if (segments.length === 0) return null;
+  if (segments.length > 1) return undefined;
+
+  const [propId, operator, ...valueParts] = segments[0].split(':');
+  if (!propId || !operator) return null; // malformed segment is a no-op in the JS path too
+  if (operator !== 'contains') return undefined;
+  const propDef = schema?.properties.find((p) => p.id === propId);
+  if (propDef?.type !== 'title') return undefined;
+  return valueParts.join(':');
+}
+
 export async function getRows(
   databaseId: string,
   options: GetRowsOptions = {},
   viewer?: ReferenceViewer
 ): Promise<{ rows: DatabaseRow[]; total: number }> {
-  const database = await getStorage().getPage(databaseId);
+  const storage = getStorage();
+  const database = await storage.getPage(databaseId);
   if (!database || database.type !== 'database') {
     throw new Error('Database not found');
   }
 
-  // Get all child pages (rows)
-  const allPages = await getStorage().getAllPages();
-  let rows = allPages.filter((p) => p.parentId === databaseId);
-
-  // Apply filtering
-  if (options.filter) {
-    rows = applyFilter(rows, options.filter, database.databaseSchema);
-  }
-
-  // Apply sorting — use childIds order when no explicit sort
-  if (options.sort) {
-    rows = applySort(rows, options.sort, database.databaseSchema);
-  } else if (database.childIds.length > 0) {
-    const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
-    rows.sort((a, b) => {
-      const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-      const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-      return aIdx - bIdx;
-    });
-  }
-
-  const total = rows.length;
-
-  // Apply pagination
   const offset = options.offset ?? 0;
   const limit = options.limit ?? 50;
-  rows = rows.slice(offset, offset + limit);
+
+  let rows: Page[];
+  let total: number;
+
+  // SQL fast path (backends that implement it): no sort, and at most a
+  // single title-contains filter — the shape of every default table/kanban
+  // fetch and of the reference-picker search.
+  const titleContains = extractTitleOnlyContains(options.filter, database.databaseSchema);
+  if (!options.sort && titleContains !== undefined && storage.queryDatabaseRows) {
+    const result = await storage.queryDatabaseRows({
+      databaseId,
+      titleContains,
+      childIdsOrder: database.childIds,
+      limit,
+      offset,
+    });
+    rows = result.pages;
+    total = result.total;
+  } else {
+    // JS path: fetch this database's children, filter/sort/paginate in memory.
+    rows = await storage.getPagesByParent(databaseId);
+
+    if (options.filter) {
+      rows = applyFilter(rows, options.filter, database.databaseSchema);
+    }
+
+    // Apply sorting — use childIds order when no explicit sort
+    if (options.sort) {
+      rows = applySort(rows, options.sort, database.databaseSchema);
+    } else if (database.childIds.length > 0) {
+      const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
+      rows.sort((a, b) => {
+        const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+        const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+        return aIdx - bIdx;
+      });
+    }
+
+    total = rows.length;
+    rows = rows.slice(offset, offset + limit);
+  }
 
   // Transform to DatabaseRow format
   const databaseRows: DatabaseRow[] = rows.map((page) => ({
@@ -75,8 +115,7 @@ export async function getRows(
 
   // Resolve reference display names (permission-aware) for the paginated rows only.
   if (viewer) {
-    const pagesById = new Map(allPages.map((p) => [p.id, p]));
-    await resolveReferencesForRows(databaseRows, database.databaseSchema, viewer, pagesById);
+    await resolveReferencesForRows(databaseRows, database.databaseSchema, viewer);
   }
 
   return { rows: databaseRows, total };

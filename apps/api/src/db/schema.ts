@@ -28,6 +28,7 @@ export const permissions = sqliteTable('permissions', {
   grantedAt: text('granted_at').notNull(),
 }, (table) => [
   primaryKey({ columns: [table.pageId, table.userId] }),
+  index('idx_permissions_user_id').on(table.userId),
 ]);
 
 // Pages table
