@@ -31,6 +31,13 @@ import type {
   VerifyTwoFactorInput,
   ConfirmTwoFactorInput,
   DisableTwoFactorInput,
+  McpDatabaseAccess,
+  SetMcpAccessInput,
+  McpTokenMeta,
+  CreateMcpTokenResponse,
+  McpOAuthClientInfo,
+  McpConsentInput,
+  McpConsentResponse,
 } from '@nonotion/shared';
 import { getClientId } from '@/lib/realtime/client-id';
 
@@ -417,6 +424,47 @@ export interface RealtimeTokenResponse {
 
 export const realtimeApi = {
   getToken: () => request<RealtimeTokenResponse>('/realtime/token'),
+};
+
+export interface McpAccessWithTitle extends McpDatabaseAccess {
+  databaseTitle: string | null;
+  databaseIcon: string | null;
+}
+
+export const mcpApi = {
+  listAccess: () => request<McpAccessWithTitle[]>('/mcp/access'),
+
+  getAccess: (databaseId: string) => request<McpDatabaseAccess | null>(`/mcp/access/${databaseId}`),
+
+  setAccess: (databaseId: string, input: SetMcpAccessInput) =>
+    request<McpDatabaseAccess>(`/mcp/access/${databaseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+
+  removeAccess: (databaseId: string) =>
+    request<{ removed: boolean }>(`/mcp/access/${databaseId}`, { method: 'DELETE' }),
+
+  listTokens: () => request<McpTokenMeta[]>('/mcp/tokens'),
+
+  createToken: (name: string) =>
+    request<CreateMcpTokenResponse>('/mcp/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  revokeToken: (id: string) => request<{ removed: boolean }>(`/mcp/tokens/${id}`, { method: 'DELETE' }),
+
+  getOAuthClientInfo: (clientId: string) =>
+    request<McpOAuthClientInfo>(`/mcp/oauth/client-info?client_id=${encodeURIComponent(clientId)}`, {
+      skipAuth: true,
+    }),
+
+  approveConsent: (input: McpConsentInput) =>
+    request<McpConsentResponse>('/mcp/oauth/consent', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };
 
 export const importApi = {

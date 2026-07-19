@@ -48,6 +48,18 @@ export function isOptionId(id: string): boolean {
   return id.startsWith('opt_') && id.length === 16;
 }
 
+export function generateMcpTokenId(): string {
+  return `mcpt_${generateRandomString(12)}`;
+}
+
+export function generateMcpClientId(): string {
+  return `mcpc_${generateRandomString(12)}`;
+}
+
+export function generateMcpRefreshTokenId(): string {
+  return `mcprt_${generateRandomString(12)}`;
+}
+
 export function generateFileId(): string {
   return `file_${generateRandomString(12)}`;
 }

@@ -39,10 +39,46 @@ function getPropertyText(value: PropertyValue): string {
   }
 }
 
-export async function search(query: string, userId: string, options?: PermissionOptions): Promise<SearchResult[]> {
+export async function search(
+  query: string,
+  userId: string,
+  options?: PermissionOptions,
+  limit = 20,
+  scopeDatabaseIds?: Set<string>
+): Promise<SearchResult[]> {
   const lowerQuery = query.toLowerCase();
   const accessiblePages = await getUserAccessiblePages(userId, options);
-  const pageMap = new Map<string, Page>(accessiblePages.map(p => [p.id, p]));
+  let pageMap = new Map<string, Page>(accessiblePages.map(p => [p.id, p]));
+
+  // Optional scope restriction (MCP): keep only pages whose nearest database
+  // ancestor is in the given set. Filtering BEFORE scoring so in-scope results
+  // can't be starved out of the cap by unrelated content.
+  if (scopeDatabaseIds) {
+    const scopeCache = new Map<string, string | null>();
+    const findScope = (pageId: string): string | null => {
+      const cached = scopeCache.get(pageId);
+      if (cached !== undefined) return cached;
+      let scope: string | null = null;
+      let current = pageMap.get(pageId);
+      for (let depth = 0; depth < 64 && current; depth++) {
+        if (current.type === 'database') {
+          scope = current.id;
+          break;
+        }
+        current = current.parentId ? pageMap.get(current.parentId) : undefined;
+      }
+      scopeCache.set(pageId, scope);
+      return scope;
+    };
+    pageMap = new Map(
+      [...pageMap].filter(([id]) => {
+        const scope = findScope(id);
+        return scope !== null && scopeDatabaseIds.has(scope);
+      })
+    );
+  }
+
+  const pages = Array.from(pageMap.values());
   const pageIds = Array.from(pageMap.keys());
 
   // Track best result per page: { result, score }
@@ -57,7 +93,7 @@ export async function search(query: string, userId: string, options?: Permission
   }
 
   // 1. Search page titles
-  for (const page of accessiblePages) {
+  for (const page of pages) {
     const lowerTitle = page.title.toLowerCase();
     if (lowerTitle.includes(lowerQuery)) {
       const score = lowerTitle.startsWith(lowerQuery) ? 20 : 10;
@@ -100,7 +136,7 @@ export async function search(query: string, userId: string, options?: Permission
   }
 
   // 3. Search database row properties
-  for (const page of accessiblePages) {
+  for (const page of pages) {
     if (!page.properties) continue;
     // Skip if already matched by title
     for (const [, propValue] of Object.entries(page.properties)) {
@@ -129,10 +165,10 @@ export async function search(query: string, userId: string, options?: Permission
     }
   }
 
-  // Sort by score descending, cap at 20
+  // Sort by score descending, cap at limit
   const results = Array.from(bestByPage.values())
     .sort((a, b) => b.score - a.score)
-    .slice(0, 20)
+    .slice(0, limit)
     .map(entry => entry.result);
 
   return results;

@@ -124,7 +124,7 @@ export const authApi = {
     }),
 
   getConfig: (): Promise<AuthConfigResponse> =>
-    Promise.resolve({ enabledModes: ['db'], googleClientId: null }),
+    Promise.resolve({ enabledModes: ['db'], googleClientId: null, mcpEnabled: false }),
 };
 
 // ============ USERS API ============
@@ -918,6 +918,27 @@ export const searchApi = {
 
 export const realtimeApi = {
   getToken: async () => ({ enabled: false as const }),
+};
+
+// MCP is server-only; the UI is hidden in demo mode (mcpEnabled: false).
+export const mcpApi = {
+  listAccess: async () => [],
+  getAccess: async (_databaseId: string) => null,
+  setAccess: async (): Promise<never> => {
+    throw new Error('MCP is not available in demo mode');
+  },
+  removeAccess: async () => ({ removed: false }),
+  listTokens: async () => [],
+  createToken: async (): Promise<never> => {
+    throw new Error('MCP is not available in demo mode');
+  },
+  revokeToken: async () => ({ removed: false }),
+  getOAuthClientInfo: async (): Promise<never> => {
+    throw new Error('MCP is not available in demo mode');
+  },
+  approveConsent: async (): Promise<never> => {
+    throw new Error('MCP is not available in demo mode');
+  },
 };
 
 export const importApi = {

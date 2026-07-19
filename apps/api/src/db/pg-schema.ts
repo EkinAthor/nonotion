@@ -154,6 +154,87 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });
 
+// MCP: per-user grant exposing a database via the MCP server
+export const mcpDatabaseAccess = pgTable(
+  'mcp_database_access',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    databaseId: text('database_id').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    allowImages: boolean('allow_images').notNull().default(false),
+    allowFiles: boolean('allow_files').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.databaseId] }),
+    index('idx_mcp_access_user').on(table.userId),
+  ]
+);
+
+// MCP: personal access tokens (secret stored as sha256 hex, never plaintext)
+export const mcpPersonalAccessTokens = pgTable(
+  'mcp_personal_access_tokens',
+  {
+    id: text('id').primaryKey(), // mcpt_xxx
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    tokenSuffix: text('token_suffix').notNull(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('idx_mcp_pat_user').on(table.userId)]
+);
+
+// MCP OAuth: dynamically registered clients (public clients, PKCE only)
+export const mcpOauthClients = pgTable('mcp_oauth_clients', {
+  id: text('id').primaryKey(), // mcpc_xxx
+  name: text('name').notNull(),
+  redirectUris: jsonb('redirect_uris').notNull(), // string[]
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('none'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+});
+
+// MCP OAuth: single-use authorization codes (stored as sha256 hex)
+export const mcpOauthCodes = pgTable('mcp_oauth_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  clientId: text('client_id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  redirectUri: text('redirect_uri').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  codeChallengeMethod: text('code_challenge_method').notNull(),
+  scope: text('scope').notNull().default('mcp:read'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+});
+
+// MCP OAuth: refresh tokens (sha256 at rest, rotated on use)
+export const mcpOauthRefreshTokens = pgTable(
+  'mcp_oauth_refresh_tokens',
+  {
+    id: text('id').primaryKey(), // mcprt_xxx
+    tokenHash: text('token_hash').notNull().unique(),
+    clientId: text('client_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull().default('mcp:read'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    rotatedToId: text('rotated_to_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('idx_mcp_refresh_user').on(table.userId)]
+);
+
 // Type exports for inference
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
@@ -169,3 +250,8 @@ export type FileRow = typeof files.$inferSelect;
 export type NewFileRow = typeof files.$inferInsert;
 export type SettingRow = typeof settings.$inferSelect;
 export type NewSettingRow = typeof settings.$inferInsert;
+export type McpDatabaseAccessRow = typeof mcpDatabaseAccess.$inferSelect;
+export type McpPersonalAccessTokenRow = typeof mcpPersonalAccessTokens.$inferSelect;
+export type McpOauthClientRow = typeof mcpOauthClients.$inferSelect;
+export type McpOauthCodeRow = typeof mcpOauthCodes.$inferSelect;
+export type McpOauthRefreshTokenRow = typeof mcpOauthRefreshTokens.$inferSelect;

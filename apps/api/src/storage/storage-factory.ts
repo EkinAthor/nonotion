@@ -1,5 +1,6 @@
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
 import type { FileStorageAdapter } from './file-storage-adapter.js';
+import type { McpStorageAdapter } from './mcp-storage-adapter.js';
 import { PostgresStorage } from './postgres-storage.js';
 
 export type StorageType = 'sqlite' | 'json-sqlite' | 'postgres';
@@ -12,6 +13,7 @@ export interface StorageConfig {
 let storageInstance: StorageAdapter | null = null;
 let userStorageInstance: UserStorageAdapter | null = null;
 let fileStorageInstance: FileStorageAdapter | null = null;
+let mcpStorageInstance: McpStorageAdapter | null = null;
 let postgresInstance: PostgresStorage | null = null;
 
 export async function initializeStorage(config: StorageConfig): Promise<{
@@ -28,6 +30,7 @@ export async function initializeStorage(config: StorageConfig): Promise<{
     storageInstance = pg;
     userStorageInstance = pg;
     fileStorageInstance = pg;
+    mcpStorageInstance = pg;
 
     console.log('Using PostgreSQL storage backend');
   } else {
@@ -37,6 +40,7 @@ export async function initializeStorage(config: StorageConfig): Promise<{
     storageInstance = sqliteStorage;
     userStorageInstance = sqliteStorage;
     fileStorageInstance = sqliteStorage;
+    mcpStorageInstance = sqliteStorage;
 
     console.log('Using SQLite storage backend');
   }
@@ -68,6 +72,13 @@ export function getFileStorage(): FileStorageAdapter {
   return fileStorageInstance;
 }
 
+export function getMcpStorage(): McpStorageAdapter {
+  if (!mcpStorageInstance) {
+    throw new Error('MCP storage not initialized. Call initializeStorage() first.');
+  }
+  return mcpStorageInstance;
+}
+
 export function getStorageType(): StorageType {
   if (postgresInstance) {
     return 'postgres';
@@ -83,4 +94,5 @@ export async function closeStorage(): Promise<void> {
   storageInstance = null;
   userStorageInstance = null;
   fileStorageInstance = null;
+  mcpStorageInstance = null;
 }

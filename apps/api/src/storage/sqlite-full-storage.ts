@@ -1,5 +1,18 @@
 import { db } from '../db/index.js';
-import { users, permissions, pages, blocks, files, settings, pageReferences } from '../db/schema.js';
+import {
+  users,
+  permissions,
+  pages,
+  blocks,
+  files,
+  settings,
+  pageReferences,
+  mcpDatabaseAccess,
+  mcpPersonalAccessTokens,
+  mcpOauthClients,
+  mcpOauthCodes,
+  mcpOauthRefreshTokens,
+} from '../db/schema.js';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import type {
   Page,
@@ -11,9 +24,15 @@ import type {
   DatabaseSchema,
   PropertyValue,
   PageType,
+  McpDatabaseAccess,
+  McpPersonalAccessToken,
+  McpOAuthClient,
+  McpOAuthCode,
+  McpOAuthRefreshToken,
 } from '@nonotion/shared';
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
 import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
+import type { McpStorageAdapter } from './mcp-storage-adapter.js';
 import type { PageRow, BlockRow } from '../db/schema.js';
 
 function rowToUser(row: typeof users.$inferSelect): User {
@@ -82,7 +101,7 @@ function rowToBlock(row: BlockRow): Block {
   };
 }
 
-export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter {
+export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter, McpStorageAdapter {
   // ==================== StorageAdapter: Pages ====================
 
   async getAllPages(): Promise<Page[]> {
@@ -496,5 +515,143 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
 
   async deleteReferencesByTarget(targetRowId: string): Promise<void> {
     db.delete(pageReferences).where(eq(pageReferences.targetRowId, targetRowId)).run();
+  }
+
+  // ==================== McpStorageAdapter ====================
+
+  async getMcpDatabaseAccess(userId: string, databaseId: string): Promise<McpDatabaseAccess | null> {
+    const rows = db
+      .select()
+      .from(mcpDatabaseAccess)
+      .where(and(eq(mcpDatabaseAccess.userId, userId), eq(mcpDatabaseAccess.databaseId, databaseId)))
+      .all();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async listMcpDatabaseAccess(userId: string): Promise<McpDatabaseAccess[]> {
+    return db.select().from(mcpDatabaseAccess).where(eq(mcpDatabaseAccess.userId, userId)).all();
+  }
+
+  async upsertMcpDatabaseAccess(access: McpDatabaseAccess): Promise<McpDatabaseAccess> {
+    db.insert(mcpDatabaseAccess)
+      .values(access)
+      .onConflictDoUpdate({
+        target: [mcpDatabaseAccess.userId, mcpDatabaseAccess.databaseId],
+        set: {
+          enabled: access.enabled,
+          allowImages: access.allowImages,
+          allowFiles: access.allowFiles,
+          updatedAt: access.updatedAt,
+        },
+      })
+      .run();
+    return access;
+  }
+
+  async deleteMcpDatabaseAccess(userId: string, databaseId: string): Promise<boolean> {
+    const result = db
+      .delete(mcpDatabaseAccess)
+      .where(and(eq(mcpDatabaseAccess.userId, userId), eq(mcpDatabaseAccess.databaseId, databaseId)))
+      .run();
+    return result.changes > 0;
+  }
+
+  async createMcpToken(token: McpPersonalAccessToken): Promise<McpPersonalAccessToken> {
+    db.insert(mcpPersonalAccessTokens).values(token).run();
+    return token;
+  }
+
+  async getMcpToken(id: string): Promise<McpPersonalAccessToken | null> {
+    const rows = db.select().from(mcpPersonalAccessTokens).where(eq(mcpPersonalAccessTokens.id, id)).all();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async listMcpTokens(userId: string): Promise<McpPersonalAccessToken[]> {
+    return db.select().from(mcpPersonalAccessTokens).where(eq(mcpPersonalAccessTokens.userId, userId)).all();
+  }
+
+  async deleteMcpToken(id: string, userId: string): Promise<boolean> {
+    const result = db
+      .delete(mcpPersonalAccessTokens)
+      .where(and(eq(mcpPersonalAccessTokens.id, id), eq(mcpPersonalAccessTokens.userId, userId)))
+      .run();
+    return result.changes > 0;
+  }
+
+  async touchMcpTokenUsed(id: string, when: string): Promise<void> {
+    db.update(mcpPersonalAccessTokens)
+      .set({ lastUsedAt: when })
+      .where(eq(mcpPersonalAccessTokens.id, id))
+      .run();
+  }
+
+  async createOAuthClient(client: McpOAuthClient): Promise<McpOAuthClient> {
+    db.insert(mcpOauthClients)
+      .values({ ...client, redirectUris: JSON.stringify(client.redirectUris) })
+      .run();
+    return client;
+  }
+
+  async getOAuthClient(id: string): Promise<McpOAuthClient | null> {
+    const rows = db.select().from(mcpOauthClients).where(eq(mcpOauthClients.id, id)).all();
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return { ...row, redirectUris: JSON.parse(row.redirectUris) as string[] };
+  }
+
+  async createOAuthCode(code: McpOAuthCode): Promise<void> {
+    db.insert(mcpOauthCodes).values(code).run();
+  }
+
+  async consumeOAuthCode(codeHash: string, now: string): Promise<McpOAuthCode | null> {
+    // Atomic single-use consume: mark used only if not yet used and not expired.
+    const result = db
+      .update(mcpOauthCodes)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(mcpOauthCodes.codeHash, codeHash),
+          sql`${mcpOauthCodes.usedAt} IS NULL`,
+          sql`${mcpOauthCodes.expiresAt} > ${now}`
+        )
+      )
+      .returning()
+      .all();
+    if (result.length === 0) return null;
+    return result[0] as McpOAuthCode;
+  }
+
+  async createOAuthRefreshToken(token: McpOAuthRefreshToken): Promise<void> {
+    db.insert(mcpOauthRefreshTokens).values(token).run();
+  }
+
+  async getOAuthRefreshTokenByHash(tokenHash: string): Promise<McpOAuthRefreshToken | null> {
+    const rows = db
+      .select()
+      .from(mcpOauthRefreshTokens)
+      .where(eq(mcpOauthRefreshTokens.tokenHash, tokenHash))
+      .all();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async getOAuthRefreshTokenById(id: string): Promise<McpOAuthRefreshToken | null> {
+    const rows = db
+      .select()
+      .from(mcpOauthRefreshTokens)
+      .where(eq(mcpOauthRefreshTokens.id, id))
+      .all();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async revokeOAuthRefreshToken(id: string, rotatedToId?: string): Promise<void> {
+    db.update(mcpOauthRefreshTokens)
+      .set({ revokedAt: new Date().toISOString(), rotatedToId: rotatedToId ?? null })
+      .where(eq(mcpOauthRefreshTokens.id, id))
+      .run();
+  }
+
+  async deleteExpiredOAuthRows(now: string): Promise<void> {
+    db.delete(mcpOauthCodes).where(sql`${mcpOauthCodes.expiresAt} <= ${now}`).run();
+    db.delete(mcpOauthRefreshTokens).where(sql`${mcpOauthRefreshTokens.expiresAt} <= ${now}`).run();
   }
 }

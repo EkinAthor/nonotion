@@ -12,9 +12,15 @@ import type {
   DatabaseSchema,
   PropertyValue,
   PageType,
+  McpDatabaseAccess,
+  McpPersonalAccessToken,
+  McpOAuthClient,
+  McpOAuthCode,
+  McpOAuthRefreshToken,
 } from '@nonotion/shared';
 import type { StorageAdapter, UserStorageAdapter, DatabaseRowsQuery } from './storage-adapter.js';
 import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
+import type { McpStorageAdapter } from './mcp-storage-adapter.js';
 import * as pgSchema from '../db/pg-schema.js';
 
 type PgDatabase = ReturnType<typeof drizzle<typeof pgSchema>>;
@@ -109,7 +115,7 @@ function rowToPermission(row: pgSchema.PermissionRow): PagePermission {
   };
 }
 
-export class PostgresStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter {
+export class PostgresStorage implements StorageAdapter, UserStorageAdapter, FileStorageAdapter, McpStorageAdapter {
   private db: PgDatabase;
   private pool: Pool;
 
@@ -649,4 +655,252 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       .delete(pgSchema.pageReferences)
       .where(eq(pgSchema.pageReferences.targetRowId, targetRowId));
   }
+
+  // ==================== McpStorageAdapter ====================
+
+  async getMcpDatabaseAccess(userId: string, databaseId: string): Promise<McpDatabaseAccess | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpDatabaseAccess)
+      .where(
+        and(
+          eq(pgSchema.mcpDatabaseAccess.userId, userId),
+          eq(pgSchema.mcpDatabaseAccess.databaseId, databaseId)
+        )
+      );
+    return rows.length > 0 ? rowToMcpAccess(rows[0]) : null;
+  }
+
+  async listMcpDatabaseAccess(userId: string): Promise<McpDatabaseAccess[]> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpDatabaseAccess)
+      .where(eq(pgSchema.mcpDatabaseAccess.userId, userId));
+    return rows.map(rowToMcpAccess);
+  }
+
+  async upsertMcpDatabaseAccess(access: McpDatabaseAccess): Promise<McpDatabaseAccess> {
+    const values = {
+      ...access,
+      createdAt: new Date(access.createdAt),
+      updatedAt: new Date(access.updatedAt),
+    };
+    await this.db
+      .insert(pgSchema.mcpDatabaseAccess)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [pgSchema.mcpDatabaseAccess.userId, pgSchema.mcpDatabaseAccess.databaseId],
+        set: {
+          enabled: access.enabled,
+          allowImages: access.allowImages,
+          allowFiles: access.allowFiles,
+          updatedAt: values.updatedAt,
+        },
+      });
+    return access;
+  }
+
+  async deleteMcpDatabaseAccess(userId: string, databaseId: string): Promise<boolean> {
+    const result = await this.db
+      .delete(pgSchema.mcpDatabaseAccess)
+      .where(
+        and(
+          eq(pgSchema.mcpDatabaseAccess.userId, userId),
+          eq(pgSchema.mcpDatabaseAccess.databaseId, databaseId)
+        )
+      )
+      .returning({ userId: pgSchema.mcpDatabaseAccess.userId });
+    return result.length > 0;
+  }
+
+  async createMcpToken(token: McpPersonalAccessToken): Promise<McpPersonalAccessToken> {
+    await this.db.insert(pgSchema.mcpPersonalAccessTokens).values({
+      ...token,
+      lastUsedAt: token.lastUsedAt ? new Date(token.lastUsedAt) : null,
+      createdAt: new Date(token.createdAt),
+    });
+    return token;
+  }
+
+  async getMcpToken(id: string): Promise<McpPersonalAccessToken | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpPersonalAccessTokens)
+      .where(eq(pgSchema.mcpPersonalAccessTokens.id, id));
+    return rows.length > 0 ? rowToMcpToken(rows[0]) : null;
+  }
+
+  async listMcpTokens(userId: string): Promise<McpPersonalAccessToken[]> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpPersonalAccessTokens)
+      .where(eq(pgSchema.mcpPersonalAccessTokens.userId, userId));
+    return rows.map(rowToMcpToken);
+  }
+
+  async deleteMcpToken(id: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .delete(pgSchema.mcpPersonalAccessTokens)
+      .where(
+        and(
+          eq(pgSchema.mcpPersonalAccessTokens.id, id),
+          eq(pgSchema.mcpPersonalAccessTokens.userId, userId)
+        )
+      )
+      .returning({ id: pgSchema.mcpPersonalAccessTokens.id });
+    return result.length > 0;
+  }
+
+  async touchMcpTokenUsed(id: string, when: string): Promise<void> {
+    await this.db
+      .update(pgSchema.mcpPersonalAccessTokens)
+      .set({ lastUsedAt: new Date(when) })
+      .where(eq(pgSchema.mcpPersonalAccessTokens.id, id));
+  }
+
+  async createOAuthClient(client: McpOAuthClient): Promise<McpOAuthClient> {
+    await this.db.insert(pgSchema.mcpOauthClients).values({
+      id: client.id,
+      name: client.name,
+      redirectUris: client.redirectUris,
+      tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+      createdAt: new Date(client.createdAt),
+    });
+    return client;
+  }
+
+  async getOAuthClient(id: string): Promise<McpOAuthClient | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpOauthClients)
+      .where(eq(pgSchema.mcpOauthClients.id, id));
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      id: row.id,
+      name: row.name,
+      redirectUris: row.redirectUris as string[],
+      tokenEndpointAuthMethod: row.tokenEndpointAuthMethod,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async createOAuthCode(code: McpOAuthCode): Promise<void> {
+    await this.db.insert(pgSchema.mcpOauthCodes).values({
+      ...code,
+      expiresAt: new Date(code.expiresAt),
+      usedAt: code.usedAt ? new Date(code.usedAt) : null,
+      createdAt: new Date(code.createdAt),
+    });
+  }
+
+  async consumeOAuthCode(codeHash: string, now: string): Promise<McpOAuthCode | null> {
+    // Atomic single-use consume: mark used only if not yet used and not expired.
+    const nowDate = new Date(now);
+    const result = await this.db
+      .update(pgSchema.mcpOauthCodes)
+      .set({ usedAt: nowDate })
+      .where(
+        and(
+          eq(pgSchema.mcpOauthCodes.codeHash, codeHash),
+          sql`${pgSchema.mcpOauthCodes.usedAt} IS NULL`,
+          sql`${pgSchema.mcpOauthCodes.expiresAt} > ${nowDate}`
+        )
+      )
+      .returning();
+    if (result.length === 0) return null;
+    const row = result[0];
+    return {
+      codeHash: row.codeHash,
+      clientId: row.clientId,
+      userId: row.userId,
+      redirectUri: row.redirectUri,
+      codeChallenge: row.codeChallenge,
+      codeChallengeMethod: row.codeChallengeMethod as 'S256',
+      scope: row.scope,
+      expiresAt: row.expiresAt.toISOString(),
+      usedAt: row.usedAt ? row.usedAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async createOAuthRefreshToken(token: McpOAuthRefreshToken): Promise<void> {
+    await this.db.insert(pgSchema.mcpOauthRefreshTokens).values({
+      ...token,
+      expiresAt: new Date(token.expiresAt),
+      revokedAt: token.revokedAt ? new Date(token.revokedAt) : null,
+      createdAt: new Date(token.createdAt),
+    });
+  }
+
+  async getOAuthRefreshTokenByHash(tokenHash: string): Promise<McpOAuthRefreshToken | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpOauthRefreshTokens)
+      .where(eq(pgSchema.mcpOauthRefreshTokens.tokenHash, tokenHash));
+    return rows.length > 0 ? rowToMcpRefreshToken(rows[0]) : null;
+  }
+
+  async getOAuthRefreshTokenById(id: string): Promise<McpOAuthRefreshToken | null> {
+    const rows = await this.db
+      .select()
+      .from(pgSchema.mcpOauthRefreshTokens)
+      .where(eq(pgSchema.mcpOauthRefreshTokens.id, id));
+    return rows.length > 0 ? rowToMcpRefreshToken(rows[0]) : null;
+  }
+
+  async revokeOAuthRefreshToken(id: string, rotatedToId?: string): Promise<void> {
+    await this.db
+      .update(pgSchema.mcpOauthRefreshTokens)
+      .set({ revokedAt: new Date(), rotatedToId: rotatedToId ?? null })
+      .where(eq(pgSchema.mcpOauthRefreshTokens.id, id));
+  }
+
+  async deleteExpiredOAuthRows(now: string): Promise<void> {
+    const nowDate = new Date(now);
+    await this.db
+      .delete(pgSchema.mcpOauthCodes)
+      .where(sql`${pgSchema.mcpOauthCodes.expiresAt} <= ${nowDate}`);
+    await this.db
+      .delete(pgSchema.mcpOauthRefreshTokens)
+      .where(sql`${pgSchema.mcpOauthRefreshTokens.expiresAt} <= ${nowDate}`);
+  }
+}
+
+function rowToMcpAccess(row: pgSchema.McpDatabaseAccessRow): McpDatabaseAccess {
+  return {
+    userId: row.userId,
+    databaseId: row.databaseId,
+    enabled: row.enabled,
+    allowImages: row.allowImages,
+    allowFiles: row.allowFiles,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function rowToMcpRefreshToken(row: pgSchema.McpOauthRefreshTokenRow): McpOAuthRefreshToken {
+  return {
+    id: row.id,
+    tokenHash: row.tokenHash,
+    clientId: row.clientId,
+    userId: row.userId,
+    scope: row.scope,
+    expiresAt: row.expiresAt.toISOString(),
+    revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
+    rotatedToId: row.rotatedToId ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function rowToMcpToken(row: pgSchema.McpPersonalAccessTokenRow): McpPersonalAccessToken {
+  return {
+    id: row.id,
+    userId: row.userId,
+    name: row.name,
+    tokenHash: row.tokenHash,
+    tokenSuffix: row.tokenSuffix,
+    lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

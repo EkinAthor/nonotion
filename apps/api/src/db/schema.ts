@@ -111,6 +111,71 @@ export const settings = sqliteTable('settings', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// MCP: per-user grant exposing a database via the MCP server
+export const mcpDatabaseAccess = sqliteTable('mcp_database_access', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  databaseId: text('database_id').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  allowImages: integer('allow_images', { mode: 'boolean' }).notNull().default(false),
+  allowFiles: integer('allow_files', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.databaseId] }),
+  index('idx_mcp_access_user').on(table.userId),
+]);
+
+// MCP: personal access tokens (secret stored as sha256 hex, never plaintext)
+export const mcpPersonalAccessTokens = sqliteTable('mcp_personal_access_tokens', {
+  id: text('id').primaryKey(), // mcpt_xxx
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  tokenSuffix: text('token_suffix').notNull(),
+  lastUsedAt: text('last_used_at'),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_mcp_pat_user').on(table.userId),
+]);
+
+// MCP OAuth: dynamically registered clients (public clients, PKCE only)
+export const mcpOauthClients = sqliteTable('mcp_oauth_clients', {
+  id: text('id').primaryKey(), // mcpc_xxx
+  name: text('name').notNull(),
+  redirectUris: text('redirect_uris').notNull(), // JSON-serialized string[]
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('none'),
+  createdAt: text('created_at').notNull(),
+});
+
+// MCP OAuth: single-use authorization codes (stored as sha256 hex)
+export const mcpOauthCodes = sqliteTable('mcp_oauth_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  clientId: text('client_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  redirectUri: text('redirect_uri').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  codeChallengeMethod: text('code_challenge_method').notNull(),
+  scope: text('scope').notNull().default('mcp:read'),
+  expiresAt: text('expires_at').notNull(),
+  usedAt: text('used_at'),
+  createdAt: text('created_at').notNull(),
+});
+
+// MCP OAuth: refresh tokens (sha256 at rest, rotated on use)
+export const mcpOauthRefreshTokens = sqliteTable('mcp_oauth_refresh_tokens', {
+  id: text('id').primaryKey(), // mcprt_xxx
+  tokenHash: text('token_hash').notNull().unique(),
+  clientId: text('client_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  scope: text('scope').notNull().default('mcp:read'),
+  expiresAt: text('expires_at').notNull(),
+  revokedAt: text('revoked_at'),
+  rotatedToId: text('rotated_to_id'),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_mcp_refresh_user').on(table.userId),
+]);
+
 export type SettingRow = typeof settings.$inferSelect;
 export type NewSettingRow = typeof settings.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -125,3 +190,8 @@ export type BlockRow = typeof blocks.$inferSelect;
 export type NewBlockRow = typeof blocks.$inferInsert;
 export type FileRow = typeof files.$inferSelect;
 export type NewFileRow = typeof files.$inferInsert;
+export type McpDatabaseAccessRow = typeof mcpDatabaseAccess.$inferSelect;
+export type McpPersonalAccessTokenRow = typeof mcpPersonalAccessTokens.$inferSelect;
+export type McpOauthClientRow = typeof mcpOauthClients.$inferSelect;
+export type McpOauthCodeRow = typeof mcpOauthCodes.$inferSelect;
+export type McpOauthRefreshTokenRow = typeof mcpOauthRefreshTokens.$inferSelect;

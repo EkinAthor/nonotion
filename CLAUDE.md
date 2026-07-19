@@ -259,6 +259,20 @@ Postgres-first optimizations behind optional adapter methods; SQLite keeps the J
 
 Deferred (assessed, not implemented): full jsonb filter/sort push-down (revisit >5-10k rows/database with active filters), GIN index on `properties` (rejected — queries are parent_id-bounded and GIN wouldn't serve path-extraction predicates), accessible-pages CTE (JS fix sufficient <50k pages).
 
+### 24. MCP Server (Claude integration)
+Read-only Model Context Protocol server for Claude clients (claude.ai custom connectors, Claude Desktop, Claude Code). Gated by `MCP_ENABLED=true` — when off, no routes are registered and all UI is hidden (`AuthConfigResponse.mcpEnabled`). Docs: `docs/mcp.md`.
+
+- **Endpoint**: `POST /mcp` — Streamable HTTP transport (`@modelcontextprotocol/sdk`), **stateless**: a fresh `McpServer` + `StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })` per request, wired via `reply.hijack()` + `transport.handleRequest(request.raw, reply.raw, request.body)` (serverless-safe, no SSE). `GET/DELETE /mcp` → 405. Note `/mcp*` and `/.well-known/*` are root-level routes, not under `/api`.
+- **Auth (two kinds, strictly separated)**: `mcp/mcp-auth.ts` accepts PATs (`nmcp_{tokenId12}{secret40hex}` — id embedded for O(1) lookup, SHA-256 at rest, managed in Account settings) and MCP OAuth JWTs (existing `JWT_SECRET`, claims `aud:'nonotion-mcp'` + `mcpScope:'read'`, 1h). `authMiddleware`/`optionalAuthMiddleware` reject any token with `mcpScope`; `/mcp` rejects session tokens. The user row is re-fetched every request (approval/existence). 401s carry `WWW-Authenticate: Bearer resource_metadata=...` which triggers client OAuth discovery.
+- **OAuth 2.1 AS built-in** (`mcp/oauth/`): RFC 9728 + 8414 metadata, RFC 7591 dynamic registration (public clients, PKCE S256 only, https/loopback redirect URIs, exact match), `GET /mcp/oauth/authorize` → validates then 302 → SPA `/mcp/consent` (`McpConsentPage.tsx`, AuthGuard preserves query via `state.from`) → `POST /api/mcp/oauth/consent` (session auth, re-validates, issues single-use code — atomic `consumeOAuthCode`, hashed, 10-min TTL) → `POST /mcp/oauth/token` (formbody; code+PKCE or refresh grant). Refresh tokens rotate on use; reuse of a revoked token revokes the successor chain. All OAuth state is DB-backed (works on Vercel).
+- **Access model**: per-user per-database grants in `mcp_database_access` (`enabled`, `allowImages`, `allowFiles` reserved) — `mcp-access-service.ts`. Always additive to `canRead`, re-checked on every tool call (`getEffectiveAccess`). UI: "MCP" button in `DatabaseToolbar` → `McpAccessPopover` (any viewer, per-user); overview + PATs in `AccountSettingsModal` → `McpSettingsSection`.
+- **Tools** (`mcp/tools/`, one file each + `tool-helpers.ts`): `list_databases` (schemas incl. reference targets with `mcpAccessible` flag), `query_database` (property/option **names** mapped to ids, then delegates to `databaseService.getRows` — reuses filter engine + SQL fast path), `get_page` (markdown via `mcp/block-markdown.ts`; scope rule: nearest database ancestor must be MCP-enabled), `search` (scoped variant — `search-service.ts` takes optional `limit` + `scopeDatabaseIds`, filtering **before** scoring so results aren't starved), `get_image` (authorized by scanning the page's image blocks for the file id; `allowImages` gate, 4MB cap, no SVG). References: reference-service redaction (`accessible`) is never weakened; MCP adds `mcpAccessible = accessible && mcpEnabled(targetDb)` — names/ids shown when readable but not traversable, with an explicit note.
+- **Storage**: `McpStorageAdapter` (`storage/mcp-storage-adapter.ts`) implemented by both storages, `getMcpStorage()` in the factory. Tables (both schemas + migrations): `mcp_database_access`, `mcp_personal_access_tokens`, `mcp_oauth_clients`, `mcp_oauth_codes`, `mcp_oauth_refresh_tokens`. Expired-row GC is opportunistic (on code creation).
+- **CORS**: delegate in `index.ts` — permissive for `/mcp*` + `/.well-known/*`, fixed origin list otherwise. Rate limiting: `mcp` tier on `POST /mcp`; auth tier on register/token; metadata exempt.
+- **Demo mode**: `mcpApi` stub in `demo-client.ts`; UI hidden (`mcpEnabled: false`).
+
+Env vars: `MCP_ENABLED`, `MCP_PUBLIC_URL` (issuer/audience, required in prod), `FRONTEND_URL`, `MCP_ACCESS_TOKEN_TTL_MINUTES`, `MCP_REFRESH_TOKEN_TTL_DAYS`, `MCP_AUTH_CODE_TTL_MINUTES`, `RATE_LIMIT_MCP_*`. Types/Zod: `packages/shared/src/{types,schemas}/mcp.ts`.
+
 ## Critical Files
 
 | File | Purpose |
@@ -324,6 +338,20 @@ Deferred (assessed, not implemented): full jsonb filter/sort push-down (revisit 
 | `apps/web/src/stores/databaseInstanceRegistry.ts` | Global registry for database instance stores |
 | `apps/web/src/components/presence/PresenceAvatarBar.tsx` | Avatar bar component for page top bar |
 | `apps/web/src/components/presence/BlockEditIndicator.tsx` | Soft lock border + name tag on blocks |
+| `apps/api/src/mcp/mcp-routes.ts` | `POST /mcp` — stateless Streamable HTTP endpoint (hijack + per-request transport) |
+| `apps/api/src/mcp/mcp-auth.ts` | Bearer auth for /mcp: PAT + MCP JWT verification, token separation |
+| `apps/api/src/mcp/mcp-server.ts` | Builds the per-request McpServer and registers the five tools |
+| `apps/api/src/mcp/block-markdown.ts` | Block[] → markdown serializer (TipTap inline HTML → md) |
+| `apps/api/src/mcp/tools/tool-helpers.ts` | Name→id mapping, filter building, row humanization, scope walk, MCP access cache |
+| `apps/api/src/mcp/oauth/oauth-service.ts` | DCR, PKCE, auth codes, token issue + refresh rotation/reuse detection |
+| `apps/api/src/mcp/oauth/oauth-routes.ts` | Well-known metadata, register, authorize, token endpoints |
+| `apps/api/src/services/mcp-access-service.ts` | Per-user per-database MCP grants + effective-access checks |
+| `apps/api/src/services/mcp-pat-service.ts` | Personal access tokens (create/list/revoke/verify) |
+| `apps/api/src/routes/mcp-settings.ts` | `/api/mcp/*` REST for settings UI + OAuth consent endpoint |
+| `apps/api/src/config/mcp.ts` | MCP env config loader (`isMcpEnabled`, `loadMcpConfig`) |
+| `apps/web/src/pages/McpConsentPage.tsx` | OAuth consent screen (approve/deny, database overview) |
+| `apps/web/src/components/auth/McpSettingsSection.tsx` | PAT management + MCP database overview in Account settings |
+| `apps/web/src/components/database/McpAccessPopover.tsx` | Per-database MCP toggle + image/file options popover |
 
 ## Commands
 

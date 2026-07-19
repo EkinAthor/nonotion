@@ -6,6 +6,7 @@ import RegisterPage from './pages/RegisterPage';
 import AuthGuard from './components/auth/AuthGuard';
 import AdminGuard from './components/auth/AdminGuard';
 import UserManagementPage from './pages/admin/UserManagementPage';
+import McpConsentPage from './pages/McpConsentPage';
 
 function App() {
   return (
@@ -13,6 +14,16 @@ function App() {
       {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+
+      {/* MCP OAuth consent (auth required, no MainLayout) */}
+      <Route
+        path="/mcp/consent"
+        element={
+          <AuthGuard>
+            <McpConsentPage />
+          </AuthGuard>
+        }
+      />
 
       {/* Protected routes */}
       <Route

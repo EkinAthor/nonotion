@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { IS_DEMO_MODE } from '@/api/client';
 import ChangePasswordModal from './ChangePasswordModal';
+import McpSettingsSection from './McpSettingsSection';
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -11,7 +12,7 @@ interface AccountSettingsModalProps {
 type View = 'main' | 'enable-confirm' | 'disable-confirm';
 
 export default function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalProps) {
-  const { user, initiateTwoFactor, confirmTwoFactor, disableTwoFactor, clearError } = useAuthStore();
+  const { user, authConfig, initiateTwoFactor, confirmTwoFactor, disableTwoFactor, clearError } = useAuthStore();
   const [view, setView] = useState<View>('main');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -240,6 +241,9 @@ export default function AccountSettingsModal({ isOpen, onClose }: AccountSetting
               This account signs in with Google. Two-factor authentication is managed by your Google account.
             </p>
           )}
+
+          {/* Claude / MCP access */}
+          {authConfig?.mcpEnabled && !IS_DEMO_MODE && <McpSettingsSection />}
         </div>
       </div>
 

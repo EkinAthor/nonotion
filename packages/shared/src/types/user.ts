@@ -122,4 +122,5 @@ export type AuthMode = 'db' | 'google';
 export interface AuthConfigResponse {
   enabledModes: AuthMode[];
   googleClientId: string | null;
+  mcpEnabled: boolean;
 }
