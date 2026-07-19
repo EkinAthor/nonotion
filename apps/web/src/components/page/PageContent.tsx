@@ -35,13 +35,15 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
 
   const page = pages.get(pageId);
   const blocks = getBlocksForPage(pageId);
-  const isDatabase = page?.type === 'database';
+  const pageType = page?.type; // undefined until pageStore has loaded
+  const isDatabase = pageType === 'database';
   const isPeek = variant === 'peek';
 
+  // Permission + realtime channel — once per page. Must not depend on the page
+  // type: on a cold refresh the type is unknown until /api/pages resolves, and
+  // re-running this on that flip would re-fetch permission and churn the
+  // realtime join/leave.
   useEffect(() => {
-    if (!isDatabase) {
-      fetchBlocks(pageId);
-    }
     setPermissionLoading(true);
     pagesApi.getPermission(pageId)
       .then((result) => setPermission(result.level))
@@ -56,7 +58,15 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
       setPermissionLoading(true);
       getRealtimeManager()?.leavePage();
     };
-  }, [pageId, fetchBlocks, isDatabase]);
+  }, [pageId]);
+
+  // Blocks — only once the page type is known, and never for database pages
+  // (their content is rows, fetched by DatabaseView).
+  useEffect(() => {
+    if (pageType && pageType !== 'database') {
+      fetchBlocks(pageId);
+    }
+  }, [pageId, pageType, fetchBlocks]);
 
   if (!page) {
     return (

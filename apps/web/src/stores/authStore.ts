@@ -221,7 +221,13 @@ export const useAuthStore = create<AuthState>()(
         const token = get().token;
         if (!token) return;
 
-        set({ isLoading: true, error: null });
+        // With a persisted user we can render optimistically and verify in the
+        // background — flipping isLoading here would unmount the whole app tree
+        // (AuthGuard swaps children for a loading screen) and re-fire every
+        // mount-time fetch on refresh.
+        if (!get().user) {
+          set({ isLoading: true, error: null });
+        }
         try {
           const response = await authApi.me();
           set({

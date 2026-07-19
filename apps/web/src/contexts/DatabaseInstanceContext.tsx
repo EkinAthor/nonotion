@@ -233,6 +233,10 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     }
   }
 
+  // Monotonic fetch counter — a response is applied only if no newer fetch
+  // (or database switch / clear) happened while it was in flight.
+  let fetchSeq = 0;
+
   const store = createStore<DatabaseInstanceState>((set, get) => ({
     activeDatabaseId: null,
     schema: null,
@@ -260,13 +264,19 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         return;
       }
 
+      // Re-applying the same database (e.g. a schema refresh from pageStore)
+      // must not wipe already-fetched rows — only a real switch resets them.
+      const isSameDatabase = get().activeDatabaseId === page.id;
+      if (!isSameDatabase) {
+        fetchSeq++;
+      }
+
       const updates: Partial<DatabaseInstanceState> = {
         activeDatabaseId: page.id,
         schema: page.databaseSchema,
-        rows: [],
-        total: 0,
         error: null,
         kanbanCardOrder: page.databaseSchema.kanbanCardOrder ?? {},
+        ...(isSameDatabase ? {} : { rows: [], total: 0 }),
       };
 
       // Seed view config from server default if user has no local override
@@ -293,6 +303,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       if (!activeDatabaseId) return;
 
       const isKanban = viewConfig.viewType === 'kanban';
+      const seq = ++fetchSeq;
       set({
         isLoading: true,
         error: null,
@@ -312,8 +323,10 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
           limit: isKanban ? KANBAN_FETCH_LIMIT : PAGE_SIZE,
           offset: 0,
         });
+        if (seq !== fetchSeq) return; // superseded by a newer fetch/switch/clear
         set({ rows: result.rows, total: result.total, isLoading: false });
       } catch (error) {
+        if (seq !== fetchSeq) return;
         set({ error: (error as Error).message, isLoading: false });
       }
     },
@@ -840,6 +853,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     clearDatabase: () => {
+      fetchSeq++; // invalidate any in-flight fetch
       set({
         activeDatabaseId: null,
         schema: null,
