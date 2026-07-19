@@ -11,6 +11,17 @@ function loadSidebarOpen(): boolean {
   }
 }
 
+// Seed the peek panel (split view) from the `?peek=` URL param so a fresh load / shared link
+// opens the split view immediately, and so the store and URL agree from the first render
+// (MainLayout keeps them in sync thereafter). See CLAUDE.md "split view" notes.
+function loadInitialPeek(): string | null {
+  try {
+    return new URLSearchParams(window.location.search).get('peek');
+  } catch {
+    return null;
+  }
+}
+
 interface UiState {
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -34,7 +45,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   sidebarOpen: loadSidebarOpen(),
   sidebarWidth: 240,
   searchOpen: false,
-  peekPageId: null,
+  peekPageId: loadInitialPeek(),
   peekPanelWidth: 0,
   sidebarAutoCollapsed: false,
 

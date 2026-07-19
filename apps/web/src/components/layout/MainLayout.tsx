@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useSearchParams } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import { IS_DEMO_MODE } from '@/api/client';
@@ -11,11 +11,47 @@ import DemoBanner from './DemoBanner';
 export default function MainLayout() {
   const { fetchPages, fetchPageOrder } = usePageStore();
   const { sidebarOpen, sidebarWidth, peekPageId, sidebarAutoCollapsed, toggleSidebar, setSidebarOpen, toggleSearch } = useUiStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlPeek = searchParams.get('peek');
 
   useEffect(() => {
     fetchPages();
     fetchPageOrder();
   }, [fetchPages, fetchPageOrder]);
+
+  // Keep the peek panel (split view) and the `?peek=` URL param in sync so the split view
+  // survives reloads and shared links. The store is seeded from the URL at creation
+  // (uiStore.loadInitialPeek), so the two already agree on first render; these two effects only
+  // reconcile *subsequent* changes. Both are idempotent (they no-op when already consistent), so
+  // React StrictMode's double-invoked effects are harmless.
+
+  // URL -> store: reload, pasted link, back/forward, or navigating to a page without a peek param.
+  // Reads fresh store state via getState() so it depends only on `urlPeek`.
+  useEffect(() => {
+    const { peekPageId: current, openPeekPanel, closePeekPanel } = useUiStore.getState();
+    if (urlPeek) {
+      if (urlPeek !== current) openPeekPanel(urlPeek);
+    } else if (current) {
+      closePeekPanel();
+    }
+  }, [urlPeek]);
+
+  // store -> URL: opening/closing the peek panel from the table, kanban, toolbar, or panel
+  // controls. Keyed only on `peekPageId` (not `searchParams`) so navigation between pages never
+  // re-adds a stale peek param; the current param is read fresh from window.location.
+  useEffect(() => {
+    const current = new URLSearchParams(window.location.search).get('peek');
+    if (peekPageId === current) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (peekPageId) next.set('peek', peekPageId);
+        else next.delete('peek');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [peekPageId, setSearchParams]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
