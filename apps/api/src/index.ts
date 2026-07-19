@@ -103,7 +103,8 @@ const corsOrigins = process.env.CORS_ORIGINS
 // the app API keeps the fixed origin list.
 const appCorsOptions = {
   origin: corsOrigins,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  // PUT is used by the MCP settings routes (/api/mcp/access/:databaseId)
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-Id'],
   credentials: true,
   exposedHeaders: ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'],
