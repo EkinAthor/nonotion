@@ -192,21 +192,25 @@ function InlineDatabaseDisplay({ block, readOnly }: DatabaseViewEditProps) {
     }
   }, [focusBlockId, block.id, setFocusBlock]);
 
-  // Load database data
+  // Load database data — once per embedded database (fires when pages arrive).
+  // Keyed on id/type, not the page object: pageStore refetches replace every
+  // page object, and re-running this would refetch rows for each embedded view.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (databasePage && databasePage.type === 'database') {
       const store = storeRef.current.getState();
       store.loadDatabase(databasePage);
       store.fetchRows();
     }
-  }, [databasePage]);
+  }, [databasePage?.id, databasePage?.type]);
 
-  // Re-load when schema changes
+  // Re-apply schema on real changes only (version bumps on server mutations).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (databasePage?.databaseSchema) {
       storeRef.current.getState().loadDatabase(databasePage);
     }
-  }, [databasePage?.databaseSchema]);
+  }, [databasePage?.id, databasePage?.version]);
 
   const handleNavigate = useCallback(() => {
     if (!isDeleted && !isNotDatabase) {

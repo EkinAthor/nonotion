@@ -46,12 +46,16 @@ function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
     };
   }, [page.id, loadDatabase, fetchRows, clearDatabase]);
 
-  // Re-load when schema changes
+  // Re-apply schema when the page actually changes. Keyed on version (bumped by
+  // every server-side mutation), not the schema object — pageStore refetches
+  // produce new object identities for unchanged pages, and loadDatabase must
+  // not re-run for those (it resets view state on a database switch).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (page.databaseSchema) {
       loadDatabase(page);
     }
-  }, [page.databaseSchema, loadDatabase]);
+  }, [page.id, page.version, loadDatabase]);
 
   if (error) {
     return (
