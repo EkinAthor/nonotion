@@ -18,6 +18,7 @@ import { initializeStorage, getStorageType, type StorageType } from './storage/s
 import { ensureAdminPasswordReset } from './services/auth-service.js';
 import { runWithRequestContext } from './services/request-context.js';
 import { registerRateLimit } from './config/rate-limit.js';
+import { isMcpEnabled } from './config/mcp.js';
 import { loadRealtimeConfig } from './config/realtime.js';
 import { initializeBroadcaster } from './realtime/realtime-factory.js';
 import { clientIdMiddleware } from './middleware/client-id.js';
@@ -97,13 +98,26 @@ const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim().replace(/\/+$/, ''))
   : ['http://localhost:5173', 'http://localhost:3000'];
 
-// Register CORS
-await fastify.register(cors, {
+// Register CORS. MCP + OAuth discovery endpoints are called from arbitrary
+// origins (MCP Inspector, OAuth clients), so they get a permissive policy;
+// the app API keeps the fixed origin list.
+const appCorsOptions = {
   origin: corsOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-Id'],
   credentials: true,
   exposedHeaders: ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'],
+};
+const mcpCorsOptions = {
+  origin: true,
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'mcp-protocol-version', 'mcp-session-id', 'last-event-id'],
+  exposedHeaders: ['mcp-session-id', 'mcp-protocol-version', 'www-authenticate'],
+};
+await fastify.register(cors, () => (req: { url?: string }, callback: (err: Error | null, options: typeof appCorsOptions | typeof mcpCorsOptions) => void) => {
+  const url = req.url ?? '';
+  const isMcpPath = url.startsWith('/mcp') || url.startsWith('/.well-known/');
+  callback(null, isMcpPath ? mcpCorsOptions : appCorsOptions);
 });
 
 // Register JWT plugin
@@ -137,6 +151,16 @@ await fastify.register(filesRoutes);
 await fastify.register(importRoutes);
 await fastify.register(searchRoutes);
 await fastify.register(realtimeRoutes);
+
+// MCP server (read-only Model Context Protocol access) — zero overhead when disabled
+if (isMcpEnabled()) {
+  const { mcpSettingsRoutes } = await import('./routes/mcp-settings.js');
+  const { mcpRoutes } = await import('./mcp/mcp-routes.js');
+  const { mcpOAuthRoutes } = await import('./mcp/oauth/oauth-routes.js');
+  await fastify.register(mcpSettingsRoutes);
+  await fastify.register(mcpRoutes);
+  await fastify.register(mcpOAuthRoutes);
+}
 
 // Health check (exempt from rate limiting)
 fastify.get('/health', { config: { rateLimit: false } }, async () => {

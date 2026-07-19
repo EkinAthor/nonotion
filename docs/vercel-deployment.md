@@ -43,6 +43,7 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://your-nonotion-project-web.vercel.app`).
     *   `ADMIN_EMAIL`: Your initial admin email.
     *   `RESEND_API_KEY` + `EMAIL_FROM`: Required only if you use email two-factor authentication (see the Resend note below).
+    *   `MCP_ENABLED` + `MCP_PUBLIC_URL` + `FRONTEND_URL`: Required only if you enable the MCP server (see the MCP note below).
 
 > [!NOTE]
 > Vercel sets `NODE_ENV=production` automatically for all deployments. The API requires `JWT_SECRET` in production and will throw a startup error if it is missing.
@@ -55,6 +56,18 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 
 > [!NOTE]
 > **Rate Limiting:** The built-in rate limiting is automatically disabled on Vercel because it uses an in-memory store that doesn't persist between serverless invocations. For production rate limiting on Vercel, configure [Vercel Firewall / WAF rules](https://vercel.com/docs/security/firewall) to set IP-based rate limits at the edge.
+
+> [!NOTE]
+> **MCP Server (Claude integration).** To enable the read-only MCP server (see `docs/mcp.md`), set on the API project:
+> *   `MCP_ENABLED`: `true`
+> *   `MCP_PUBLIC_URL`: The public URL of the **API** deployment (e.g., `https://your-nonotion-project-api.vercel.app`) with no trailing slash. This is the OAuth issuer and token audience — claude.ai will refuse to connect if it doesn't match the URL you enter as the connector.
+> *   `FRONTEND_URL`: The URL of the **Web** deployment (used for the OAuth consent screen redirect).
+>
+> Details that matter on Vercel:
+> *   The MCP endpoints live at the **root** of the API (`/mcp`, `/mcp/oauth/*`, `/.well-known/oauth-*`), not under `/api`. The existing `apps/api/vercel.json` rewrite (`/(.*)` → serverless handler) already covers them — if you customize routing or put a proxy/CDN in front, make sure these root paths reach the API function.
+> *   All OAuth state (clients, codes, refresh tokens) is stored in Postgres, so the stateless serverless model works out of the box. The MCP transport runs in JSON-response mode (no SSE).
+> *   Because in-app rate limiting is disabled on Vercel, add Vercel Firewall rules for `/mcp` and `/mcp/oauth/*` (the token and registration endpoints are unauthenticated by design and should be rate-limited at the edge).
+> *   Long tool calls (large `query_database` responses, `get_image`) must fit within your Vercel function timeout.
 
 ---
 

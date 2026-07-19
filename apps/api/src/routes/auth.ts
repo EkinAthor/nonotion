@@ -10,6 +10,7 @@ import {
 } from '@nonotion/shared';
 import * as authService from '../services/auth-service.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { isMcpEnabled } from '../config/mcp.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Get auth config (public, no auth needed)
@@ -22,6 +23,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       data: {
         enabledModes,
         googleClientId: enabledModes.includes('google') ? googleClientId : null,
+        mcpEnabled: isMcpEnabled(),
       },
     });
   });

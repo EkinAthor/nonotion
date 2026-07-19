@@ -15,5 +15,6 @@ export const filesApi = client.filesApi;
 export const searchApi = client.searchApi;
 export const importApi = client.importApi;
 export const realtimeApi = client.realtimeApi;
+export const mcpApi = client.mcpApi;
 
-export type { SearchResult, ShareWithUser, GetRowsOptions, GetRowsResult, RealtimeTokenResponse } from './real-client';
+export type { SearchResult, ShareWithUser, GetRowsOptions, GetRowsResult, RealtimeTokenResponse, McpAccessWithTitle } from './real-client';

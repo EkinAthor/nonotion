@@ -39,10 +39,11 @@ function AuthGuardInner({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated()) {
-      // Redirect to login, but save the intended destination
-      navigate('/login', { state: { from: location.pathname }, replace: true });
+      // Redirect to login, but save the intended destination (incl. query
+      // params — the MCP OAuth consent page depends on them).
+      navigate('/login', { state: { from: location.pathname + location.search }, replace: true });
     }
-  }, [isLoading, isAuthenticated, navigate, location.pathname]);
+  }, [isLoading, isAuthenticated, navigate, location.pathname, location.search]);
 
   // Show loading state while checking auth
   if (isLoading) {

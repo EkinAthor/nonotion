@@ -7,3 +7,4 @@ export * from './database.js';
 export * from './file.js';
 export * from './import.js';
 export * from './realtime.js';
+export * from './mcp.js';

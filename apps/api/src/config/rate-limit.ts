@@ -32,6 +32,7 @@ export interface RateLimitConfig {
   upload: TierConfig;
   import: TierConfig;
   search: TierConfig;
+  mcp: TierConfig;
 }
 
 // ─── Fastify type augmentation ──────────────────────────────────────────────
@@ -66,6 +67,10 @@ export function loadRateLimitConfig(): RateLimitConfig {
     search: {
       max: envInt('RATE_LIMIT_SEARCH_MAX', 30),
       timeWindow: minutesToMs(envInt('RATE_LIMIT_SEARCH_WINDOW_MINUTES', 1)),
+    },
+    mcp: {
+      max: envInt('RATE_LIMIT_MCP_MAX', 60),
+      timeWindow: minutesToMs(envInt('RATE_LIMIT_MCP_WINDOW_MINUTES', 1)),
     },
   };
 }

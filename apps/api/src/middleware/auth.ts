@@ -15,17 +15,24 @@ declare module '@fastify/jwt' {
     // never be accepted as normal auth tokens (see authMiddleware guard below).
     payload:
       | { userId: string; role: 'admin' | 'user'; isOwner: boolean; twoFactorPending?: false }
-      | { userId: string; twoFactorPending: true };
+      | { userId: string; twoFactorPending: true }
+      // MCP access tokens — accepted only by the /mcp endpoint, rejected by
+      // authMiddleware/optionalAuthMiddleware (see mcpScope guard below).
+      | { userId: string; mcpScope: 'read'; aud: string };
     user: { userId: string; role: 'admin' | 'user'; isOwner: boolean; twoFactorPending?: boolean };
   }
 }
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean; mcpScope?: string }>();
     // Reject login-challenge tokens — they are not a completed authentication.
     if (decoded.twoFactorPending) {
       throw new Error('Two-factor challenge not completed');
+    }
+    // Reject MCP access tokens — they are only valid on the /mcp endpoint.
+    if (decoded.mcpScope) {
+      throw new Error('MCP tokens cannot access the application API');
     }
     request.userId = decoded.userId;
     request.userRole = decoded.role;
@@ -40,9 +47,12 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 
 export async function optionalAuthMiddleware(request: FastifyRequest): Promise<void> {
   try {
-    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean }>();
+    const decoded = await request.jwtVerify<{ userId: string; role: 'admin' | 'user'; isOwner?: boolean; twoFactorPending?: boolean; mcpScope?: string }>();
     if (decoded.twoFactorPending) {
       throw new Error('Two-factor challenge not completed');
+    }
+    if (decoded.mcpScope) {
+      throw new Error('MCP tokens cannot access the application API');
     }
     request.userId = decoded.userId;
     request.userRole = decoded.role;

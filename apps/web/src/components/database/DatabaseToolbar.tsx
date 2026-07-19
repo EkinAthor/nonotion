@@ -21,6 +21,8 @@ import { IS_DEMO_MODE } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 import FilterPopover, { getFilterSummary } from './FilterPopover';
 import PropertiesPanel from './PropertiesPanel';
+import McpAccessPopover from './McpAccessPopover';
+import { useAuthStore } from '@/stores/authStore';
 
 interface DatabaseToolbarProps {
   canEdit: boolean;
@@ -45,13 +47,16 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
   } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
+  const mcpEnabled = useAuthStore((s) => s.authConfig?.mcpEnabled ?? false);
   const [isCreating, setIsCreating] = useState(false);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [showMcpPopover, setShowMcpPopover] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
   const [showGroupByDropdown, setShowGroupByDropdown] = useState(false);
   const [showColumnsPopover, setShowColumnsPopover] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const mcpButtonRef = useRef<HTMLButtonElement>(null);
   const propertiesButtonRef = useRef<HTMLButtonElement>(null);
   const groupByButtonRef = useRef<HTMLButtonElement>(null);
   const columnsButtonRef = useRef<HTMLButtonElement>(null);
@@ -260,6 +265,31 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
             </svg>
             {isSaving ? 'Saving...' : 'Save as default'}
           </button>
+        )}
+
+        {/* MCP access — per-user, needs only read access; hidden in demo mode */}
+        {mcpEnabled && !IS_DEMO_MODE && activeDatabaseId && (
+          <div>
+            <button
+              ref={mcpButtonRef}
+              onClick={() => setShowMcpPopover(!showMcpPopover)}
+              className="flex items-center gap-1 px-2 py-1 text-sm text-notion-text-secondary rounded hover:bg-notion-hover"
+              title="Make this database available to Claude via MCP"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              MCP
+            </button>
+
+            {showMcpPopover && (
+              <McpAccessPopover
+                databaseId={activeDatabaseId}
+                onClose={() => setShowMcpPopover(false)}
+                anchorRef={mcpButtonRef}
+              />
+            )}
+          </div>
         )}
 
         {/* Properties Button */}
