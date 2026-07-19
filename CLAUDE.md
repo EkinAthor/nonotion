@@ -273,6 +273,16 @@ Read-only Model Context Protocol server for Claude clients (claude.ai custom con
 
 Env vars: `MCP_ENABLED`, `MCP_PUBLIC_URL` (issuer/audience, required in prod), `FRONTEND_URL`, `MCP_ACCESS_TOKEN_TTL_MINUTES`, `MCP_REFRESH_TOKEN_TTL_DAYS`, `MCP_AUTH_CODE_TTL_MINUTES`, `RATE_LIMIT_MCP_*`. Types/Zod: `packages/shared/src/{types,schemas}/mcp.ts`.
 
+### 25. Split View (Peek Panel) URL Persistence
+The split view (`SidePanel` + `PageContent variant="peek"`) is reflected in the URL as a `?peek=<pageId>` search param, so it survives page reloads and can be shared/opened via a copied link. `uiStore.peekPageId` remains the in-memory source of truth for rendering; the URL is a synced mirror. **No backend/store contract changes** — pure client routing state, so demo mode is unaffected.
+
+- **Store seeded from URL**: `uiStore` initializes `peekPageId` from `?peek=` at creation (`loadInitialPeek()` reads `window.location.search`), so the store and URL agree on the very first render (panel shows immediately, no flash, no mount-time reconciliation conflict).
+- **Bidirectional sync** lives in `MainLayout.tsx` (the always-mounted protected-route layout) as two idempotent effects:
+  - **URL → store** (keyed on `?peek`): reload, pasted link, back/forward, or sidebar nav to a page without a peek param. Reads fresh store state via `useUiStore.getState()` and calls `openPeekPanel`/`closePeekPanel`.
+  - **store → URL** (keyed **only** on `peekPageId`, never on `searchParams`, so navigating between pages can't re-add a stale peek): reads the current param fresh from `window.location.search`, writes with `setSearchParams(..., { replace: true })` (peek is a lightweight view, not a history entry).
+  - Both effects no-op when already consistent, so React StrictMode's double-invoked effects are harmless.
+- **Call sites unchanged**: `TableView`/`KanbanView`/`DatabaseToolbar`/`SidePanel`/`PageContent` still call `openPeekPanel`/`closePeekPanel`; the URL follows. `PageView` no longer force-closes the peek on `pageId` change — the URL→store effect handles closing when a target URL has no `peek` param.
+
 ## Critical Files
 
 | File | Purpose |
