@@ -4,6 +4,7 @@ import { usePageStore } from '@/stores/pageStore';
 import { useBlockStore } from '@/stores/blockStore';
 import { pagesApi } from '@/api/client';
 import { getRealtimeManager } from '@/lib/realtime';
+import { undoManager } from '@/lib/undo/undo-manager';
 import { usePresenceStore } from '@/stores/presenceStore';
 import PresenceAvatarBar from '@/components/presence/PresenceAvatarBar';
 import PageHeader from './PageHeader';
@@ -58,6 +59,8 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
       setPermission(null);
       setPermissionLoading(true);
       getRealtimeManager()?.leavePage();
+      // Undo history is per open page — drop it on navigate away / close
+      undoManager.clearPage(pageId);
     };
   }, [pageId]);
 

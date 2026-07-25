@@ -27,6 +27,7 @@ import CrossBlockFormatToolbar from './CrossBlockFormatToolbar';
 import { getMarkdownPrefix, getHtmlTag } from './registry';
 import { htmlToInlineMarkdown } from '@/lib/html-markdown';
 import { computeDragSet } from '@/lib/block-hierarchy';
+import { undoManager } from '@/lib/undo/undo-manager';
 
 interface BlockCanvasProps {
   pageId: string;
@@ -287,6 +288,35 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
       document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
+
+  // Document-level undo/redo fallback — covers states where no editor or input
+  // has focus (multi-block selection, image block selected, nothing focused).
+  // Focused editors/textareas/inputs handle these keys themselves (capture
+  // phase runs first, so bail out for them to avoid double handling).
+  useEffect(() => {
+    if (readOnly) return;
+
+    const handleUndoKeys = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('[contenteditable="true"], textarea, input, select')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (key === 'y' || event.shiftKey) {
+        undoManager.redo(pageId);
+      } else {
+        undoManager.undo(pageId);
+      }
+    };
+
+    document.addEventListener('keydown', handleUndoKeys, true);
+    return () => {
+      document.removeEventListener('keydown', handleUndoKeys, true);
+    };
+  }, [pageId, readOnly]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

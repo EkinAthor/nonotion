@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Block, BlockType, BlockContent, CreateBlockInput, UpdateBlockInput } from '@nonotion/shared';
 import { generateBlockId } from '@nonotion/shared';
 import { blocksApi } from '@/api/client';
+import { undoManager } from '@/lib/undo/undo-manager';
 
 // Temp ID → real server ID mapping (only needed for API calls)
 const tempToRealId = new Map<string, string>();
@@ -10,6 +11,14 @@ const pendingCreates = new Map<string, Promise<Block>>();
 
 function resolveId(id: string): string {
   return tempToRealId.get(id) ?? id;
+}
+
+// Undo history: local mutations record by default; undo/redo application and
+// debounced text-saves (recorded as coalesced bursts instead) pass 'skip'.
+export type HistoryOpt = { history?: 'record' | 'skip' };
+
+function shouldRecord(opts?: HistoryOpt): boolean {
+  return opts?.history !== 'skip' && !undoManager.isApplying();
 }
 
 export type FocusPosition = 'start' | 'end' | number | null;
@@ -24,22 +33,23 @@ interface BlockState {
 
   // Actions
   fetchBlocks: (pageId: string) => Promise<void>;
-  createBlock: (pageId: string, type: BlockType, content: BlockContent, order?: number) => Promise<Block>;
+  createBlock: (pageId: string, type: BlockType, content: BlockContent, order?: number, opts?: HistoryOpt) => Promise<Block>;
   createMultipleBlocks: (
     pageId: string,
     blocks: Array<{ type: BlockType; content: BlockContent }>,
-    afterOrder: number
+    afterOrder: number,
+    opts?: HistoryOpt
   ) => Promise<Block[]>;
-  updateBlock: (id: string, input: UpdateBlockInput) => Promise<Block>;
-  deleteBlock: (id: string) => Promise<void>;
-  reorderBlocks: (pageId: string, blockIds: string[]) => Promise<void>;
+  updateBlock: (id: string, input: UpdateBlockInput, opts?: HistoryOpt) => Promise<Block>;
+  deleteBlock: (id: string, opts?: HistoryOpt) => Promise<void>;
+  reorderBlocks: (pageId: string, blockIds: string[], opts?: HistoryOpt) => Promise<void>;
   setSelectedBlock: (id: string | null) => void;
   setFocusBlock: (id: string | null, position?: FocusPosition) => void;
   changeBlockType: (
     id: string,
     newType: BlockType,
     newText?: string,
-    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' },
+    options?: { startNumber?: number; cursorPosition?: 'start' | 'end' } & HistoryOpt,
   ) => Promise<Block>;
 
   // Selectors
@@ -93,17 +103,34 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     }
   },
 
-  createBlock: async (pageId, type, content, order) => {
+  createBlock: async (pageId, type, content, order, opts) => {
     // 1. Generate temp block immediately
     const tempId = generateBlockId();
     const tempBlock: Block = {
       id: tempId,
       type,
       pageId,
-      order: order ?? 0,
+      order: order ?? (get().blocksByPage.get(pageId)?.length ?? 0),
       content,
       version: 0,
     };
+
+    if (shouldRecord(opts)) {
+      undoManager.record(
+        {
+          kind: 'create',
+          blockId: tempId,
+          snapshot: {
+            id: tempId,
+            pageId,
+            type,
+            content: structuredClone(content),
+            order: tempBlock.order,
+          },
+        },
+        pageId
+      );
+    }
 
     // 2. Optimistic update: insert temp block into store
     set((state) => {
@@ -174,19 +201,50 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     return tempBlock;
   },
 
-  createMultipleBlocks: async (pageId, blocksToCreate, afterOrder) => {
+  createMultipleBlocks: async (pageId, blocksToCreate, afterOrder, opts) => {
     // Delegate to optimistic createBlock for each — all appear instantly
     const createdBlocks: Block[] = [];
     for (let i = 0; i < blocksToCreate.length; i++) {
       const { type, content } = blocksToCreate[i];
       const order = afterOrder + 1 + i;
-      const block = await get().createBlock(pageId, type, content, order);
+      const block = await get().createBlock(pageId, type, content, order, opts);
       createdBlocks.push(block);
     }
     return createdBlocks;
   },
 
-  updateBlock: async (id, input) => {
+  updateBlock: async (id, input, opts) => {
+    if (shouldRecord(opts)) {
+      // Commit open typing bursts BEFORE capturing before-state, so the
+      // snapshot reflects the freshly-saved editor content
+      undoManager.flushBursts();
+      const before = get().getBlockById(id);
+      if (before && input.type !== undefined) {
+        undoManager.record(
+          {
+            kind: 'type_change',
+            blockId: id,
+            before: { type: before.type, content: structuredClone(before.content) },
+            after: {
+              type: input.type,
+              content: structuredClone(input.content ?? before.content),
+            },
+          },
+          before.pageId
+        );
+      } else if (before && input.content !== undefined) {
+        undoManager.record(
+          {
+            kind: 'content_set',
+            blockId: id,
+            before: structuredClone(before.content),
+            after: structuredClone(input.content),
+          },
+          before.pageId
+        );
+      }
+    }
+
     // 1. Optimistic update: apply input to local state immediately
     //    This keeps the store in sync with the editor for operations
     //    that read from the store (e.g., merge blocks)
@@ -246,7 +304,11 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     }
   },
 
-  deleteBlock: async (id) => {
+  deleteBlock: async (id, opts) => {
+    if (shouldRecord(opts)) {
+      undoManager.flushBursts();
+    }
+
     // Find the block's pageId before removing
     let pageId: string | null = null;
     for (const [pId, blocks] of get().blocksByPage.entries()) {
@@ -254,6 +316,26 @@ export const useBlockStore = create<BlockState>((set, get) => ({
         pageId = pId;
         break;
       }
+    }
+
+    if (pageId && shouldRecord(opts)) {
+      const blocks = get().blocksByPage.get(pageId)!;
+      const block = blocks.find((b) => b.id === id)!;
+      undoManager.record(
+        {
+          kind: 'delete',
+          blockId: id,
+          snapshot: {
+            id,
+            pageId,
+            type: block.type,
+            content: structuredClone(block.content),
+            order: block.order,
+          },
+          orderedIdsBefore: [...blocks].sort((a, b) => a.order - b.order).map((b) => b.id),
+        },
+        pageId
+      );
     }
 
     // 1. Optimistic removal from store
@@ -291,7 +373,20 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     });
   },
 
-  reorderBlocks: async (pageId, blockIds) => {
+  reorderBlocks: async (pageId, blockIds, opts) => {
+    if (shouldRecord(opts)) {
+      const current = get().blocksByPage.get(pageId) || [];
+      undoManager.record(
+        {
+          kind: 'reorder',
+          pageId,
+          beforeIds: [...current].sort((a, b) => a.order - b.order).map((b) => b.id),
+          afterIds: [...blockIds],
+        },
+        pageId
+      );
+    }
+
     // Optimistic update
     set((state) => {
       const blocksByPage = new Map(state.blocksByPage);
@@ -309,10 +404,22 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     try {
       // Resolve temp IDs to real server IDs for the API call
       const resolvedIds = blockIds.map(resolveId);
-      const blocks = await blocksApi.reorder(pageId, { blockIds: resolvedIds });
+      const serverBlocks = await blocksApi.reorder(pageId, { blockIds: resolvedIds });
+      // Merge server order/version into existing store blocks instead of
+      // replacing the array — temp IDs must stay the canonical store keys
+      // (replacing them with server IDs would remount editors and orphan
+      // pending temp-id references)
       set((state) => {
         const blocksByPage = new Map(state.blocksByPage);
-        blocksByPage.set(pageId, blocks.sort((a, b) => a.order - b.order));
+        const current = blocksByPage.get(pageId) || [];
+        const byRealId = new Map(serverBlocks.map((b) => [b.id, b]));
+        const merged = current
+          .map((b) => {
+            const server = byRealId.get(resolveId(b.id));
+            return server ? { ...b, order: server.order, version: server.version } : b;
+          })
+          .sort((a, b) => a.order - b.order);
+        blocksByPage.set(pageId, merged);
         return { blocksByPage };
       });
     } catch (error) {
@@ -331,6 +438,10 @@ export const useBlockStore = create<BlockState>((set, get) => ({
   },
 
   changeBlockType: async (id, newType, newText, options) => {
+    if (shouldRecord(options)) {
+      undoManager.flushBursts();
+    }
+
     // Find the block to get its current content
     let existingBlock: Block | undefined;
     for (const blocks of get().blocksByPage.values()) {
@@ -410,6 +521,18 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       default:
         content = { text };
         break;
+    }
+
+    if (shouldRecord(options)) {
+      undoManager.record(
+        {
+          kind: 'type_change',
+          blockId: id,
+          before: { type: existingBlock.type, content: structuredClone(existingBlock.content) },
+          after: { type: newType, content: structuredClone(content) },
+        },
+        existingBlock.pageId
+      );
     }
 
     // Optimistic update: apply type + content locally first
@@ -581,8 +704,11 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const firstBlock = selectedBlocks[0];
     const prevBlockId = get().getAdjacentBlockId(firstBlock.id, 'prev');
 
-    // deleteBlock is now optimistic — all removals happen synchronously
-    ids.forEach(id => deleteBlock(id));
+    // deleteBlock is now optimistic — all removals happen synchronously.
+    // Grouped so a single undo restores every deleted block + ordering.
+    undoManager.transact(firstBlock.pageId, () => {
+      ids.forEach(id => deleteBlock(id));
+    });
 
     clearSelection();
 

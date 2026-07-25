@@ -9,6 +9,7 @@ import { usePageStore } from '@/stores/pageStore';
 import { BlockContextProvider, type PasteBlockData } from '@/contexts/BlockContext';
 import { getPlainTextLength } from '@/lib/tiptap/html-utils';
 import { filesApi } from '@/api/client';
+import { undoManager } from '@/lib/undo/undo-manager';
 import HeadingEdit from './registry/HeadingEdit';
 import Heading2Edit from './registry/Heading2Edit';
 import Heading3Edit from './registry/Heading3Edit';
@@ -140,6 +141,10 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
     // If no previous block, do nothing (first block edge case)
     if (!prevBlockId) return;
 
+    // Commit open typing bursts so both blocks' store content (and the undo
+    // snapshots below) are fresh before we read it
+    undoManager.flushBursts();
+
     const prevBlock = getBlockById(prevBlockId);
     if (!prevBlock) return;
 
@@ -155,14 +160,17 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
 
     // Fire-and-forget: all three operations execute their optimistic
     // set() calls synchronously. React batches the resulting re-render.
-    if (currentText && 'text' in prevBlock.content) {
-      const mergedText = prevText + currentText;
-      updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
-    }
+    // Grouped so a single undo restores both blocks (un-merge).
+    undoManager.transact(pageId, () => {
+      if (currentText && 'text' in prevBlock.content) {
+        const mergedText = prevText + currentText;
+        updateBlock(prevBlockId, { content: { ...prevBlock.content, text: mergedText } });
+      }
 
-    deleteBlock(block.id);
+      deleteBlock(block.id);
+    });
     setFocusBlock(prevBlockId, cursorPosition);
-  }, [block.id, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
+  }, [block.id, pageId, getAdjacentBlockId, getBlockById, updateBlock, deleteBlock, setFocusBlock]);
 
   const handlePasteImage = useCallback(async (file: File): Promise<void> => {
     try {

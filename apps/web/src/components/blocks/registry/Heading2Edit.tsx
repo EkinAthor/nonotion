@@ -38,7 +38,12 @@ export default function Heading2Edit({ block, readOnly = false }: HeadingEditPro
     if (focusBlockId === block.id && editor) {
       if (typeof focusPosition === 'number') {
         editor.commands.focus();
-        editor.commands.setTextSelection(focusPosition);
+        try {
+          editor.commands.setTextSelection(focusPosition);
+        } catch {
+          // Stale caret position (e.g. after undo changed the text) — fall back
+          editor.commands.focus('end');
+        }
       } else if (focusPosition === 'start') {
         editor.commands.focus('start');
       } else {
