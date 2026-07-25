@@ -296,6 +296,18 @@ Google-Docs-style unified undo/redo for the page canvas: Ctrl/Cmd+Z, Ctrl/Cmd+Sh
 - **Store id invariant (bug fixed here)**: `reorderBlocks`' success path must MERGE server order/version into existing store blocks — never replace the array with the server response, which would swap canonical temp ids for real ids (remounting editors and breaking undo's id chain).
 - **Dev introspection**: `window.__undoDebug` (DEV only) exposes `stacks(pageId)`/`detail(pageId)` for tests/debugging.
 
+### 27. Created-Time System Property
+Every database schema contains a read-only `created_time` system property (`{ id: 'prop_created_time', name: 'Created', type: 'created_time' }` — fixed sentinel id + factory `createCreatedTimeProperty(order)` in `packages/shared/src/utils/system-properties.ts`). Its value is the row page's `createdAt` — **synthesized at read time, never stored in the `properties` blob** (mirrors the title pattern: title lives on `row.title`, created lives on `row.createdAt`).
+
+- **Provisioning**: seeded in `createDefaultSchema()` (backend + demo-client), boot-time `backfillCreatedTimeProperty()` in `database-service.ts` (called from `index.ts`, idempotent, mirrors `backfillReferenceIndex`), appended by the Notion import's `buildSchema()`, and reconciled in `demo-init.ts` for already-seeded demo users.
+- **Sort/filter special-casing** (backend `applySort`/`applySingleFilter` + demo-client mirrors): sort compares full ISO `createdAt` (time-precision); filters compare **date-only** (`createdAt.slice(0, 10)`) because the filter UI emits `YYYY-MM-DD` — a full timestamp would fail same-day `lte`/`eq`. Sorting always uses the JS path (the SQL fast path requires no sort).
+- **Immutability**: `updateSchema` blocks delete and name/options updates (width allowed); `addPropertyInputSchema` uses `addablePropertyTypeSchema` (excludes `created_time`) so it can't be added manually; `updateRowProperties` strips `created_time` values before merging. All mirrored in demo-client.
+- **Hidden by default — `ViewConfig.shownSystemPropertyIds`**: system properties use *inverted* visibility semantics (visible only when listed), so localStorage configs and server defaults saved before the property existed keep it hidden. `togglePropertyVisibility` and `getVisibleProperties` in `DatabaseInstanceContext.tsx` branch on `type === 'created_time'`; the optional field round-trips through `DefaultViewConfig` (save-as-default/revert).
+- **UI**: `CellRenderer` renders it via `DateCell` with `canEdit` forced false (date-only display of the full timestamp); PropertiesPanel shows it with a static name, no delete button, but a working eye toggle; FilterPopover reuses `DateRangeInput`; Kanban cards synthesize the value via `getCardValue()`. Column-header click sorting works unchanged.
+- **Page view parity** (`PageProperties.tsx`): the row-page property list creates its instance store with the parent database id as persistence key (same key as `DatabaseView`), so it loads the same localStorage view config and applies the same visibility + property order as the database view (hidden columns stay hidden on the row page; changes reflect on next mount of the row page). It synthesizes the created_time value from `page.createdAt` like the table view.
+- **MCP**: `humanizeRows` emits `row.createdAt` under the property name; filter values are normalized to date-only in `mapFilterValue`.
+- Non-database pages already carry `createdAt`; no property surface exists for them yet (future use).
+
 ## Critical Files
 
 | File | Purpose |

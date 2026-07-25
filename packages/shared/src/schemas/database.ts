@@ -11,7 +11,11 @@ export const propertyTypeSchema = z.enum([
   'url',
   'checkbox',
   'reference',
+  'created_time',
 ]);
+
+// Property types users can add manually — excludes system properties
+export const addablePropertyTypeSchema = propertyTypeSchema.exclude(['created_time']);
 
 // Select colors
 export const selectColorSchema = z.enum([
@@ -87,6 +91,7 @@ export const defaultViewConfigSchema = z.object({
   sort: sortConfigSchema.optional(),
   filters: z.array(filterRuleSchema),
   hiddenPropertyIds: z.array(z.string()),
+  shownSystemPropertyIds: z.array(z.string()).optional(),
   propertyOrder: z.array(z.string()),
   viewType: databaseViewTypeSchema.optional(),
   kanban: kanbanConfigSchema.optional(),
@@ -148,6 +153,11 @@ export const referenceValueSchema = z.object({
   value: z.array(z.string()), // array of referenced row page ids
 });
 
+export const createdTimeValueSchema = z.object({
+  type: z.literal('created_time'),
+  value: z.string(), // page createdAt (ISO 8601) — read-only, never stored
+});
+
 export const propertyValueSchema = z.discriminatedUnion('type', [
   titleValueSchema,
   textValueSchema,
@@ -158,12 +168,13 @@ export const propertyValueSchema = z.discriminatedUnion('type', [
   urlValueSchema,
   checkboxValueSchema,
   referenceValueSchema,
+  createdTimeValueSchema,
 ]);
 
 // API Input schemas
 export const addPropertyInputSchema = z.object({
   name: z.string().min(1).max(100),
-  type: propertyTypeSchema,
+  type: addablePropertyTypeSchema,
   options: z
     .array(
       z.object({

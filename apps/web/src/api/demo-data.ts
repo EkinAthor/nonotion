@@ -3,6 +3,7 @@
  * seedDemoData() writes everything to localStorage via demo-storage.
  */
 import type { Page, Block } from '@nonotion/shared';
+import { createCreatedTimeProperty } from '@nonotion/shared';
 import * as storage from './demo-storage';
 
 const NOW = '2026-02-21T00:00:00.000Z';
@@ -104,6 +105,7 @@ const bookSchema = {
     { id: PROP_RECOMMEND, name: 'Recommend', type: 'checkbox' as const, order: 6 },
     { id: PROP_NOTES, name: 'Notes', type: 'text' as const, order: 7 },
     { id: PROP_LINK, name: 'Link', type: 'url' as const, order: 8 },
+    createCreatedTimeProperty(9),
   ],
 };
 

@@ -38,6 +38,7 @@ function getTypeIcon(type: string): string {
     case 'select': return '▼';
     case 'multi_select': return '◆';
     case 'date': return '📅';
+    case 'created_time': return '🕐';
     case 'checkbox': return '☐';
     case 'url': return '🔗';
     case 'person': return '👤';
@@ -217,7 +218,9 @@ export default function PropertiesPanel({ onClose, anchorRef, canEdit }: Propert
               <SortablePropertyRow
                 key={prop.id}
                 property={prop}
-                isHidden={viewConfig.hiddenPropertyIds.includes(prop.id)}
+                isHidden={prop.type === 'created_time'
+                  ? !viewConfig.shownSystemPropertyIds.includes(prop.id)
+                  : viewConfig.hiddenPropertyIds.includes(prop.id)}
                 canEdit={canEdit}
                 onRename={handleRename}
                 onDelete={handleDelete}
@@ -339,6 +342,9 @@ function SortablePropertyRow({
   const [editName, setEditName] = useState(property.name);
   const [isEditing, setIsEditing] = useState(false);
 
+  // System property: read-only name, cannot be deleted (visibility still toggleable)
+  const isSystem = property.type === 'created_time';
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -384,7 +390,7 @@ function SortablePropertyRow({
       <span className="w-5 text-center text-xs opacity-60">{getTypeIcon(property.type)}</span>
 
       {/* Property name — inline editable */}
-      {canEdit && isEditing ? (
+      {canEdit && !isSystem && isEditing ? (
         <input
           value={editName}
           onChange={(e) => setEditName(e.target.value)}
@@ -395,8 +401,9 @@ function SortablePropertyRow({
         />
       ) : (
         <button
-          onClick={() => { if (canEdit) { setIsEditing(true); setEditName(property.name); } }}
-          className={`flex-1 text-sm text-left truncate min-w-0 ${canEdit ? 'cursor-text' : 'cursor-default'} ${isHidden ? 'text-notion-text-secondary line-through' : 'text-notion-text'}`}
+          onClick={() => { if (canEdit && !isSystem) { setIsEditing(true); setEditName(property.name); } }}
+          className={`flex-1 text-sm text-left truncate min-w-0 ${canEdit && !isSystem ? 'cursor-text' : 'cursor-default'} ${isHidden ? 'text-notion-text-secondary line-through' : 'text-notion-text'}`}
+          title={isSystem ? 'System property — read-only' : undefined}
         >
           {property.name}
         </button>
@@ -421,7 +428,7 @@ function SortablePropertyRow({
       </button>
 
       {/* Delete button */}
-      {canEdit && (
+      {canEdit && !isSystem && (
         <button
           onClick={() => onDelete(property.id)}
           className="p-0.5 rounded text-notion-text-secondary hover:text-red-600 opacity-0 group-hover:opacity-100"

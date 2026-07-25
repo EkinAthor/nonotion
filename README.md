@@ -28,6 +28,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - "New" button in the database toolbar creates a page and opens it immediately in split view
 - Split view is reflected in the URL (`?peek=<pageId>`), so it survives a page reload and can be shared/opened via a copied link
 - Database references: a property linking records to rows in another database (many-to-many, clickable, searchable/filterable by name, permission-aware `#ref` redaction)
+- Read-only "Created" system property on every database: the row's creation timestamp, hidden by default, sortable (time precision) and filterable (date range), displayed as a date
 - Save/revert default database view config (filters, sort, hidden columns, property order) for all users
 - Image upload (file picker + clipboard paste) with BLOB storage
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)

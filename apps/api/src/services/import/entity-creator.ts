@@ -7,7 +7,7 @@ import type {
   BlockContent,
   Block,
 } from '@nonotion/shared';
-import { generateBlockId, generatePropertyId, now } from '@nonotion/shared';
+import { generateBlockId, generatePropertyId, createCreatedTimeProperty, now } from '@nonotion/shared';
 import type { ImportNode } from './hierarchy-builder.js';
 import type { InferredProperty } from './type-inferrer.js';
 import { inferProperties } from './type-inferrer.js';
@@ -210,6 +210,8 @@ function buildSchema(inferredProps: InferredProperty[]): DatabaseSchema {
     return propDef;
   });
 
+  properties.push(createCreatedTimeProperty(order));
+
   return { properties };
 }
 
@@ -224,9 +226,10 @@ async function createRowPage(
   const csvRow = node.csvRows?.[0];
   if (!csvRow) return null;
 
-  // Map CSV values to property values
+  // Map CSV values to property values (created_time is synthesized, never stored)
   const properties: Record<string, PropertyValue> = {};
   for (const propDef of schema.properties) {
+    if (propDef.type === 'created_time') continue;
     const rawValue = (csvRow[propDef.name] ?? '').trim();
     properties[propDef.id] = mapPropertyValue(propDef, rawValue);
   }
