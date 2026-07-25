@@ -23,6 +23,7 @@ import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import { usersApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
+import { formatPropertyDate } from '@/lib/format-date';
 import CellRenderer from './cells/CellRenderer';
 
 /** Check if a property value is empty (no meaningful data to display) */
@@ -632,7 +633,7 @@ function CardPropertyPreview({ property, value, userMap }: CardPropertyPreviewPr
         <div className="flex items-baseline gap-2 min-w-0">
           {label}
           <span className="text-xs text-notion-text">
-            {new Date(value.value).toLocaleDateString()}
+            {formatPropertyDate(value.value)}
           </span>
         </div>
       );

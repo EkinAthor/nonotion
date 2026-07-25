@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { formatPropertyDate } from '@/lib/format-date';
 
 interface DateCellProps {
   value: string | null;
@@ -22,25 +23,11 @@ export default function DateCell({ value, onChange, canEdit }: DateCellProps) {
     onChange(newValue || null);
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
   if (!canEdit) {
     return (
       <div className="py-0.5">
         {value ? (
-          <span>{formatDate(value)}</span>
+          <span>{formatPropertyDate(value)}</span>
         ) : (
           <span className="text-notion-text-secondary">-</span>
         )}
@@ -70,7 +57,7 @@ export default function DateCell({ value, onChange, canEdit }: DateCellProps) {
       className="py-0.5 cursor-pointer hover:bg-gray-100 rounded px-1 min-h-[24px]"
     >
       {value ? (
-        <span>{formatDate(value)}</span>
+        <span>{formatPropertyDate(value)}</span>
       ) : (
         <span className="text-notion-text-secondary">Empty</span>
       )}
