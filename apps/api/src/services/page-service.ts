@@ -38,6 +38,21 @@ export async function getAllPages(): Promise<Page[]> {
   return getStorage().getAllPages();
 }
 
+/**
+ * Reduce a page list to the "navigable" set shown in the sidebar tree: documents and databases,
+ * but NOT database row-pages (the children of a database) — those are accessed via the database
+ * view and would otherwise bloat the payload with every row's `properties`. Starred rows are kept
+ * so the Starred section still works. Pages whose parent is outside the given set are kept
+ * (conservative). Pure/synchronous — operates on an already-fetched list.
+ */
+export function filterNavigablePages(pages: Page[]): Page[] {
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  return pages.filter((p) => {
+    if (!p.parentId || p.isStarred) return true; // roots + starred are always navigable
+    return byId.get(p.parentId)?.type !== 'database'; // drop rows of a database
+  });
+}
+
 export async function getPage(id: string): Promise<Page | null> {
   return getStorage().getPage(id);
 }
