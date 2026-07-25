@@ -105,6 +105,17 @@ export default function CellRenderer({
         />
       );
 
+    case 'created_time':
+      // Read-only system property — DateCell's !canEdit branch renders date-only
+      return (
+        <DateCell
+          value={(value as { type: 'created_time'; value: string })?.value ?? null}
+          onChange={() => {}}
+          canEdit={false}
+          rowId={rowId}
+        />
+      );
+
     case 'reference':
       return (
         <ReferenceCell

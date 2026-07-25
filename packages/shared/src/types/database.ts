@@ -8,7 +8,8 @@ export type PropertyType =
   | 'person'
   | 'url'
   | 'checkbox'
-  | 'reference';
+  | 'reference'
+  | 'created_time';
 
 // Colors for select/multi-select options
 export type SelectColor =
@@ -62,6 +63,10 @@ export interface DefaultViewConfig {
   sort?: SortConfig;
   filters: FilterRule[];
   hiddenPropertyIds: string[];
+  // System properties (created_time) are hidden unless listed here — inverted
+  // semantics vs hiddenPropertyIds, so configs predating a system property
+  // default it to hidden.
+  shownSystemPropertyIds?: string[];
   propertyOrder: string[];
   viewType?: DatabaseViewType;
   kanban?: KanbanConfig;
@@ -87,7 +92,8 @@ export type PropertyValue =
   | { type: 'person'; value: string | null } // user id or null
   | { type: 'url'; value: string }
   | { type: 'checkbox'; value: boolean }
-  | { type: 'reference'; value: string[] }; // array of referenced row page ids ("pg_...")
+  | { type: 'reference'; value: string[] } // array of referenced row page ids ("pg_...")
+  | { type: 'created_time'; value: string }; // page createdAt (ISO 8601) — read-only, synthesized, never stored in properties
 
 // Input types for API operations
 export interface AddPropertyInput {

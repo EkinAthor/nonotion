@@ -40,9 +40,19 @@ function isEmptyValue(value: PropertyValue | undefined): boolean {
       return value.value.length === 0;
     case 'checkbox':
       return false; // checkbox always has a meaningful value
+    case 'created_time':
+      return false; // every row has a creation timestamp
     default:
       return true;
   }
+}
+
+/** Card property value — created_time lives on the row, not in the properties blob */
+function getCardValue(row: DatabaseRow, prop: PropertyDefinition): PropertyValue | undefined {
+  if (prop.type === 'created_time') {
+    return { type: 'created_time', value: row.createdAt };
+  }
+  return row.properties[prop.id];
 }
 
 interface KanbanViewProps {
@@ -454,7 +464,7 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }
   }, [updateRowProperties, row.id]);
 
   // Filter to only non-empty properties
-  const visibleProps = cardProperties.filter((prop) => !isEmptyValue(row.properties[prop.id]));
+  const visibleProps = cardProperties.filter((prop) => !isEmptyValue(getCardValue(row, prop)));
 
   return (
     <div
@@ -485,7 +495,7 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }
             <CardEditableProperty
               key={prop.id}
               property={prop}
-              value={row.properties[prop.id]}
+              value={getCardValue(row, prop)}
               rowId={row.id}
               canEdit={canEdit}
               onChange={(value) => handleCellChange(prop.id, value)}
@@ -546,7 +556,7 @@ function KanbanCardOverlay({ row, cardProperties, userMap }: { row: DatabaseRow;
             <CardPropertyPreview
               key={prop.id}
               property={prop}
-              value={row.properties[prop.id]}
+              value={getCardValue(row, prop)}
               userMap={userMap}
             />
           ))}
@@ -616,6 +626,7 @@ function CardPropertyPreview({ property, value, userMap }: CardPropertyPreviewPr
     }
 
     case 'date':
+    case 'created_time':
       if (!value.value) return null;
       return (
         <div className="flex items-baseline gap-2 min-w-0">

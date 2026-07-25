@@ -9,7 +9,12 @@ import type {
   SelectColor,
   UpdateKanbanCardOrderInput,
 } from '@nonotion/shared';
-import { generatePropertyId, generateOptionId, now } from '@nonotion/shared';
+import {
+  generatePropertyId,
+  generateOptionId,
+  now,
+  createCreatedTimeProperty,
+} from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
 import { resolveReferencesForRows, type ReferenceViewer } from './reference-service.js';
 
@@ -139,9 +144,9 @@ export async function updateSchema(
   // Remove properties
   if (input.removePropertyIds?.length) {
     const removeSet = new Set(input.removePropertyIds);
-    // Don't allow removing the title property
+    // Don't allow removing the title or created_time system properties
     properties = properties.filter(
-      (p) => p.type === 'title' || !removeSet.has(p.id)
+      (p) => p.type === 'title' || p.type === 'created_time' || !removeSet.has(p.id)
     );
   }
 
@@ -162,11 +167,13 @@ export async function updateSchema(
     for (const update of input.updateProperties) {
       const idx = properties.findIndex((p) => p.id === update.id);
       if (idx !== -1) {
+        // created_time is read-only except for column width
+        const isSystemProp = properties[idx].type === 'created_time';
         properties[idx] = {
           ...properties[idx],
-          ...(update.name !== undefined && { name: update.name }),
+          ...(!isSystemProp && update.name !== undefined && { name: update.name }),
           ...(update.width !== undefined && { width: update.width }),
-          ...(update.options !== undefined && { options: update.options }),
+          ...(!isSystemProp && update.options !== undefined && { options: update.options }),
         };
       }
     }
@@ -243,6 +250,12 @@ export async function updateRowProperties(
   const timestamp = now();
   const existingProps = row.properties ?? {};
 
+  // created_time is read-only and synthesized from page.createdAt — never
+  // allow it into the properties blob.
+  properties = Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value.type !== 'created_time')
+  );
+
   // Check if title property is being updated - update page title
   let titleUpdate: { title?: string } = {};
   for (const value of Object.values(properties)) {
@@ -280,8 +293,33 @@ export function createDefaultSchema(): DatabaseSchema {
         type: 'title',
         order: 0,
       },
+      createCreatedTimeProperty(1),
     ],
   };
+}
+
+/**
+ * One-time backfill: ensure every database schema has the created_time
+ * system property. Idempotent — skips databases that already have one.
+ * Called at boot (mirrors backfillReferenceIndex).
+ */
+export async function backfillCreatedTimeProperty(): Promise<void> {
+  const storage = getStorage();
+  const pages = await storage.getAllPages();
+  for (const page of pages) {
+    if (page.type !== 'database') continue;
+    const schema = page.databaseSchema ?? { properties: [] };
+    if (schema.properties.some((p) => p.type === 'created_time')) continue;
+    const maxOrder = schema.properties.reduce((max, p) => Math.max(max, p.order), -1);
+    await storage.updatePage(page.id, {
+      databaseSchema: {
+        ...schema,
+        properties: [...schema.properties, createCreatedTimeProperty(maxOrder + 1)],
+      },
+      updatedAt: now(),
+      version: page.version + 1,
+    });
+  }
 }
 
 // Helper functions
@@ -349,14 +387,19 @@ function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSch
 
   if (!propId || !operator) return rows;
 
-  // Check if filtering on a title property — title lives on row.title, not row.properties
+  // Title and created_time live on the page itself, not row.properties.
   const propDef = schema?.properties.find((p) => p.id === propId);
   const isTitleProperty = propDef?.type === 'title';
+  const isCreatedTimeProperty = propDef?.type === 'created_time';
 
   return rows.filter((row) => {
+    // created_time compares date-only: the filter UI emits YYYY-MM-DD, so a
+    // full ISO timestamp would fail same-day lte/eq.
     const propValue = isTitleProperty
       ? { type: 'title' as const, value: row.title }
-      : row.properties?.[propId];
+      : isCreatedTimeProperty
+        ? { type: 'date' as const, value: row.createdAt.slice(0, 10) }
+        : row.properties?.[propId];
 
     switch (operator) {
       case 'empty':
@@ -477,6 +520,10 @@ function applySort(
     if (propDef?.type === 'title') {
       aVal = a.title;
       bVal = b.title;
+    } else if (propDef?.type === 'created_time') {
+      // Full ISO timestamp — sorts chronologically as a string
+      aVal = a.createdAt;
+      bVal = b.createdAt;
     } else {
       aVal = a.properties?.[propId]?.value;
       bVal = b.properties?.[propId]?.value;

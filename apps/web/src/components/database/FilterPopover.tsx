@@ -101,6 +101,7 @@ function FilterPropertyRow({ property, filters, onUpdate }: FilterPropertyRowPro
     case 'url':
       return <TextFilterInput property={property} rules={currentRules} onUpdate={onUpdate} />;
     case 'date':
+    case 'created_time':
       return <DateRangeInput property={property} rules={currentRules} onUpdate={onUpdate} />;
     case 'select':
       return <TagFilterInput property={property} rules={currentRules} onUpdate={onUpdate} mode="select" />;

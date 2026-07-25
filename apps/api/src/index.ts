@@ -82,6 +82,14 @@ try {
   console.error('Reference index backfill error:', error);
 }
 
+// Ensure every database schema has the created_time system property (idempotent).
+try {
+  const { backfillCreatedTimeProperty } = await import('./services/database-service.js');
+  await backfillCreatedTimeProperty();
+} catch (error) {
+  console.error('Created-time property backfill error:', error);
+}
+
 // Initialize realtime broadcaster
 const realtimeConfig = loadRealtimeConfig();
 await initializeBroadcaster(realtimeConfig);

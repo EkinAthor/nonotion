@@ -44,6 +44,7 @@ import {
   generateBlockId,
   generatePropertyId,
   generateOptionId,
+  createCreatedTimeProperty,
 } from '@nonotion/shared';
 import * as storage from './demo-storage';
 import { DEMO_USER, DEMO_USER_ID } from './demo-data';
@@ -220,6 +221,7 @@ export const pagesApi = {
             type: 'title',
             order: 0,
           },
+          createCreatedTimeProperty(1),
         ],
       };
     }
@@ -452,11 +454,15 @@ function applySingleFilter(rows: Page[], filterStr: string, schema?: DatabaseSch
 
   const propDef = schema?.properties.find((p) => p.id === propId);
   const isTitleProperty = propDef?.type === 'title';
+  const isCreatedTimeProperty = propDef?.type === 'created_time';
 
   return rows.filter((row) => {
+    // created_time compares date-only (filter UI emits YYYY-MM-DD) — mirrors backend
     const propValue = isTitleProperty
       ? { type: 'title' as const, value: row.title }
-      : row.properties?.[propId];
+      : isCreatedTimeProperty
+        ? { type: 'date' as const, value: row.createdAt.slice(0, 10) }
+        : row.properties?.[propId];
 
     switch (operator) {
       case 'empty':
@@ -543,6 +549,10 @@ function applySort(rows: Page[], sortStr: string, schema?: DatabaseSchema): Page
     if (propDef?.type === 'title') {
       aVal = a.title;
       bVal = b.title;
+    } else if (propDef?.type === 'created_time') {
+      // Full ISO timestamp — sorts chronologically as a string
+      aVal = a.createdAt;
+      bVal = b.createdAt;
     } else {
       aVal = a.properties?.[propId]?.value;
       bVal = b.properties?.[propId]?.value;
@@ -673,10 +683,12 @@ export const databaseApi = {
     const schema = database.databaseSchema ?? { properties: [] };
     let properties = [...schema.properties];
 
-    // Remove properties
+    // Remove properties (title and created_time are protected)
     if (input.removePropertyIds?.length) {
       const removeSet = new Set(input.removePropertyIds);
-      properties = properties.filter((p) => p.type === 'title' || !removeSet.has(p.id));
+      properties = properties.filter(
+        (p) => p.type === 'title' || p.type === 'created_time' || !removeSet.has(p.id)
+      );
     }
 
     // Add new properties
@@ -692,11 +704,13 @@ export const databaseApi = {
       for (const update of input.updateProperties) {
         const idx = properties.findIndex((p) => p.id === update.id);
         if (idx !== -1) {
+          // created_time is read-only except for column width
+          const isSystemProp = properties[idx].type === 'created_time';
           properties[idx] = {
             ...properties[idx],
-            ...(update.name !== undefined && { name: update.name }),
+            ...(!isSystemProp && update.name !== undefined && { name: update.name }),
             ...(update.width !== undefined && { width: update.width }),
-            ...(update.options !== undefined && { options: update.options }),
+            ...(!isSystemProp && update.options !== undefined && { options: update.options }),
           };
         }
       }
@@ -754,9 +768,14 @@ export const databaseApi = {
 
     const existingProps = row.properties ?? {};
 
+    // created_time is read-only and synthesized — never stored in the blob
+    const writableProps = Object.fromEntries(
+      Object.entries(input.properties).filter(([, value]) => value.type !== 'created_time')
+    );
+
     // Check if title property is being updated
     let titleUpdate: { title?: string } = {};
-    for (const value of Object.values(input.properties)) {
+    for (const value of Object.values(writableProps)) {
       if (value.type === 'title') {
         titleUpdate.title = value.value;
       }
@@ -764,7 +783,7 @@ export const databaseApi = {
 
     const updated = storage.updatePage(pageId, {
       ...titleUpdate,
-      properties: { ...existingProps, ...input.properties },
+      properties: { ...existingProps, ...writableProps },
     });
     if (!updated) throw new Error('Row not found');
     return Promise.resolve(updated);

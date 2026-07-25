@@ -202,7 +202,9 @@ export default function TableView({ canEdit }: TableViewProps) {
                     property={prop}
                     value={prop.type === 'title'
                       ? { type: 'title', value: row.title }
-                      : row.properties[prop.id]
+                      : prop.type === 'created_time'
+                        ? { type: 'created_time', value: row.createdAt }
+                        : row.properties[prop.id]
                     }
                     onChange={(value) => handleCellChange(row.id, prop.id, value)}
                     canEdit={canEdit}
@@ -404,7 +406,9 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
             property={prop}
             value={prop.type === 'title'
               ? { type: 'title', value: row.title }
-              : row.properties[prop.id]
+              : prop.type === 'created_time'
+                ? { type: 'created_time', value: row.createdAt }
+                : row.properties[prop.id]
             }
             onChange={(value) => onCellChange(row.id, prop.id, value)}
             canEdit={canEdit}
@@ -431,6 +435,7 @@ function TableHeader({ property, sortConfig, onSort }: TableHeaderProps) {
       case 'select': return '▼';
       case 'multi_select': return '◆';
       case 'date': return '📅';
+      case 'created_time': return '🕐';
       case 'checkbox': return '☐';
       case 'url': return '🔗';
       case 'person': return '👤';

@@ -65,6 +65,9 @@ interface ViewConfig {
   filters: FilterRule[];
   columnWidths: Record<string, number>;
   hiddenPropertyIds: string[];
+  // System properties (created_time) are hidden unless listed here — inverted
+  // semantics so configs saved before a system property existed keep it hidden.
+  shownSystemPropertyIds: string[];
   propertyOrder: string[];
   kanban?: KanbanConfig;
 }
@@ -172,7 +175,7 @@ export interface DatabaseInstanceState {
 }
 
 /** Order properties: title always first, then by view-local order (fallback to schema order). */
-function getOrderedProperties(
+export function getOrderedProperties(
   properties: PropertyDefinition[],
   propertyOrder: string[],
 ): PropertyDefinition[] {
@@ -223,6 +226,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     filters: savedConfig?.filters ?? [],
     columnWidths: savedConfig?.columnWidths ?? {},
     hiddenPropertyIds: (savedConfig as Partial<ViewConfig>)?.hiddenPropertyIds ?? [],
+    shownSystemPropertyIds: (savedConfig as Partial<ViewConfig>)?.shownSystemPropertyIds ?? [],
     propertyOrder: (savedConfig as Partial<ViewConfig>)?.propertyOrder ?? [],
     kanban: (savedConfig as Partial<ViewConfig>)?.kanban,
   };
@@ -288,6 +292,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
           filters: def.filters,
           columnWidths: {},
           hiddenPropertyIds: def.hiddenPropertyIds,
+          shownSystemPropertyIds: def.shownSystemPropertyIds ?? [],
           propertyOrder: def.propertyOrder,
           kanban: def.kanban,
         };
@@ -600,7 +605,21 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     togglePropertyVisibility: (propertyId) => {
-      const { viewConfig } = get();
+      const { viewConfig, schema } = get();
+      const prop = schema?.properties.find((p) => p.id === propertyId);
+
+      // System properties use inverted visibility (hidden unless shown)
+      if (prop?.type === 'created_time') {
+        const shown = viewConfig.shownSystemPropertyIds;
+        const newShown = shown.includes(propertyId)
+          ? shown.filter((id) => id !== propertyId)
+          : [...shown, propertyId];
+        const newConfig = { ...viewConfig, shownSystemPropertyIds: newShown };
+        set({ viewConfig: newConfig });
+        persist(newConfig);
+        return;
+      }
+
       const hidden = viewConfig.hiddenPropertyIds;
       const newHidden = hidden.includes(propertyId)
         ? hidden.filter((id) => id !== propertyId)
@@ -789,6 +808,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         sort: viewConfig.sort,
         filters: viewConfig.filters,
         hiddenPropertyIds: viewConfig.hiddenPropertyIds,
+        shownSystemPropertyIds: viewConfig.shownSystemPropertyIds,
         propertyOrder: viewConfig.propertyOrder,
         viewType: viewConfig.viewType,
         kanban: viewConfig.kanban,
@@ -820,6 +840,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         filters: def.filters,
         columnWidths: {},
         hiddenPropertyIds: def.hiddenPropertyIds,
+        shownSystemPropertyIds: def.shownSystemPropertyIds ?? [],
         propertyOrder: def.propertyOrder,
         kanban: def.kanban,
       };
@@ -839,7 +860,13 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
       const ordered = getOrderedProperties(schema.properties, viewConfig.propertyOrder);
       const hiddenSet = new Set(viewConfig.hiddenPropertyIds);
-      return ordered.filter((p) => p.type === 'title' || !hiddenSet.has(p.id));
+      const shownSystemSet = new Set(viewConfig.shownSystemPropertyIds);
+      return ordered.filter((p) => {
+        if (p.type === 'title') return true;
+        // System properties are hidden unless explicitly shown
+        if (p.type === 'created_time') return shownSystemSet.has(p.id);
+        return !hiddenSet.has(p.id);
+      });
     },
 
     getAllPropertiesOrdered: () => {

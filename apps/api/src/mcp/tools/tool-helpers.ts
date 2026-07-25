@@ -160,6 +160,10 @@ function mapFilterValue(prop: PropertyDefinition, value: string): string {
         );
       }
       return value;
+    case 'created_time':
+      // The service compares created_time date-only (YYYY-MM-DD); normalize
+      // full ISO timestamps agents may pass.
+      return value.slice(0, 10);
     default:
       return value;
   }
@@ -227,6 +231,12 @@ export async function humanizeRows(
       if (prop.type === 'reference') {
         const humanized = await humanizeReference(row, prop, accessCache);
         if (humanized) properties[prop.name] = humanized;
+        continue;
+      }
+
+      // created_time lives on the row, not in the properties blob.
+      if (prop.type === 'created_time') {
+        properties[prop.name] = row.createdAt;
         continue;
       }
 
