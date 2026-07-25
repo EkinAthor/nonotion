@@ -6,6 +6,9 @@ import { getDatabaseInstance } from './databaseInstanceRegistry';
 const EXPANDED_NODES_KEY = 'nonotion_expanded_nodes';
 const STARRED_EXPANDED_NODES_KEY = 'nonotion_starred_expanded_nodes';
 
+// Dedupe concurrent lazy single-page loads (see `loadPage`).
+const inFlightPageLoads = new Set<string>();
+
 function loadExpandedSet(key: string): Set<string> {
   try {
     const stored = localStorage.getItem(key);
@@ -35,6 +38,7 @@ interface PageState {
   // Actions
   fetchPages: () => Promise<void>;
   fetchPageOrder: () => Promise<void>;
+  loadPage: (id: string) => Promise<void>;
   setCurrentPage: (id: string | null) => void;
   createPage: (input: CreatePageInput) => Promise<Page>;
   updatePage: (id: string, input: UpdatePageInput) => void;
@@ -78,6 +82,26 @@ export const usePageStore = create<PageState>((set, get) => ({
       set({ rootPageOrder: order.rootPageOrder, starredPageOrder: order.starredPageOrder });
     } catch {
       // Non-critical, order just won't be applied
+    }
+  },
+
+  // Lazily fetch a single page into the store. Database row-pages are excluded from the initial
+  // fetchPages() payload (see GET /api/pages), so opening a row (full page or split view) needs
+  // this to populate the store. No-op if the page is already loaded or a load is in flight.
+  loadPage: async (id) => {
+    if (get().pages.has(id) || inFlightPageLoads.has(id)) return;
+    inFlightPageLoads.add(id);
+    try {
+      const page = await pagesApi.get(id);
+      set((state) => {
+        const pages = new Map(state.pages);
+        pages.set(page.id, page);
+        return { pages };
+      });
+    } catch {
+      // Missing/inaccessible page — PageContent will keep showing its not-found/loading state.
+    } finally {
+      inFlightPageLoads.delete(id);
     }
   },
 
@@ -382,9 +406,15 @@ export const usePageStore = create<PageState>((set, get) => ({
 
       return {
         ...page,
-        children: page.childIds
-          .map(buildTree)
-          .filter((n): n is PageTreeNode => n !== null),
+        // Databases are leaf nodes in the sidebar — their children are database rows, which are
+        // accessed via the database view, not listed in the tree. This also stops a row that was
+        // lazily loaded into the store (when opened) from reappearing under its database.
+        children:
+          page.type === 'database'
+            ? []
+            : page.childIds
+                .map(buildTree)
+                .filter((n): n is PageTreeNode => n !== null),
       };
     };
 

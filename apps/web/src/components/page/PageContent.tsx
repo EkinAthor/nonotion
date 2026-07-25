@@ -25,10 +25,11 @@ interface PageContentProps {
 
 export default function PageContent({ pageId, variant = 'full', onClose, onOpenFullPage }: PageContentProps) {
   const navigate = useNavigate();
-  const { pages, updatePage, deletePage } = usePageStore();
+  const { pages, updatePage, deletePage, loadPage } = usePageStore();
   const { fetchBlocks, getBlocksForPage } = useBlockStore();
   const [permission, setPermission] = useState<PermissionLevel | null>(null);
   const [permissionLoading, setPermissionLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const realtimeConnected = usePresenceStore((s) => s.connected);
@@ -68,10 +69,29 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
     }
   }, [pageId, pageType, fetchBlocks]);
 
+  // Lazy-load the page if it isn't in the store. Database row-pages are excluded from the initial
+  // fetchPages() payload, so opening a row (full page or split view) fetches it on demand here.
+  useEffect(() => {
+    if (page) {
+      setNotFound(false);
+      return;
+    }
+    let cancelled = false;
+    setNotFound(false);
+    loadPage(pageId).finally(() => {
+      if (!cancelled && !usePageStore.getState().pages.has(pageId)) {
+        setNotFound(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId, page, loadPage]);
+
   if (!page) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-notion-text-secondary">Page not found</p>
+        <p className="text-notion-text-secondary">{notFound ? 'Page not found' : 'Loading...'}</p>
       </div>
     );
   }

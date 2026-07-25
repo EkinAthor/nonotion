@@ -12,10 +12,12 @@ export async function pagesRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', mustChangePasswordMiddleware);
   fastify.addHook('preHandler', approvedUserMiddleware);
 
-  // GET /api/pages - List all pages user has access to
+  // GET /api/pages - List navigable pages the user can access (sidebar tree).
+  // Excludes database row-pages (except starred ones) to keep the payload small — rows are
+  // fetched on demand via the database view / GET /api/pages/:id.
   fastify.get('/api/pages', async (request, reply) => {
     const pages = await permissionService.getUserAccessiblePages(request.userId!, { isWorkspaceOwner: request.isOwner });
-    return reply.send({ data: pages, success: true });
+    return reply.send({ data: pageService.filterNavigablePages(pages), success: true });
   });
 
   // GET /api/pages/order - Get page order settings

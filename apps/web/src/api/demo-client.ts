@@ -169,8 +169,16 @@ export const sharesApi = {
 // ============ PAGES API ============
 
 export const pagesApi = {
+  // Mirror the real API: return only "navigable" pages (documents + databases, plus starred rows),
+  // excluding database row-pages. Rows are fetched on demand via pagesApi.get (see loadPage).
   getAll: (): Promise<Page[]> => {
-    return Promise.resolve(storage.getAllPages());
+    const pages = storage.getAllPages();
+    const byId = new Map(pages.map((p) => [p.id, p]));
+    const navigable = pages.filter((p) => {
+      if (!p.parentId || p.isStarred) return true;
+      return byId.get(p.parentId)?.type !== 'database';
+    });
+    return Promise.resolve(navigable);
   },
 
   get: (id: string): Promise<Page> => {
