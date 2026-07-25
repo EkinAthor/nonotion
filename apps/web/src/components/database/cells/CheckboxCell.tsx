@@ -15,7 +15,7 @@ export default function CheckboxCell({ value, onChange, canEdit }: CheckboxCellP
 
   return (
     <div
-      className={`flex items-center justify-center ${canEdit ? 'cursor-pointer' : ''}`}
+      className={`flex items-center justify-start ${canEdit ? 'cursor-pointer' : ''}`}
       onClick={handleClick}
     >
       <div
