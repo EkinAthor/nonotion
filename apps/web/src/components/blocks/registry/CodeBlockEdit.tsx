@@ -11,6 +11,7 @@ import 'prismjs/components/prism-sql';
 import type { Block, CodeBlockContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { useBlockContext } from '@/contexts/BlockContext';
+import { undoManager } from '@/lib/undo/undo-manager';
 
 interface CodeBlockEditProps {
   block: Block;
@@ -38,10 +39,27 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
   const { updateBlock, focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
   const { focusNextBlock, focusPreviousBlock } = useBlockContext();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // Latest local values for use in stable callbacks (burst flusher, timers)
+  const codeRef = useRef(code);
+  const languageRef = useRef(language);
+  // Typing-burst state for undo coalescing (null = no open burst)
+  const burstBaselineRef = useRef<string | null>(null);
+  const burstTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Sync local state when block content changes externally
   useEffect(() => {
-    setCode(content.code || '');
+    if ((content.code || '') !== codeRef.current) {
+      // External change (remote edit, undo application) — must not be
+      // attributed to a local typing burst
+      burstBaselineRef.current = null;
+      if (burstTimerRef.current) {
+        clearTimeout(burstTimerRef.current);
+        burstTimerRef.current = undefined;
+      }
+      codeRef.current = content.code || '';
+      setCode(content.code || '');
+    }
+    languageRef.current = content.language || '';
     setLanguage(content.language || '');
   }, [content.code, content.language]);
 
@@ -70,35 +88,125 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
+      // history:'skip' — code typing lands in undo history as coalesced
+      // bursts (commitBurst), language changes record explicitly
       debounceRef.current = setTimeout(async () => {
-        await updateBlock(block.id, {
-          content: { code: newCode, language: newLanguage || undefined },
-        });
+        await updateBlock(
+          block.id,
+          { content: { code: newCode, language: newLanguage || undefined } },
+          { history: 'skip' }
+        );
       }, 500);
     },
     [block.id, updateBlock]
   );
 
+  // Commits the open typing burst: force-saves un-flushed code to the store
+  // and records one coalesced text_edit undo step. No-op when no burst open.
+  const commitBurst = useCallback(() => {
+    if (burstTimerRef.current) {
+      clearTimeout(burstTimerRef.current);
+      burstTimerRef.current = undefined;
+    }
+    const baseline = burstBaselineRef.current;
+    if (baseline === null) return;
+    burstBaselineRef.current = null;
+
+    const current = codeRef.current;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
+    const storeBlock = useBlockStore.getState().getBlockById(block.id);
+    if (storeBlock && 'code' in storeBlock.content && storeBlock.content.code !== current) {
+      updateBlock(
+        block.id,
+        { content: { code: current, language: languageRef.current || undefined } },
+        { history: 'skip' }
+      ).catch(() => {});
+    }
+
+    if (baseline !== current) {
+      undoManager.record(
+        { kind: 'text_edit', blockId: block.id, before: baseline, after: current },
+        block.pageId
+      );
+    }
+  }, [block.id, block.pageId, updateBlock]);
+
+  const commitBurstRef = useRef(commitBurst);
+  useEffect(() => {
+    commitBurstRef.current = commitBurst;
+  }, [commitBurst]);
+
+  // Register the burst flusher; cleanup commits any open burst on unmount
+  useEffect(() => {
+    undoManager.registerBurstFlusher(block.id, () => commitBurstRef.current());
+    return () => {
+      commitBurstRef.current();
+      undoManager.unregisterBurstFlusher(block.id);
+    };
+  }, [block.id]);
+
+  // Leaving edit mode ends the typing burst
+  useEffect(() => {
+    if (!isEditing) commitBurstRef.current();
+  }, [isEditing]);
+
+  const applyLocalCodeChange = useCallback(
+    (newCode: string) => {
+      if (burstBaselineRef.current === null) {
+        burstBaselineRef.current = codeRef.current;
+      }
+      if (burstTimerRef.current) {
+        clearTimeout(burstTimerRef.current);
+      }
+      burstTimerRef.current = setTimeout(() => commitBurstRef.current(), 1000);
+      codeRef.current = newCode;
+      setCode(newCode);
+      saveContent(newCode, languageRef.current);
+    },
+    [saveContent]
+  );
+
   const handleCodeChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newCode = e.target.value;
-      setCode(newCode);
-      saveContent(newCode, language);
+      applyLocalCodeChange(e.target.value);
     },
-    [language, saveContent]
+    [applyLocalCodeChange]
   );
 
   const handleLanguageChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newLanguage = e.target.value;
       setLanguage(newLanguage);
-      saveContent(code, newLanguage);
+      languageRef.current = newLanguage;
+      // Flush code typing first, then record the language switch as its own
+      // one-shot undo step (default history)
+      commitBurstRef.current();
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = undefined;
+      }
+      updateBlock(block.id, {
+        content: { code: codeRef.current, language: newLanguage || undefined },
+      }).catch(() => {});
     },
-    [code, saveContent]
+    [block.id, updateBlock]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Document-wide undo/redo — suppress the textarea's native undo
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        if (e.key.toLowerCase() === 'y' || e.shiftKey) {
+          undoManager.redo(block.pageId);
+        } else {
+          undoManager.undo(block.pageId);
+        }
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         const textarea = textareaRef.current;
@@ -106,8 +214,7 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
           const newCode = code.substring(0, start) + '  ' + code.substring(end);
-          setCode(newCode);
-          saveContent(newCode, language);
+          applyLocalCodeChange(newCode);
           // Set cursor position after tab
           setTimeout(() => {
             textarea.setSelectionRange(start + 2, start + 2);
@@ -138,7 +245,7 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
         }
       }
     },
-    [code, language, saveContent, focusPreviousBlock, focusNextBlock]
+    [code, block.pageId, applyLocalCodeChange, focusPreviousBlock, focusNextBlock]
   );
 
   // Get highlighted HTML

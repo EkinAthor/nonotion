@@ -284,6 +284,18 @@ The split view (`SidePanel` + `PageContent variant="peek"`) is reflected in the 
   - Both effects no-op when already consistent, so React StrictMode's double-invoked effects are harmless.
 - **Call sites unchanged**: `TableView`/`KanbanView`/`DatabaseToolbar`/`SidePanel`/`PageContent` still call `openPeekPanel`/`closePeekPanel`; the URL follows. `PageView` no longer force-closes the peek on `pageId` change — the URL→store effect handles closing when a target URL has no `peek` param.
 
+### 26. Undo/Redo (Document-Wide)
+Google-Docs-style unified undo/redo for the page canvas: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y. One per-page, in-memory history covering text edits AND structural ops (create/delete/split/merge, type changes, reorder, multi-delete). Page title and database ops are NOT covered. History clears on navigate-away/reload (`undoManager.clearPage` in `PageContent`'s per-pageId effect cleanup). Frontend-only — no backend/shared changes, demo mode works automatically.
+
+- **UndoManager** (`apps/web/src/lib/undo/undo-manager.ts`): plain module (not Zustand — no reactive consumers, callable from store module scope). Per-page undo/redo stacks of `UndoEntry { steps: UndoStep[], focusBefore }`; step kinds: `text_edit` (before/after HTML or code string), `create`/`delete` (full `BlockSnapshot`, `delete` also carries `orderedIdsBefore`), `content_set`, `type_change`, `reorder`. Cap 100 entries/page. Applying undo/redo replays inverse ops through blockStore mutations with `{ history: 'skip' }`, so optimistic updates, `pendingCreates` sequencing, and the API boundary are reused. Per-page serial queue for rapid Ctrl+Z. `idRemap` chain: undoing a delete re-creates the block (hard deletes — new id minted); all step ids resolve through the chain at apply time.
+- **Recording** happens ONLY inside blockStore local mutations (`createBlock`/`updateBlock`/`deleteBlock`/`reorderBlocks`/`changeBlockType`), in the synchronous optimistic section, guarded by `shouldRecord(opts)` (`history: 'skip'` + `undoManager.isApplying()`). `applyRemote*`/`fetchBlocks` never record → remote users' changes are never undoable locally (own-changes-only under realtime, by construction).
+- **Text bursts**: TipTap's per-block StarterKit history is DISABLED (`history: false` in `useBlockEditor`). Typing coalesces into one `text_edit` step per burst — committed on ~1s pause, blur, structural op, or undo keypress. `commitBurst` force-saves un-flushed editor content to the store (`history:'skip'`) and records baseline→current. **Invariant**: `record()` of a structural step and `transact()` call `flushBursts()` first, and store methods that snapshot before-state flush before capturing — so snapshots are always fresh. `CodeBlockEdit` mirrors the burst pattern for its textarea (native undo suppressed via keydown intercept).
+- **Grouping**: `undoManager.transact(pageId, fn)` folds all steps recorded in `fn` into one entry. Call sites: Enter-split (`useBlockEditor` Enter handler), Backspace-merge (`BlockWrapper.deleteAndMergeToPrevious`), multi-line paste, slash conversion (`selectSlashCommand`), `deleteSelectedBlocks`.
+- **Conflict rule (skip)**: each step apply checks the block's current state matches the step's expected state (text/content/type equality); mismatch (remote edit, failed create) → step silently skipped. Never overwrites others' work despite server LWW.
+- **Key interception**: `BlockKeyboardExtension` Mod-z/Shift-Mod-z/Mod-y (always consume, even on empty stack, to suppress native contenteditable undo); document-level capture fallback in `BlockCanvas` for no-focus/multi-select states (bails out for contenteditable/textarea/input/select); `CodeBlockEdit` textarea keydown.
+- **Store id invariant (bug fixed here)**: `reorderBlocks`' success path must MERGE server order/version into existing store blocks — never replace the array with the server response, which would swap canonical temp ids for real ids (remounting editors and breaking undo's id chain).
+- **Dev introspection**: `window.__undoDebug` (DEV only) exposes `stacks(pageId)`/`detail(pageId)` for tests/debugging.
+
 ## Critical Files
 
 | File | Purpose |
@@ -292,7 +304,8 @@ The split view (`SidePanel` + `PageContent variant="peek"`) is reflected in the 
 | `packages/shared/src/schemas/block.ts` | Zod validation for block API requests |
 | `apps/api/src/storage/sqlite-full-storage.ts` | Unified SQLite storage for all entities (pages, blocks, users, permissions, files) |
 | `apps/web/src/stores/pageStore.ts` | Page state with optimistic update/delete |
-| `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates + temp ID mapping |
+| `apps/web/src/stores/blockStore.ts` | Block state with optimistic updates + temp ID mapping + undo recording |
+| `apps/web/src/lib/undo/undo-manager.ts` | Document-wide undo/redo manager (per-page stacks, bursts, groups, id remap) |
 | `apps/web/src/stores/databaseStore.ts` | Database state with optimistic row/property updates |
 | `apps/web/src/components/blocks/BlockCanvas.tsx` | Main editing surface with drag-and-drop |
 | `apps/web/src/lib/tiptap/useBlockEditor.ts` | Shared TipTap editor hook with auto-save, keyboard handling, slash commands |

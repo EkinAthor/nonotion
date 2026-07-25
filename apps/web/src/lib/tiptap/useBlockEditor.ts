@@ -19,6 +19,11 @@ import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/regis
 import { stripOuterPTag } from './html-utils';
 import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { inlineMarkdownToHtml } from '@/lib/html-markdown';
+import { undoManager } from '@/lib/undo/undo-manager';
+
+// One undo step per typing burst; a burst commits after this pause (or on
+// blur / structural op / undo keypress)
+const BURST_PAUSE_MS = 1000;
 
 function parseLineForBlockType(line: string): PasteBlockData {
   const { type, text, checked } = parseMarkdownLine(line);
@@ -125,6 +130,15 @@ export function useBlockEditor({
         return;
       }
 
+      // Open a typing burst (undo unit) capturing the pre-change content
+      if (burstBaselineRef.current === null) {
+        burstBaselineRef.current = lastKnownContentRef.current;
+      }
+      if (burstTimerRef.current) {
+        clearTimeout(burstTimerRef.current);
+      }
+      burstTimerRef.current = setTimeout(() => commitBurstRef.current(), BURST_PAUSE_MS);
+
       // Update last known content to match what we're about to save
       lastKnownContentRef.current = text;
 
@@ -133,7 +147,8 @@ export function useBlockEditor({
         clearTimeout(debounceRef.current);
       }
 
-      // Debounce save by 500ms
+      // Debounce save by 500ms. history:'skip' — typing lands in undo history
+      // as coalesced bursts (commitBurst), not per-save entries.
       debounceRef.current = setTimeout(async () => {
         const currentBlock = blockRef.current;
         const content: BlockContent = headingLevel
@@ -142,7 +157,7 @@ export function useBlockEditor({
 
         pendingSavesRef.current.add(text);
         try {
-          await updateBlock(currentBlock.id, { content });
+          await updateBlock(currentBlock.id, { content }, { history: 'skip' });
         } finally {
           pendingSavesRef.current.delete(text);
         }
@@ -150,6 +165,66 @@ export function useBlockEditor({
     },
     [headingLevel, updateBlock]
   );
+
+  // Commits the open typing burst: force-saves the editor content to the store
+  // (so structural before-snapshots are fresh) and records one coalesced
+  // text_edit undo step. Safe to call anytime — no-op when no burst is open.
+  const commitBurst = useCallback(() => {
+    if (burstTimerRef.current) {
+      clearTimeout(burstTimerRef.current);
+      burstTimerRef.current = undefined;
+    }
+    const baseline = burstBaselineRef.current;
+    if (baseline === null) return;
+    burstBaselineRef.current = null;
+
+    const currentEditor = editorRef.current;
+    const current = currentEditor && !currentEditor.isDestroyed
+      ? stripOuterPTag(currentEditor.getHTML())
+      : lastKnownContentRef.current;
+
+    // Force-flush any un-saved text (covers both the pending 500ms debounce
+    // and paths that cancelled it, e.g. markdown/slash conversions)
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
+    const currentBlock = blockRef.current;
+    const storeBlock = useBlockStore.getState().getBlockById(currentBlock.id);
+    if (storeBlock && getBlockText(storeBlock.content) !== current) {
+      const content: BlockContent = headingLevel
+        ? { ...currentBlock.content, text: current, level: headingLevel }
+        : { ...currentBlock.content, text: current };
+      pendingSavesRef.current.add(current);
+      updateBlock(currentBlock.id, { content }, { history: 'skip' })
+        .catch(() => {})
+        .finally(() => {
+          pendingSavesRef.current.delete(current);
+        });
+    }
+
+    if (baseline !== current) {
+      undoManager.record(
+        { kind: 'text_edit', blockId: currentBlock.id, before: baseline, after: current },
+        currentBlock.pageId
+      );
+    }
+  }, [headingLevel, updateBlock]);
+
+  const commitBurstRef = useRef(commitBurst);
+  useEffect(() => {
+    commitBurstRef.current = commitBurst;
+  }, [commitBurst]);
+
+  // Register this block's burst flusher so structural ops / undo can commit
+  // open bursts before capturing snapshots. Cleanup commits on unmount.
+  useEffect(() => {
+    undoManager.registerBurstFlusher(block.id, () => commitBurstRef.current());
+    return () => {
+      commitBurstRef.current();
+      undoManager.unregisterBurstFlusher(block.id);
+    };
+  }, [block.id]);
 
   // Flush pending save on unmount instead of discarding
   useEffect(() => {
@@ -164,8 +239,9 @@ export function useBlockEditor({
           const content: BlockContent = headingLevel
             ? { ...currentBlock.content, text: html, level: headingLevel }
             : { ...currentBlock.content, text: html };
-          // Fire-and-forget — component is unmounting
-          updateBlock(currentBlock.id, { content });
+          // Fire-and-forget — component is unmounting. history:'skip' — the
+          // burst flusher records the coalesced undo step for this text.
+          updateBlock(currentBlock.id, { content }, { history: 'skip' });
         }
       }
     };
@@ -182,6 +258,9 @@ export function useBlockEditor({
   const lastKnownContentRef = useRef(getBlockText(block.content));
   // Flag to skip saving during external content sync
   const isSyncingExternalContentRef = useRef(false);
+  // Typing-burst state for undo coalescing (null = no open burst)
+  const burstBaselineRef = useRef<string | null>(null);
+  const burstTimerRef = useRef<ReturnType<typeof setTimeout>>();
   // Track pending saves to prevent false sync triggers from optimistic updates
   const pendingSavesRef = useRef<Set<string>>(new Set());
   // Refs for callbacks - handling things like preserving position of block indent
@@ -238,38 +317,44 @@ export function useBlockEditor({
 
   const selectSlashCommand = useCallback(
     async (type: BlockType, action?: string) => {
-      const currentEditor = editorRef.current;
-      if (currentEditor && slashStartPosRef.current !== null) {
-        // Delete the slash and query text (slash is at position 1, delete from 1 to cursor)
-        const from = slashStartPosRef.current;
-        const to = currentEditor.state.selection.from;
-        currentEditor.chain().focus().deleteRange({ from, to }).run();
+      // Group the slash-text cleanup + type conversion as ONE undo entry (the
+      // "/query" typing itself was flushed as its own entry by transact)
+      await undoManager.transact(blockRef.current.pageId, () => {
+        const currentEditor = editorRef.current;
+        if (currentEditor && slashStartPosRef.current !== null) {
+          // Delete the slash and query text (slash is at position 1, delete from 1 to cursor)
+          const from = slashStartPosRef.current;
+          const to = currentEditor.state.selection.from;
+          currentEditor.chain().focus().deleteRange({ from, to }).run();
 
-        // Cancel any pending debounced save
-        if (debounceRef.current) {
-          clearTimeout(debounceRef.current);
+          // Cancel any pending debounced save
+          if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+          }
+          // Clear the ref so the unmount-flush cleanup doesn't fire a stale save
+          debounceRef.current = undefined;
+
+          // Save cleaned content for text-based types only.
+          // page_link content is set entirely by the action handler — saving
+          // paragraph text here would race with it and overwrite linkedPageId.
+          // history:'skip' — the burst flush inside changeBlockType records the
+          // text change into this group as a text_edit step.
+          if (type !== 'page_link' && type !== 'database_view') {
+            const cleanedText = stripOuterPTag(currentEditor.getHTML());
+            const currentBlock = blockRef.current;
+            const content: BlockContent = headingLevel
+              ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
+              : { ...currentBlock.content, text: cleanedText };
+            updateBlock(currentBlock.id, { content }, { history: 'skip' });
+          }
         }
-        // Clear the ref so the unmount-flush cleanup doesn't fire a stale save
-        debounceRef.current = undefined;
+        closeSlashMenu();
 
-        // Save cleaned content for text-based types only.
-        // page_link content is set entirely by the action handler — saving
-        // paragraph text here would race with it and overwrite linkedPageId.
-        if (type !== 'page_link' && type !== 'database_view') {
-          const cleanedText = stripOuterPTag(currentEditor.getHTML());
-          const currentBlock = blockRef.current;
-          const content: BlockContent = headingLevel
-            ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
-            : { ...currentBlock.content, text: cleanedText };
-          updateBlock(currentBlock.id, { content });
+        if (onChangeBlockType) {
+          onChangeBlockType(type, undefined, action);
+          // Focus is handled by BlockWrapper setting focusBlockId after type change
         }
-      }
-      closeSlashMenu();
-
-      if (onChangeBlockType) {
-        onChangeBlockType(type, undefined, action);
-        // Focus is handled by BlockWrapper setting focusBlockId after type change
-      }
+      });
     },
     [closeSlashMenu, onChangeBlockType, block.id, headingLevel, updateBlock]
   );
@@ -370,35 +455,42 @@ export function useBlockEditor({
               const docEnd = view.state.doc.content.size - 1;
               const textAfterCursor = from < docEnd ? view.state.doc.textBetween(from, docEnd) : '';
 
-              // Delete text after cursor (it will be moved to a new block)
-              if (textAfterCursor) {
-                const tr = view.state.tr.deleteRange(from, docEnd);
-                view.dispatch(tr);
-              }
-
-              // Handle first line - if it has markdown and we're at start of empty block, change type
-              const currentText = view.state.doc.textContent;
-              if (firstLineHasMarkdown && (currentText === '' || from === 1)) {
-                // Don't insert text into editor - pass it to changeBlockType instead
-                // The editor will be replaced when block type changes
-                if (changeBlockTypeRef.current) {
-                  changeBlockTypeRef.current(firstLineData.type, getBlockText(firstLineData.content));
-                }
-              } else {
-                // Insert first line as-is at cursor position
-                const firstLine = lines[0];
-                if (firstLine) {
-                  const tr = view.state.tr.insertText(firstLine);
-                  view.dispatch(tr);
-                }
-              }
-
               // Parse remaining lines into blocks
               const remainingLines = lines.slice(1);
               const blocksToCreate: PasteBlockData[] = remainingLines.map(parseLineForBlockType);
 
-              // Create the remaining blocks (paste callback will handle textAfterCursor as final block)
-              pasteCallbackRef.current(blocksToCreate, textAfterCursor);
+              // Commit typing-so-far as its own undo entry, then group the whole
+              // paste (source-block change + created blocks) as ONE entry
+              commitBurstRef.current();
+              undoManager.transact(blockRef.current.pageId, async () => {
+                // Delete text after cursor (it will be moved to a new block)
+                if (textAfterCursor) {
+                  const tr = view.state.tr.deleteRange(from, docEnd);
+                  view.dispatch(tr);
+                }
+
+                // Handle first line - if it has markdown and we're at start of empty block, change type
+                const currentText = view.state.doc.textContent;
+                if (firstLineHasMarkdown && (currentText === '' || from === 1)) {
+                  // Don't insert text into editor - pass it to changeBlockType instead
+                  // The editor will be replaced when block type changes
+                  if (changeBlockTypeRef.current) {
+                    changeBlockTypeRef.current(firstLineData.type, getBlockText(firstLineData.content));
+                  }
+                } else {
+                  // Insert first line as-is at cursor position
+                  const firstLine = lines[0];
+                  if (firstLine) {
+                    const tr = view.state.tr.insertText(firstLine);
+                    view.dispatch(tr);
+                  }
+                  // Record this block's text change into the group
+                  commitBurstRef.current();
+                }
+
+                // Create the remaining blocks (paste callback will handle textAfterCursor as final block)
+                await pasteCallbackRef.current?.(blocksToCreate, textAfterCursor);
+              });
 
               event.preventDefault();
               return true;
@@ -498,6 +590,9 @@ export function useBlockEditor({
             return true;
           }
 
+          // Commit typing-so-far as its own undo entry before the split group
+          commitBurstRef.current();
+
           let htmlAfter = '';
           if (from < docEnd) {
             // Extract the content after cursor as a slice
@@ -510,13 +605,18 @@ export function useBlockEditor({
             htmlAfter = temp.innerHTML;
           }
 
-          // Delete text after cursor from current block
-          if (from < docEnd) {
-            editor.commands.deleteRange({ from, to: docEnd });
-          }
+          // Group the split (source-block truncation + new block) as ONE undo entry
+          undoManager.transact(blockRef.current.pageId, () => {
+            // Delete text after cursor from current block
+            if (from < docEnd) {
+              editor.commands.deleteRange({ from, to: docEnd });
+              // Record the truncation into the group as a text_edit step
+              commitBurstRef.current();
+            }
 
-          // Call callback to create new block with the HTML content
-          createCallbackRef.current?.(htmlAfter);
+            // Call callback to create new block with the HTML content
+            createCallbackRef.current?.(htmlAfter);
+          });
           return true;
         },
         'Shift-Enter': () => {
@@ -621,6 +721,20 @@ export function useBlockEditor({
           }
           return false;
         },
+        // Document-wide undo/redo — always consume so the browser's native
+        // contenteditable undo never fires, even on an empty stack
+        'Mod-z': () => {
+          undoManager.undo(blockRef.current.pageId);
+          return true;
+        },
+        'Shift-Mod-z': () => {
+          undoManager.redo(blockRef.current.pageId);
+          return true;
+        },
+        'Mod-y': () => {
+          undoManager.redo(blockRef.current.pageId);
+          return true;
+        },
         Tab: () => {
           // Handle indent for list blocks
           if (indentCallbackRef.current) {
@@ -654,6 +768,8 @@ export function useBlockEditor({
         horizontalRule: false,
         dropcursor: false,
         gapcursor: false,
+        // Per-block history is replaced by the document-wide undo manager
+        history: false,
         // Keep code (inline) enabled - removed code: false
       }),
       Placeholder.configure({
@@ -745,6 +861,8 @@ export function useBlockEditor({
       getRealtimeManager()?.updateActiveBlock(block.id);
     },
     onBlur: () => {
+      // Leaving the block ends the typing burst
+      commitBurstRef.current();
       getRealtimeManager()?.updateActiveBlock(null);
     },
     editorProps: {
@@ -788,6 +906,14 @@ export function useBlockEditor({
       // Cancel any pending save since we're about to overwrite with external content
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+      }
+
+      // Externally-applied content (remote edit, undo, merge) must not be
+      // attributed to a local typing burst
+      burstBaselineRef.current = null;
+      if (burstTimerRef.current) {
+        clearTimeout(burstTimerRef.current);
+        burstTimerRef.current = undefined;
       }
 
       // Set flag to prevent onUpdate from saving during sync
