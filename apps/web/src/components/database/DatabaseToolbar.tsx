@@ -41,6 +41,7 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     toggleKanbanColumnVisibility,
     setKanbanColumnOrder,
     getSelectProperties,
+    getPrefillFromFilters,
     schema,
     activeDatabaseId,
     addRow,
@@ -87,14 +88,16 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     if (!activeDatabaseId || isCreating) return;
     setIsCreating(true);
     try {
-      const page = await createPage({ title: 'Untitled', parentId: activeDatabaseId });
+      // Pre-fill properties pinned by the active filters so the new row stays in view.
+      const prefill = getPrefillFromFilters();
+      const page = await createPage({ title: 'Untitled', parentId: activeDatabaseId, properties: prefill });
       addRow({
         id: page.id,
         title: page.title,
         icon: page.icon,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
-        properties: {},
+        properties: prefill,
       });
       openPeekPanel(page.id);
     } finally {

@@ -26,6 +26,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Page sharing with permission levels (owner/editor/viewer)
 - Database pages with table view and properties (rename, delete, reorder, hide/show columns per view); databases appear as single links in the sidebar (rows are accessed via the database view) and their rows are loaded on demand, keeping the initial workspace load light
 - "New" button in the database toolbar creates a page and opens it immediately in split view
+- New rows created in a filtered database view are pre-filled with the filtered attribute values (text, select, multi-select, checkbox, url, person, reference), so they match the active filter
 - Split view is reflected in the URL (`?peek=<pageId>`), so it survives a page reload and can be shared/opened via a copied link
 - Database references: a property linking records to rows in another database (many-to-many, clickable, searchable/filterable by name, permission-aware `#ref` redaction)
 - Read-only "Created" system property on every database: the row's creation timestamp, hidden by default, sortable (time precision) and filterable (date range), displayed as a date

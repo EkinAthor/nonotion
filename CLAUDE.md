@@ -308,6 +308,13 @@ Every database schema contains a read-only `created_time` system property (`{ id
 - **MCP**: `humanizeRows` emits `row.createdAt` under the property name; filter values are normalized to date-only in `mapFilterValue`.
 - Non-database pages already carry `createdAt`; no property surface exists for them yet (future use).
 
+### 28. Prefill Row Properties from Active Filters
+When a database view is filtered by concrete attribute values, a new row created in that view is pre-filled with those values so it satisfies the filter (and stays in view). Generalizes the Kanban-column pre-fill (`KanbanView.tsx` group-by select) to all filtered properties. Frontend-only — no backend/shared/demo changes.
+
+- **`getPrefillFromFilters()`** (getter on the database instance store, `DatabaseInstanceContext.tsx`): reads `viewConfig.filters` + `schema`, returns `Record<propId, PropertyValue>`. Only "positive equality" rules produce a prefill: `text`/`url` ← `contains` (substring); `select`/`person` ← `in` **when exactly one id** (multiple is ambiguous → skipped); `multi_select` ← `any`/`all` (all ids); `reference` ← `any`/`in` (all ids); `checkbox` ← `eq` (`"true"`/`"false"` → boolean). Skipped: `neq`/`empty`/`not_empty`/`gte`/`lte`, `date`/`created_time` (ranges), `title`.
+- **Wired into all three creation paths**: `TableView.handleAddRow`, `DatabaseToolbar.handleNewPage`, `KanbanView.handleAddRow` (merges prefill with the column's group-by value, column wins). Each passes the prefill to **both** `createPage({ properties })` (persists server-side in one request — `CreatePageInput.properties` already supported by `page-service.ts`, demo-client, and Zod) and `addRow({ properties })` (optimistic display).
+- **Covers embedded views automatically**: the inline database block (`DatabaseViewEdit.tsx`) reuses the same `TableView`/`KanbanView`/`DatabaseToolbar` + store.
+
 ## Critical Files
 
 | File | Purpose |
