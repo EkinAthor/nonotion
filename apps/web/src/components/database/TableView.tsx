@@ -28,7 +28,7 @@ interface TableViewProps {
 
 export default function TableView({ canEdit }: TableViewProps) {
   const navigate = useNavigate();
-  const { rows, total, isLoadingMore, loadMore, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties, reorderRows, selectedRowIds, selectAllAcross, toggleRowSelection, toggleSelectAll } = useDatabaseInstance();
+  const { rows, total, isLoadingMore, loadMore, activeDatabaseId, updateRowProperties, addRow, viewConfig, setSort, getVisibleProperties, getPrefillFromFilters, reorderRows, selectedRowIds, selectAllAcross, toggleRowSelection, toggleSelectAll } = useDatabaseInstance();
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -62,9 +62,12 @@ export default function TableView({ canEdit }: TableViewProps) {
     if (!activeDatabaseId || isAddingRow) return;
     setIsAddingRow(true);
     try {
+      // Pre-fill properties pinned by the active filters so the new row stays in view.
+      const prefill = getPrefillFromFilters();
       const page = await createPage({
         title: 'Untitled',
         parentId: activeDatabaseId,
+        properties: prefill,
       });
 
       addRow({
@@ -73,7 +76,7 @@ export default function TableView({ canEdit }: TableViewProps) {
         icon: page.icon,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
-        properties: {},
+        properties: prefill,
       });
     } finally {
       setIsAddingRow(false);

@@ -155,6 +155,10 @@ export interface DatabaseInstanceState {
   setKanbanColumnOrder: (order: string[]) => void;
   getSelectProperties: () => PropertyDefinition[];
 
+  // Build a prefill map of property values from the active filters, so a new
+  // row created in a filtered view satisfies that filter (and stays in view).
+  getPrefillFromFilters: () => Record<string, PropertyValue>;
+
   // Property options management
   updatePropertyOptions: (propertyId: string, options: SelectOption[]) => void;
 
@@ -792,6 +796,71 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const { schema } = get();
       if (!schema) return [];
       return schema.properties.filter((p) => p.type === 'select');
+    },
+
+    getPrefillFromFilters: () => {
+      const { schema, viewConfig } = get();
+      if (!schema) return {};
+
+      const propById = new Map(schema.properties.map((p) => [p.id, p]));
+      const prefill: Record<string, PropertyValue> = {};
+
+      for (const rule of viewConfig.filters) {
+        const prop = propById.get(rule.propertyId);
+        if (!prop) continue;
+        const raw = rule.value;
+        // Only "positive equality"-style rules with a concrete value produce a
+        // prefill. Ranges (date), negations, and emptiness checks are skipped.
+        switch (prop.type) {
+          case 'text':
+          case 'url': {
+            if (rule.operator === 'contains' && raw) {
+              prefill[prop.id] = { type: prop.type, value: raw };
+            }
+            break;
+          }
+          case 'select': {
+            // Single-value target: only prefill when exactly one option is
+            // pinned (multiple is ambiguous → leave empty).
+            if (rule.operator === 'in' && raw) {
+              const ids = raw.split(',').filter(Boolean);
+              if (ids.length === 1) prefill[prop.id] = { type: 'select', value: ids[0] };
+            }
+            break;
+          }
+          case 'person': {
+            if (rule.operator === 'in' && raw) {
+              const ids = raw.split(',').filter(Boolean);
+              if (ids.length === 1) prefill[prop.id] = { type: 'person', value: ids[0] };
+            }
+            break;
+          }
+          case 'multi_select': {
+            if ((rule.operator === 'any' || rule.operator === 'all') && raw) {
+              const ids = raw.split(',').filter(Boolean);
+              if (ids.length > 0) prefill[prop.id] = { type: 'multi_select', value: ids };
+            }
+            break;
+          }
+          case 'reference': {
+            // `any` is the current operator; `in` is read for legacy configs.
+            if ((rule.operator === 'any' || rule.operator === 'in') && raw) {
+              const ids = raw.split(',').filter(Boolean);
+              if (ids.length > 0) prefill[prop.id] = { type: 'reference', value: ids };
+            }
+            break;
+          }
+          case 'checkbox': {
+            if (rule.operator === 'eq' && (raw === 'true' || raw === 'false')) {
+              prefill[prop.id] = { type: 'checkbox', value: raw === 'true' };
+            }
+            break;
+          }
+          // title, date, created_time: no prefill.
+        }
+      }
+
+      return prefill;
     },
 
     updatePropertyOptions: (propertyId, options) => {

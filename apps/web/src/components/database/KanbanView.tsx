@@ -95,6 +95,7 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
     getOrderedColumnRows,
     addRow,
     getVisibleProperties,
+    getPrefillFromFilters,
     schema,
     kanbanColumnLimits,
     loadMoreInColumn,
@@ -252,9 +253,17 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
   const handleAddRow = useCallback(async (optionId: string | null) => {
     if (!activeDatabaseId || !groupByPropertyId) return;
 
+    // Pre-fill filtered properties, then let the column's group-by value win for
+    // the group-by property so the card lands in the column it was added to.
+    const properties: Record<string, PropertyValue> = {
+      ...getPrefillFromFilters(),
+      ...(optionId ? { [groupByPropertyId]: { type: 'select' as const, value: optionId } } : {}),
+    };
+
     const page = await createPage({
       title: 'Untitled',
       parentId: activeDatabaseId,
+      properties,
     });
 
     addRow({
@@ -263,15 +272,13 @@ export default function KanbanView({ canEdit }: KanbanViewProps) {
       icon: page.icon,
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
-      properties: optionId
-        ? { [groupByPropertyId]: { type: 'select', value: optionId } }
-        : {},
+      properties,
     });
 
     if (optionId) {
       moveCardToColumn(page.id, optionId);
     }
-  }, [activeDatabaseId, groupByPropertyId, createPage, addRow, moveCardToColumn]);
+  }, [activeDatabaseId, groupByPropertyId, createPage, addRow, moveCardToColumn, getPrefillFromFilters]);
 
   if (!groupByProperty) {
     return (
