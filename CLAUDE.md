@@ -315,6 +315,15 @@ When a database view is filtered by concrete attribute values, a new row created
 - **Wired into all three creation paths**: `TableView.handleAddRow`, `DatabaseToolbar.handleNewPage`, `KanbanView.handleAddRow` (merges prefill with the column's group-by value, column wins). Each passes the prefill to **both** `createPage({ properties })` (persists server-side in one request — `CreatePageInput.properties` already supported by `page-service.ts`, demo-client, and Zod) and `addRow({ properties })` (optimistic display).
 - **Covers embedded views automatically**: the inline database block (`DatabaseViewEdit.tsx`) reuses the same `TableView`/`KanbanView`/`DatabaseToolbar` + store.
 
+### 29. Save Status Indicator
+A chip in the `PageContent` top bar (first child of the right-side cluster, so it appears on document pages, database pages, and the peek panel — all instances mirror one global store) showing auto-save state. Priority: `offline` (amber) > `saving` (pulsing blue) > `error` (red, tooltip carries the message) > `saved` (green = everything persisted, safe to close). Frontend-only; demo mode works automatically.
+
+- **Store** (`apps/web/src/stores/saveStatusStore.ts`): aggregates `pendingCount` (in-flight tracked API mutations), `dirtyKeys` (block ids inside the 500ms autosave debounce window — typed but unsent), `lastError` (set by a failed mutation, cleared only by the next *successful* one), `online`. Pure selectors `selectSaveStatus` / `hasUnsavedWork`. `useSaveStatusGlobalListeners()` (mounted in `MainLayout`) wires `online`/`offline` events and a `beforeunload` warning while `hasUnsavedWork` (pending, dirty, or unresolved error — merely being offline doesn't warn).
+- **API-boundary tracking** (`apps/web/src/api/save-tracking.ts`): `trackMutations(api, methods)` wraps an allowlist of mutation methods, applied in `client.ts` so real and demo clients are covered identically (handles the demo client's synchronous throws). Tracked: `pagesApi.create/update/delete/updateOrder`, `blocksApi.create/update/delete/reorder`, `databaseApi.updateSchema/updateProperties/updateKanbanCardOrder`, `filesApi.upload`. **New content-mutation API methods must be added to these allowlists.** Reads and `applyRemote*` (realtime echoes) are never tracked; undo/redo replays go through blockStore → wrapped `blocksApi` and are correctly counted.
+- **Dirty-window protocol** (`useBlockEditor.ts` + `CodeBlockEdit.tsx`): `markDirty(blockId)` when the debounce is (re)scheduled; the timer callback clears `debounceRef` first and `clearDirty` runs in the save's `finally` guarded by `if (!debounceRef.current)` (a retype during the save keeps the block dirty). Every path that cancels the debounce (commitBurst, unmount flush, slash/markdown conversions, external-content sync) clears the flag when its replacement save settles — so status never shows "saved" between debounce-fire and API start.
+- **Component** (`components/common/SaveIndicator.tsx`): dot + label chip, `data-save-status` attribute for tests; internal `useDisplayStatus` holds "saving" visible ≥300ms so near-instant saves (demo mode) don't flash.
+- **Known limitation**: a half-typed, un-blurred page title or database cell shows "saved" until blur/Enter fires its save (those inputs commit on blur, no debounce — same as Notion).
+
 ## Critical Files
 
 | File | Purpose |
@@ -334,7 +343,10 @@ When a database view is filtered by concrete attribute values, a new row created
 | `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface for file BLOB storage |
 | `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
 | `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
-| `apps/web/src/api/client.ts` | Conditional re-export hub (`IS_DEMO_MODE` switches between real and demo client) |
+| `apps/web/src/api/client.ts` | Conditional re-export hub (`IS_DEMO_MODE` switches between real and demo client); applies save-tracking allowlists |
+| `apps/web/src/api/save-tracking.ts` | `trackMutations` wrapper reporting content-mutation API calls to the save-status store |
+| `apps/web/src/stores/saveStatusStore.ts` | Global save-status state (pending mutations, dirty debounce windows, error, online) + unload guard |
+| `apps/web/src/components/common/SaveIndicator.tsx` | Top-bar save-status chip (saved/saving/error/offline, min-visible hold) |
 | `apps/web/src/api/real-client.ts` | Real API client with fetch-based HTTP requests |
 | `apps/web/src/api/demo-client.ts` | Mock API client backed by localStorage (demo mode) |
 | `apps/web/src/api/demo-storage.ts` | Low-level localStorage CRUD layer for demo mode |

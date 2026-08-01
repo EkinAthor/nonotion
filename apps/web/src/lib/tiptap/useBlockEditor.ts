@@ -14,6 +14,7 @@ import Highlight from '@tiptap/extension-highlight';
 import type { Block, BlockContent, BlockType } from '@nonotion/shared';
 import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
+import { useSaveStatusStore } from '@/stores/saveStatusStore';
 import type { PasteBlockData } from '@/contexts/BlockContext';
 import { parseMarkdownLine, getBlockDefinition } from '@/components/blocks/registry';
 import { stripOuterPTag } from './html-utils';
@@ -24,6 +25,12 @@ import { undoManager } from '@/lib/undo/undo-manager';
 // One undo step per typing burst; a burst commits after this pause (or on
 // blur / structural op / undo keypress)
 const BURST_PAUSE_MS = 1000;
+
+// Save indicator: a block is "dirty" from the moment typing schedules the
+// debounced save until that save settles (the API in-flight window is counted
+// separately by api/save-tracking.ts). Zustand actions are stable, so a single
+// module-scope destructure is safe.
+const { markDirty, clearDirty } = useSaveStatusStore.getState();
 
 function parseLineForBlockType(line: string): PasteBlockData {
   const { type, text, checked } = parseMarkdownLine(line);
@@ -150,6 +157,7 @@ export function useBlockEditor({
       // Debounce save by 500ms. history:'skip' — typing lands in undo history
       // as coalesced bursts (commitBurst), not per-save entries.
       debounceRef.current = setTimeout(async () => {
+        debounceRef.current = undefined;
         const currentBlock = blockRef.current;
         const content: BlockContent = headingLevel
           ? { ...currentBlock.content, text, level: headingLevel }
@@ -160,8 +168,11 @@ export function useBlockEditor({
           await updateBlock(currentBlock.id, { content }, { history: 'skip' });
         } finally {
           pendingSavesRef.current.delete(text);
+          // A newer debounce (retype during this save) keeps the block dirty
+          if (!debounceRef.current) clearDirty(currentBlock.id);
         }
       }, 500);
+      markDirty(blockRef.current.id);
     },
     [headingLevel, updateBlock]
   );
@@ -200,7 +211,11 @@ export function useBlockEditor({
         .catch(() => {})
         .finally(() => {
           pendingSavesRef.current.delete(current);
+          if (!debounceRef.current) clearDirty(currentBlock.id);
         });
+    } else {
+      // Cancelled debounce whose text is already persisted — nothing left to save
+      clearDirty(currentBlock.id);
     }
 
     if (baseline !== current) {
@@ -231,6 +246,7 @@ export function useBlockEditor({
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+        debounceRef.current = undefined;
         // Flush: save immediately instead of discarding
         const currentBlock = blockRef.current;
         const currentEditor = editorRef.current;
@@ -241,7 +257,11 @@ export function useBlockEditor({
             : { ...currentBlock.content, text: html };
           // Fire-and-forget — component is unmounting. history:'skip' — the
           // burst flusher records the coalesced undo step for this text.
-          updateBlock(currentBlock.id, { content }, { history: 'skip' });
+          updateBlock(currentBlock.id, { content }, { history: 'skip' })
+            .catch(() => {})
+            .finally(() => clearDirty(currentBlock.id));
+        } else {
+          clearDirty(currentBlock.id);
         }
       }
     };
@@ -345,7 +365,13 @@ export function useBlockEditor({
             const content: BlockContent = headingLevel
               ? { ...currentBlock.content, text: cleanedText, level: headingLevel }
               : { ...currentBlock.content, text: cleanedText };
-            updateBlock(currentBlock.id, { content }, { history: 'skip' });
+            updateBlock(currentBlock.id, { content }, { history: 'skip' })
+              .catch(() => {})
+              .finally(() => clearDirty(currentBlock.id));
+          } else {
+            // No cleanup save issued — the follow-up changeBlockType call is
+            // tracked at the API layer
+            clearDirty(blockRef.current.id);
           }
         }
         closeSlashMenu();
@@ -802,6 +828,8 @@ export function useBlockEditor({
       const text = editor.getText();
       if (/^(?:---|\*\*\*|___)$/.test(text)) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = undefined;
+        clearDirty(blockRef.current.id);
         changeBlockTypeRef.current?.('divider', '');
         return;
       }
@@ -814,6 +842,7 @@ export function useBlockEditor({
         if (bulletMatch) {
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = undefined;
+          clearDirty(blockRef.current.id);
           changeBlockTypeRef.current?.('bullet_list', bulletMatch[1], undefined, { cursorPosition: 'start' });
           return;
         }
@@ -822,6 +851,7 @@ export function useBlockEditor({
           const start = parseInt(numMatch[1], 10);
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = undefined;
+          clearDirty(blockRef.current.id);
           changeBlockTypeRef.current?.('numbered_list', numMatch[2], undefined, { startNumber: start, cursorPosition: 'start' });
           return;
         }
@@ -906,6 +936,9 @@ export function useBlockEditor({
       // Cancel any pending save since we're about to overwrite with external content
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+        debounceRef.current = undefined;
+        // Local unsent edits were discarded in favor of the external content
+        clearDirty(block.id);
       }
 
       // Externally-applied content (remote edit, undo, merge) must not be

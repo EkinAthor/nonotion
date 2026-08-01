@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useSearchParams } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
+import { useSaveStatusGlobalListeners } from '@/stores/saveStatusStore';
 import { IS_DEMO_MODE } from '@/api/client';
 import Sidebar from './Sidebar';
 import SidePanel from './SidePanel';
@@ -13,6 +14,9 @@ export default function MainLayout() {
   const { sidebarOpen, sidebarWidth, peekPageId, sidebarAutoCollapsed, toggleSidebar, setSidebarOpen, toggleSearch } = useUiStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlPeek = searchParams.get('peek');
+
+  // Save indicator: online/offline tracking + beforeunload warning while unsaved
+  useSaveStatusGlobalListeners();
 
   useEffect(() => {
     fetchPages();

@@ -15,7 +15,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Block-based editor (Heading 1/2/3 + Paragraph)
 - Drag-and-drop block reordering
 - Slash commands for block type changes
-- Auto-save with debounce
+- Auto-save with debounce and a live save-status indicator in the page top bar (green Saved / Saving… / Save failed / Offline) — green means all changes are persisted and it's safe to close; the browser warns before closing the tab while changes are unsaved
 - Document-wide undo/redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y) — one unified per-page history across text edits and block operations (create/delete/split/merge, type changes, reorder), Google-Docs-style typing bursts; only your own changes are undone under real-time collaboration
 - Star/unstar pages
 - Delete pages from the page view (full-screen or split view) and bulk-delete rows from the database table view (multi-select with select-all across pages), each with a confirmation prompt
