@@ -119,6 +119,11 @@ export interface DatabaseInstanceState {
   selectedRowIds: Set<string>;
   selectAllAcross: boolean;
 
+  // Transient quicksearch term (full-text over title + block body). NOT
+  // persisted to localStorage/server default and NOT part of viewConfig.filters
+  // — applied AND-on-top-of the active filters. Resets when the view unmounts.
+  searchQuery: string;
+
   // Actions
   loadDatabase: (page: Page) => void;
   fetchRows: (options?: { sort?: string; filter?: string }) => Promise<void>;
@@ -140,6 +145,7 @@ export interface DatabaseInstanceState {
   // View config actions
   setSort: (sort: SortConfig | undefined) => void;
   setFilters: (filters: FilterRule[]) => void;
+  setSearch: (query: string) => void;
   setColumnWidth: (propertyId: string, width: number) => void;
   togglePropertyVisibility: (propertyId: string) => void;
   setPropertyOrder: (order: string[]) => void;
@@ -259,6 +265,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     kanbanCardOrder: {},
     selectedRowIds: new Set(),
     selectAllAcross: false,
+    searchQuery: '',
 
     loadDatabase: (page) => {
       if (page.type !== 'database' || !page.databaseSchema) {
@@ -308,7 +315,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     fetchRows: async (options = {}) => {
-      const { activeDatabaseId, viewConfig } = get();
+      const { activeDatabaseId, viewConfig, searchQuery } = get();
       if (!activeDatabaseId) return;
 
       const isKanban = viewConfig.viewType === 'kanban';
@@ -329,6 +336,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         const result = await databaseApi.getRows(activeDatabaseId, {
           sort,
           filter,
+          search: searchQuery || undefined,
           limit: isKanban ? KANBAN_FETCH_LIMIT : PAGE_SIZE,
           offset: 0,
         });
@@ -341,7 +349,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     loadMore: async () => {
-      const { activeDatabaseId, viewConfig, rows, total, isLoadingMore } = get();
+      const { activeDatabaseId, viewConfig, searchQuery, rows, total, isLoadingMore } = get();
       if (!activeDatabaseId || isLoadingMore || rows.length >= total) return;
 
       set({ isLoadingMore: true });
@@ -352,6 +360,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         const result = await databaseApi.getRows(activeDatabaseId, {
           sort,
           filter,
+          search: searchQuery || undefined,
           limit: PAGE_SIZE,
           offset: rows.length,
         });
@@ -535,7 +544,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
     },
 
     deleteSelectedRows: async () => {
-      const { activeDatabaseId, selectedRowIds, selectAllAcross, viewConfig, rows, total } = get();
+      const { activeDatabaseId, selectedRowIds, selectAllAcross, viewConfig, searchQuery, rows, total } = get();
       if (!activeDatabaseId) return;
 
       // 1. Resolve the set of row IDs to delete.
@@ -544,6 +553,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         const { filter } = buildQueryStrings(viewConfig);
         const result = await databaseApi.getRows(activeDatabaseId, {
           filter,
+          search: searchQuery || undefined,
           limit: SELECT_ALL_FETCH_LIMIT,
           offset: 0,
         });
@@ -593,6 +603,14 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
       const newConfig = { ...get().viewConfig, filters };
       set({ viewConfig: newConfig, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       persist(newConfig);
+      get().fetchRows();
+    },
+
+    setSearch: (query) => {
+      // Transient — not persisted, not part of viewConfig. Resets kanban
+      // pagination and refetches from offset 0 (mirrors setFilters).
+      if (get().searchQuery === query) return;
+      set({ searchQuery: query, kanbanColumnLimits: {}, newlyAddedRowIds: new Set() });
       get().fetchRows();
     },
 
@@ -962,6 +980,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         newlyAddedRowIds: new Set(),
         selectedRowIds: new Set(),
         selectAllAcross: false,
+        searchQuery: '',
         // Keep viewConfig intact — it's loaded from localStorage on store creation
         // and the store is scoped to the component instance via useRef
       });

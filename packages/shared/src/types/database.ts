@@ -150,6 +150,7 @@ export interface FilterRule {
 export interface DatabaseRowsQuery {
   sort?: string; // "propertyId:asc|desc"
   filter?: string; // "propertyId:operator:value" or pipe-separated for multiple
+  search?: string; // transient full-text quicksearch over row title + block body
   limit?: number;
   offset?: number;
 }

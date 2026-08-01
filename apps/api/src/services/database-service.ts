@@ -14,6 +14,7 @@ import {
   generateOptionId,
   now,
   createCreatedTimeProperty,
+  getBlockText,
 } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
 import { resolveReferencesForRows, type ReferenceViewer } from './reference-service.js';
@@ -21,8 +22,43 @@ import { resolveReferencesForRows, type ReferenceViewer } from './reference-serv
 export interface GetRowsOptions {
   sort?: string;
   filter?: string;
+  search?: string; // transient full-text quicksearch over row title + block body
   limit?: number;
   offset?: number;
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '');
+}
+
+/**
+ * Restrict rows to those whose title OR any block body text contains the
+ * search term (case-insensitive). Blocks are bulk-fetched once for the
+ * candidate pages. Mirrors the global search's block matching.
+ */
+async function applySearch(rows: Page[], search: string): Promise<Page[]> {
+  const q = search.toLowerCase();
+  const titleMatches = new Set<string>();
+  const needsBlockCheck: string[] = [];
+  for (const row of rows) {
+    if (row.title.toLowerCase().includes(q)) {
+      titleMatches.add(row.id);
+    } else {
+      needsBlockCheck.push(row.id);
+    }
+  }
+
+  const blockMatches = new Set<string>();
+  if (needsBlockCheck.length > 0) {
+    const blocks = await getStorage().getBlocksByPages(needsBlockCheck);
+    for (const block of blocks) {
+      if (blockMatches.has(block.pageId)) continue;
+      const text = stripHtml(getBlockText(block.content)).toLowerCase();
+      if (text.includes(q)) blockMatches.add(block.pageId);
+    }
+  }
+
+  return rows.filter((row) => titleMatches.has(row.id) || blockMatches.has(row.id));
 }
 
 /**
@@ -70,11 +106,15 @@ export async function getRows(
   let rows: Page[];
   let total: number;
 
-  // SQL fast path (backends that implement it): no sort, and at most a
-  // single title-contains filter — the shape of every default table/kanban
-  // fetch and of the reference-picker search.
+  const search = options.search?.trim() ? options.search.trim() : undefined;
+
+  // SQL fast path (backends that implement it): no sort, no quicksearch, and
+  // at most a single title-contains filter — the shape of every default
+  // table/kanban fetch and of the reference-picker search. Quicksearch spans
+  // block body text (not visible to the title-only SQL path), so it forces
+  // the JS path.
   const titleContains = extractTitleOnlyContains(options.filter, database.databaseSchema);
-  if (!options.sort && titleContains !== undefined && storage.queryDatabaseRows) {
+  if (!options.sort && !search && titleContains !== undefined && storage.queryDatabaseRows) {
     const result = await storage.queryDatabaseRows({
       databaseId,
       titleContains,
@@ -90,6 +130,11 @@ export async function getRows(
 
     if (options.filter) {
       rows = applyFilter(rows, options.filter, database.databaseSchema);
+    }
+
+    // Quicksearch (transient): AND on top of filters, over title + block body.
+    if (search) {
+      rows = await applySearch(rows, search);
     }
 
     // Apply sorting — use childIds order when no explicit sort

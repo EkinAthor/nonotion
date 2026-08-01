@@ -325,6 +325,15 @@ A chip in the `PageContent` top bar (first child of the right-side cluster, so i
 - **Component** (`components/common/SaveIndicator.tsx`): dot + label chip, `data-save-status` attribute for tests; internal `useDisplayStatus` holds "saving" visible ≥300ms so near-instant saves (demo mode) don't flash.
 - **Known limitation**: a half-typed, un-blurred page title or database cell shows "saved" until blur/Enter fires its save (those inputs commit on blur, no debounce — same as Notion).
 
+### 30. Database Quicksearch
+A search box in the `DatabaseToolbar` that full-text filters the current database view (table or kanban, full-screen or embedded) by **row title + page body text** (block content) — **not** properties. It combines **AND** on top of any active filter view, and is **transient**: not persisted to localStorage/server default, not part of `ViewConfig.filters`, and reset on view unmount. Server-side (so it searches the whole database, not just the loaded 50-row page); parity-mirrored in demo mode.
+
+- **Wire format**: a new transient `search` query param on `GET /api/databases/:id/rows` (`DatabaseRowsQuery.search` + `databaseRowsQuerySchema` in `packages/shared`). Serialized in `real-client.ts` `databaseApi.getRows`; the route passes validated `parsed.data` straight through.
+- **Backend** (`database-service.ts` `getRows`): a non-empty `search` **forces the JS path** — the title-only SQL fast path can't see block body text, so the guard is `!options.sort && !search && titleContains !== undefined`. `applySearch(rows, term)` runs **after `applyFilter`, before sort/paginate**, so `total` reflects the searched set. It keeps a row when `title` contains the term OR any of its blocks match — blocks are bulk-fetched once via `getStorage().getBlocksByPages(candidateIds)` (only for rows whose title didn't already match), text extracted with `getBlockText` + a local `stripHtml` (same as `search-service.ts`).
+- **Store** (`DatabaseInstanceContext.tsx`): transient `searchQuery` state + `setSearch(query)` action (mirrors `setFilters`: resets kanban pagination, refetches from offset 0; no-ops when unchanged). `searchQuery` is threaded into the `databaseApi.getRows` calls in `fetchRows`, `loadMore`, and the select-all fetch in `deleteSelectedRows`, and cleared in `clearDatabase`. Deliberately excluded from `buildQueryStrings`, persisted config, and `getPrefillFromFilters`.
+- **UI** (`DatabaseToolbar.tsx`): a compact debounced (250ms) `<input>` with magnifier icon + clear button, placed after the Filter button. Since there is a single `DatabaseView` for both full-screen and embedded, it appears in both automatically; kanban narrows cards across columns (column counts reflect the searched set).
+- **Demo parity** (`demo-client.ts`): mirrored `applySearch` (title OR block text via `storage.getAllBlocks()`), applied after `applyFilter` before `slice`, so `total` matches.
+
 ## Critical Files
 
 | File | Purpose |
