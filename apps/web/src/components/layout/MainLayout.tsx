@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Outlet, useSearchParams } from 'react-router-dom';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -24,28 +24,47 @@ export default function MainLayout() {
   }, [fetchPages, fetchPageOrder]);
 
   // Keep the peek panel (split view) and the `?peek=` URL param in sync so the split view
-  // survives reloads and shared links. The store is seeded from the URL at creation
-  // (uiStore.loadInitialPeek), so the two already agree on first render; these two effects only
-  // reconcile *subsequent* changes. Both are idempotent (they no-op when already consistent), so
-  // React StrictMode's double-invoked effects are harmless.
+  // survives reloads and shared links, AND so opening/switching a peek pushes a real browser-history
+  // entry (Back/Forward step through peek states in order; Back from an open peek closes the split
+  // view, staying on the current page). The store is seeded from the URL at creation
+  // (uiStore.loadInitialPeek), so the two already agree on first render; these effects only reconcile
+  // *subsequent* changes.
+  //
+  // `syncingFromUrl` distinguishes a store change that ORIGINATED from the URL (back/forward, reload,
+  // pasted link) from one the user made (opening a peek). Only user-made changes may write the URL —
+  // otherwise a back/forward pop would echo back into a spurious history push. The window.location
+  // read isn't reliable during react-router's popstate transition, so this flag is the source of truth.
+  const syncingFromUrl = useRef(false);
 
   // URL -> store: reload, pasted link, back/forward, or navigating to a page without a peek param.
-  // Reads fresh store state via getState() so it depends only on `urlPeek`.
+  // Reads fresh store state via getState() so it depends only on `urlPeek`. Flags the resulting store
+  // change as URL-originated so the store -> URL effect below skips echoing it back to history.
   useEffect(() => {
     const { peekPageId: current, openPeekPanel, closePeekPanel } = useUiStore.getState();
     if (urlPeek) {
-      if (urlPeek !== current) openPeekPanel(urlPeek);
+      if (urlPeek !== current) {
+        syncingFromUrl.current = true;
+        openPeekPanel(urlPeek);
+      }
     } else if (current) {
+      syncingFromUrl.current = true;
       closePeekPanel();
     }
   }, [urlPeek]);
 
-  // store -> URL: opening/closing the peek panel from the table, kanban, toolbar, or panel
-  // controls. Keyed only on `peekPageId` (not `searchParams`) so navigation between pages never
-  // re-adds a stale peek param; the current param is read fresh from window.location.
+  // store -> URL: opening/closing the peek panel from the table, kanban, toolbar, or panel controls.
+  // Keyed only on `peekPageId` (not `searchParams`) so navigation between pages never re-adds a stale
+  // peek param. Opening/switching a peek pushes a history entry; closing replaces, so an explicit
+  // dismiss (X / Esc / delete) doesn't leave a forward entry that reopens the panel.
   useEffect(() => {
+    // Change came from the URL (back/forward/reload) — the URL is already correct; don't push again.
+    if (syncingFromUrl.current) {
+      syncingFromUrl.current = false;
+      return;
+    }
     const current = new URLSearchParams(window.location.search).get('peek');
     if (peekPageId === current) return;
+    const replace = !peekPageId;
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -53,7 +72,7 @@ export default function MainLayout() {
         else next.delete('peek');
         return next;
       },
-      { replace: true }
+      { replace }
     );
   }, [peekPageId, setSearchParams]);
 
