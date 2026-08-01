@@ -12,6 +12,10 @@ import type { Block, CodeBlockContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { undoManager } from '@/lib/undo/undo-manager';
+import { useSaveStatusStore } from '@/stores/saveStatusStore';
+
+// Save indicator dirty-window tracking (see useBlockEditor.ts for the protocol)
+const { markDirty, clearDirty } = useSaveStatusStore.getState();
 
 interface CodeBlockEditProps {
   block: Block;
@@ -91,12 +95,19 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
       // history:'skip' — code typing lands in undo history as coalesced
       // bursts (commitBurst), language changes record explicitly
       debounceRef.current = setTimeout(async () => {
-        await updateBlock(
-          block.id,
-          { content: { code: newCode, language: newLanguage || undefined } },
-          { history: 'skip' }
-        );
+        debounceRef.current = undefined;
+        try {
+          await updateBlock(
+            block.id,
+            { content: { code: newCode, language: newLanguage || undefined } },
+            { history: 'skip' }
+          );
+        } finally {
+          // A newer debounce (retype during this save) keeps the block dirty
+          if (!debounceRef.current) clearDirty(block.id);
+        }
       }, 500);
+      markDirty(block.id);
     },
     [block.id, updateBlock]
   );
@@ -123,7 +134,14 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
         block.id,
         { content: { code: current, language: languageRef.current || undefined } },
         { history: 'skip' }
-      ).catch(() => {});
+      )
+        .catch(() => {})
+        .finally(() => {
+          if (!debounceRef.current) clearDirty(block.id);
+        });
+    } else {
+      // Cancelled debounce whose code is already persisted — nothing left to save
+      clearDirty(block.id);
     }
 
     if (baseline !== current) {
@@ -187,6 +205,7 @@ export default function CodeBlockEdit({ block, readOnly = false }: CodeBlockEdit
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = undefined;
+        clearDirty(block.id);
       }
       updateBlock(block.id, {
         content: { code: codeRef.current, language: newLanguage || undefined },

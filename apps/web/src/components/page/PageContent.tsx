@@ -14,6 +14,7 @@ import BlockCanvas from '../blocks/BlockCanvas';
 import DatabaseView from '../database/DatabaseView';
 import ShareModal from '@/components/sharing/ShareModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SaveIndicator from '@/components/common/SaveIndicator';
 
 type PermissionLevel = 'owner' | 'full_access' | 'editor' | 'viewer';
 
@@ -147,6 +148,7 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
             <PageBreadcrumb pageId={page.id} />
           )}
           <div className="flex items-center gap-2">
+            <SaveIndicator />
             {realtimeConnected && <PresenceAvatarBar />}
             <button
               onClick={handleToggleStar}
