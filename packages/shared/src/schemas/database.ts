@@ -213,6 +213,7 @@ export const updateKanbanCardOrderInputSchema = z.object({
 export const databaseRowsQuerySchema = z.object({
   sort: z.string().optional(),
   filter: z.string().optional(),
+  search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(10000).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });

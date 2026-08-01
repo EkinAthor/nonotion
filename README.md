@@ -34,6 +34,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Image upload (file picker + clipboard paste) with BLOB storage
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
 - Quick search (Ctrl+K) across pages, block content, and database properties
+- Database quicksearch: a search box in the database toolbar that full-text filters the current view (table or kanban, full-screen or embedded) by row title and page body text, combined on top of any active filter
 - Configurable storage (JSON/SQLite or PostgreSQL)
 - Demo mode for static hosting without a backend (all data in localStorage)
 - Real-time collaboration with user presence (optional, Supabase-powered)

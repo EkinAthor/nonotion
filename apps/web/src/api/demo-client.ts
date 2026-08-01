@@ -426,6 +426,7 @@ export const blocksApi = {
 export interface GetRowsOptions {
   sort?: string;
   filter?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }
@@ -575,6 +576,31 @@ function applySort(rows: Page[], sortStr: string, schema?: DatabaseSchema): Page
   });
 }
 
+// Transient quicksearch: keep rows whose title OR any block body text contains
+// the search term (case-insensitive). Mirrors backend applySearch + the demo
+// searchApi's block-text extraction. Not applied to properties.
+function applySearch(rows: Page[], search: string): Page[] {
+  const q = search.toLowerCase();
+  const blockMatches = new Set<string>();
+  const candidateIds = new Set(
+    rows.filter((r) => !r.title.toLowerCase().includes(q)).map((r) => r.id)
+  );
+  if (candidateIds.size > 0) {
+    for (const block of storage.getAllBlocks()) {
+      if (!candidateIds.has(block.pageId) || blockMatches.has(block.pageId)) continue;
+      const content = block.content as Record<string, unknown>;
+      let text = '';
+      if ('text' in content && typeof content.text === 'string') {
+        text = stripHtml(content.text);
+      } else if ('code' in content && typeof content.code === 'string') {
+        text = content.code;
+      }
+      if (text.toLowerCase().includes(q)) blockMatches.add(block.pageId);
+    }
+  }
+  return rows.filter((r) => r.title.toLowerCase().includes(q) || blockMatches.has(r.id));
+}
+
 // --- Schema mutation helpers ---
 
 function createPropertyDefinition(input: AddPropertyInput, order: number): PropertyDefinition {
@@ -622,6 +648,9 @@ export const databaseApi = {
 
     if (options.filter) {
       rows = applyFilter(rows, options.filter, database.databaseSchema);
+    }
+    if (options.search?.trim()) {
+      rows = applySearch(rows, options.search.trim());
     }
     if (options.sort) {
       rows = applySort(rows, options.sort, database.databaseSchema);

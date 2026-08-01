@@ -42,6 +42,7 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
     setKanbanColumnOrder,
     getSelectProperties,
     getPrefillFromFilters,
+    setSearch,
     schema,
     activeDatabaseId,
     addRow,
@@ -56,6 +57,7 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
   const [showGroupByDropdown, setShowGroupByDropdown] = useState(false);
   const [showColumnsPopover, setShowColumnsPopover] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const mcpButtonRef = useRef<HTMLButtonElement>(null);
   const propertiesButtonRef = useRef<HTMLButtonElement>(null);
@@ -72,6 +74,13 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
   const kanbanGroupByProperty = isKanban && viewConfig.kanban
     ? schema?.properties.find((p) => p.id === viewConfig.kanban!.groupByPropertyId)
     : null;
+
+  // Debounced quicksearch: push the input to the store 250ms after typing stops.
+  // setSearch no-ops when the value is unchanged, so this is safe on every keystroke.
+  useEffect(() => {
+    const handle = setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => clearTimeout(handle);
+  }, [searchInput, setSearch]);
 
   const removeFilter = (propertyId: string, operator: string) => {
     const newFilters = viewConfig.filters.filter(
@@ -228,6 +237,42 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
 
           {showFilterPopover && (
             <FilterPopover onClose={() => setShowFilterPopover(false)} anchorRef={filterButtonRef} />
+          )}
+        </div>
+
+        {/* Quicksearch — transient full-text filter over title + page body text */}
+        <div className="relative flex items-center">
+          <svg
+            className="w-4 h-4 absolute left-2 text-notion-text-secondary pointer-events-none"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+          </svg>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && searchInput) {
+                e.stopPropagation();
+                setSearchInput('');
+              }
+            }}
+            placeholder="Search..."
+            className="pl-7 pr-6 py-1 text-sm w-40 rounded border border-notion-border bg-transparent text-notion-text placeholder-notion-text-secondary focus:outline-none focus:border-blue-500 focus:w-56 transition-[width]"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput('')}
+              className="absolute right-1.5 text-notion-text-secondary hover:text-notion-text rounded p-0.5"
+              title="Clear search"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           )}
         </div>
 

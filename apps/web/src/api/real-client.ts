@@ -308,6 +308,7 @@ export const blocksApi = {
 export interface GetRowsOptions {
   sort?: string;
   filter?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }
@@ -322,6 +323,7 @@ export const databaseApi = {
     const params = new URLSearchParams();
     if (options.sort) params.set('sort', options.sort);
     if (options.filter) params.set('filter', options.filter);
+    if (options.search) params.set('search', options.search);
     if (options.limit) params.set('limit', String(options.limit));
     if (options.offset) params.set('offset', String(options.offset));
 

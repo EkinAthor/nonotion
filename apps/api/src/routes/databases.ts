@@ -14,7 +14,7 @@ export async function databasesRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/databases/:id/rows - Get database rows with sort/filter
   fastify.get<{
     Params: { id: string };
-    Querystring: { sort?: string; filter?: string; limit?: string; offset?: string };
+    Querystring: { sort?: string; filter?: string; search?: string; limit?: string; offset?: string };
   }>('/api/databases/:id/rows', async (request, reply) => {
     const canRead = await permissionService.canRead(request.params.id, request.userId!, { isWorkspaceOwner: request.isOwner });
     if (!canRead) {
