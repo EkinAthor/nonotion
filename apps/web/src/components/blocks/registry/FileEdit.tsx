@@ -1,8 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Block, FileContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { useAuthStore } from '@/stores/authStore';
 import { filesApi } from '@/api/client';
+import { claimPendingUpload } from '@/lib/pending-drop-uploads';
 
 interface FileEditProps {
   block: Block;
@@ -25,15 +26,45 @@ function iconFor(filename: string): string {
     case 'pdf': return '📄';
     case 'doc':
     case 'docx':
+    case 'odt':
+    case 'rtf':
     case 'md':
-    case 'txt': return '📝';
+    case 'txt':
+    case 'log': return '📝';
     case 'xls':
     case 'xlsx':
-    case 'csv': return '📊';
+    case 'ods':
+    case 'csv':
+    case 'tsv': return '📊';
     case 'ppt':
-    case 'pptx': return '📽️';
-    case 'zip': return '🗜️';
-    case 'json': return '🧾';
+    case 'pptx':
+    case 'odp': return '📽️';
+    case 'zip':
+    case '7z':
+    case 'gz':
+    case 'tar':
+    case 'rar': return '🗜️';
+    case 'json':
+    case 'yaml':
+    case 'yml':
+    case 'xml':
+    case 'toml': return '🧾';
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'webp':
+    case 'heic':
+    case 'bmp':
+    case 'tiff': return '🖼️';
+    case 'mp3':
+    case 'wav':
+    case 'm4a':
+    case 'ogg': return '🎵';
+    case 'mp4':
+    case 'mov':
+    case 'webm': return '🎬';
+    case 'epub': return '📚';
     default: return '📎';
   }
 }
@@ -95,11 +126,21 @@ export default function FileEdit({ block, readOnly = false }: FileEditProps) {
   }, [handleFileUpload]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    if (readOnly || isUploading) return;
     e.preventDefault();
+    e.stopPropagation();
+    if (readOnly || isUploading) return;
     const file = e.dataTransfer.files?.[0];
     if (file) handleFileUpload(file);
   }, [readOnly, isUploading, handleFileUpload]);
+
+  // Canvas drag-and-drop handoff: a file dropped on the page canvas creates
+  // this block and stashes the File under its id — claim it and upload.
+  const handleFileUploadRef = useRef(handleFileUpload);
+  handleFileUploadRef.current = handleFileUpload;
+  useEffect(() => {
+    if (content.fileId) return;
+    return claimPendingUpload(block.id, (file) => handleFileUploadRef.current(file));
+  }, [block.id, content.fileId]);
 
   const openFile = useCallback(async (disposition: 'attachment' | 'inline') => {
     setError(null);
@@ -127,6 +168,7 @@ export default function FileEdit({ block, readOnly = false }: FileEditProps) {
   if (!content.fileId) {
     return (
       <div
+        data-file-dropzone
         className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center hover:bg-gray-50 transition-colors"
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}

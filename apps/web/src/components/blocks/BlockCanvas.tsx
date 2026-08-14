@@ -20,6 +20,9 @@ import type { Block, PageLinkContent, DatabaseViewContent } from '@nonotion/shar
 import { getBlockText } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { usePageStore } from '@/stores/pageStore';
+import { useAuthStore } from '@/stores/authStore';
+import { IS_DEMO_MODE } from '@/api/client';
+import { stashPendingUpload } from '@/lib/pending-drop-uploads';
 import BlockWrapper from './BlockWrapper';
 import MultiBlockDragPreview from './MultiBlockDragPreview';
 import EmptyBlockPlaceholder from './EmptyBlockPlaceholder';
@@ -59,6 +62,123 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
   }, []);
 
 
+
+  // ── OS file drag-and-drop ─────────────────────────────────────────────────
+  // Native HTML5 drag events only — dnd-kit block reordering uses pointer
+  // events, so the two systems never interfere.
+  const [dropIndicatorTop, setDropIndicatorTop] = useState<number | null>(null);
+  const dragDepthRef = useRef(0);
+
+  // Y-midpoint scan: first block whose midpoint is below the cursor is the
+  // insertion index (DOM order of [data-block-id] matches store order 0..n-1).
+  const getDropTarget = useCallback((clientY: number): { order: number; indicatorTop: number } => {
+    const container = containerRef.current;
+    if (!container) return { order: blocks.length, indicatorTop: 0 };
+    const containerRect = container.getBoundingClientRect();
+    const blockElements = container.querySelectorAll('[data-block-id]');
+    for (let i = 0; i < blockElements.length; i++) {
+      const rect = blockElements[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return { order: i, indicatorTop: rect.top - containerRect.top };
+      }
+    }
+    const last = blockElements[blockElements.length - 1];
+    return {
+      order: blockElements.length,
+      indicatorTop: last ? last.getBoundingClientRect().bottom - containerRect.top : 0,
+    };
+  }, [blocks.length]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || readOnly) return;
+
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files') ?? false;
+    const inFileDropzone = (e: DragEvent) =>
+      Boolean((e.target as HTMLElement | null)?.closest?.('[data-file-dropzone]'));
+
+    // A drop that misses the canvas must never navigate the tab away.
+    const handleWindowDrag = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+
+    const handleDragEnter = (e: DragEvent) => {
+      if (hasFiles(e)) dragDepthRef.current += 1;
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      dragDepthRef.current -= 1;
+      if (dragDepthRef.current <= 0) {
+        dragDepthRef.current = 0;
+        setDropIndicatorTop(null);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      // An empty file block's own dropzone takes precedence — no insertion line.
+      setDropIndicatorTop(inFileDropzone(e) ? null : getDropTarget(e.clientY).indicatorTop);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      dragDepthRef.current = 0;
+      setDropIndicatorTop(null);
+      // This native listener fires before React's root-delegated onDrop, so
+      // bail here and let FileEdit's own handler fill its block.
+      if (inFileDropzone(e)) return;
+      e.preventDefault();
+
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      const attachmentsEnabled = useAuthStore.getState().authConfig?.fileAttachmentsEnabled ?? false;
+      // Images use the legacy embedded-image path (works without attachments,
+      // but not in demo — mirrors paste); other files need attachments enabled.
+      const eligible = files.filter((f) =>
+        f.type.startsWith('image/') ? !IS_DEMO_MODE : attachmentsEnabled
+      );
+      if (eligible.length === 0) return;
+
+      const { order } = getDropTarget(e.clientY);
+      const { createBlock } = useBlockStore.getState();
+      // One undo entry for the whole drop; the optimistic inserts run
+      // synchronously in-store, so order + i is exact even for mixed drops.
+      undoManager.transact(pageId, () => {
+        eligible.forEach((file, i) => {
+          const isImage = file.type.startsWith('image/');
+          void createBlock(
+            pageId,
+            isImage ? 'image' : 'file',
+            isImage
+              ? { url: '', alt: '', caption: '' }
+              : { fileId: '', filename: '', size: 0, mimeType: '' },
+            order + i
+          )
+            .then((b) => stashPendingUpload(b.id, file))
+            .catch((err) => console.error('Drop upload block create failed:', err));
+        });
+      });
+    };
+
+    window.addEventListener('dragover', handleWindowDrag);
+    window.addEventListener('drop', handleWindowDrag);
+    container.addEventListener('dragenter', handleDragEnter);
+    container.addEventListener('dragleave', handleDragLeave);
+    container.addEventListener('dragover', handleDragOver);
+    container.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragover', handleWindowDrag);
+      window.removeEventListener('drop', handleWindowDrag);
+      container.removeEventListener('dragenter', handleDragEnter);
+      container.removeEventListener('dragleave', handleDragLeave);
+      container.removeEventListener('dragover', handleDragOver);
+      container.removeEventListener('drop', handleDrop);
+      dragDepthRef.current = 0;
+      setDropIndicatorTop(null);
+    };
+  }, [pageId, readOnly, getDropTarget]);
 
   // Handle mouse selection across blocks
   useEffect(() => {
@@ -403,6 +523,12 @@ export default function BlockCanvas({ pageId, blocks, readOnly = false }: BlockC
       className="min-h-[200px] pb-32 relative"
     >
       <CrossBlockFormatToolbar containerRef={containerRef} />
+      {dropIndicatorTop !== null && (
+        <div
+          className="absolute left-0 right-0 h-0.5 bg-blue-500 rounded pointer-events-none z-10"
+          style={{ top: dropIndicatorTop }}
+        />
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

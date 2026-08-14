@@ -17,8 +17,19 @@ export interface FileAttachmentsConfig {
 // ─── Loader ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_EXTENSIONS = [
+  // Documents
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'csv', 'txt', 'md', 'zip', 'json',
+  'odt', 'ods', 'odp', 'rtf', 'txt', 'md', 'csv', 'tsv', 'log',
+  // Data
+  'json', 'yaml', 'yml', 'xml', 'toml', 'ics',
+  // Archives
+  'zip', '7z', 'gz', 'tar', 'rar',
+  // Images (as attachments — embedded images use the separate image block path)
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'bmp', 'tiff',
+  // Media
+  'mp3', 'wav', 'm4a', 'ogg', 'mp4', 'mov', 'webm',
+  // Other
+  'epub',
 ];
 
 function envInt(key: string, fallback: number): number {
