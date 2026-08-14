@@ -1,6 +1,12 @@
-import type { Block, CreateBlockInput, UpdateBlockInput, ReorderBlocksInput } from '@nonotion/shared';
+import type { Block, BlockContent, CreateBlockInput, UpdateBlockInput, ReorderBlocksInput } from '@nonotion/shared';
 import { generateBlockId } from '@nonotion/shared';
 import { getStorage } from '../storage/storage-factory.js';
+import { markDetached, markReattached } from './attachment-service.js';
+
+function attachmentFileId(type: Block['type'], content: BlockContent | undefined): string | null {
+  if (type !== 'file' || !content || !('fileId' in content) || !content.fileId) return null;
+  return content.fileId;
+}
 
 export async function getBlocksByPage(pageId: string): Promise<Block[]> {
   return getStorage().getBlocksByPage(pageId);
@@ -33,6 +39,12 @@ export async function createBlock(input: CreateBlockInput): Promise<Block> {
     version: 1,
   };
 
+  // Undoing a file-block delete re-creates the block — cancel the pending GC detach.
+  const fileId = attachmentFileId(block.type, block.content);
+  if (fileId) {
+    void markReattached(fileId).catch((err) => console.warn('Attachment reattach failed:', err));
+  }
+
   return getStorage().createBlock(block);
 }
 
@@ -54,6 +66,15 @@ export async function updateBlock(id: string, input: UpdateBlockInput): Promise<
     updates.order = input.order;
   }
 
+  // File replaced in a file block → detach the old attachment for GC.
+  if (input.content !== undefined) {
+    const oldFileId = attachmentFileId(existing.type, existing.content);
+    const newFileId = attachmentFileId(updates.type ?? existing.type, input.content);
+    if (oldFileId && oldFileId !== newFileId) {
+      void markDetached(oldFileId).catch((err) => console.warn('Attachment detach failed:', err));
+    }
+  }
+
   return getStorage().updateBlock(id, updates);
 }
 
@@ -63,6 +84,12 @@ export async function deleteBlock(id: string): Promise<boolean> {
 
   const success = await getStorage().deleteBlock(id);
   if (!success) return false;
+
+  // Deleted file block → detach its attachment (grace-period GC keeps undo working).
+  const fileId = attachmentFileId(block.type, block.content);
+  if (fileId) {
+    void markDetached(fileId).catch((err) => console.warn('Attachment detach failed:', err));
+  }
 
   // Reorder remaining blocks
   const remainingBlocks = await getStorage().getBlocksByPage(block.pageId);

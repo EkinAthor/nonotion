@@ -27,7 +27,7 @@ MCP access is **per user and per database**, and always additive to normal permi
 
 - **Enable a database**: open the database → toolbar → **MCP** button → toggle *Available to Claude via MCP*.
   - *Allow image access* — additionally lets clients fetch images embedded in pages (base level is page text + properties only).
-  - *Allow file access* — reserved; uploads are currently images-only.
+  - *Allow file access* — additionally lets clients fetch files attached to pages via `get_file` (requires the server's file-attachments feature to be enabled — see `docs/file-attachments.md`).
 - **Overview / revocation**: user menu → **Account settings** → *Claude / MCP access* lists your tokens and every MCP-enabled database.
 
 ### References between databases
@@ -88,6 +88,7 @@ Point it at `{API}/mcp`; both the OAuth flow and a pasted `Bearer nmcp_…` head
 | `get_page` | Full page as markdown: properties, body (headings, lists, code, links), embedded image references, child pages. Works for rows, referenced pages, and sub-pages. |
 | `search` | Full-text search across titles, content, and properties — scoped to MCP-enabled databases. |
 | `get_image` | Fetch an embedded image (`pageId` + `fileId` from `get_page`) as an image block. Requires *Allow image access*; capped at 4 MB; SVG excluded. |
+| `get_file` | Fetch a file attached to a page (`pageId` + `fileId` from `get_page`). Requires *Allow file access*; capped at 4 MB; text-like files return as text, others as a base64 resource. |
 
 Typical agent flow: `list_databases` → `query_database` (filter e.g. `Status = "In Progress"`) → `get_page` on interesting rows → follow reference ids with further `get_page` calls → `get_image` for embedded diagrams.
 

@@ -11,12 +11,15 @@ import {
 import * as authService from '../services/auth-service.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isMcpEnabled } from '../config/mcp.js';
+import { isFileAttachmentsEnabled, loadFileAttachmentsConfig } from '../config/files.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Get auth config (public, no auth needed)
   fastify.get('/api/auth/config', async (_request, reply) => {
     const enabledModes = authService.getEnabledAuthModes();
     const googleClientId = process.env.GOOGLE_CLIENT_ID || null;
+    const fileAttachmentsEnabled = isFileAttachmentsEnabled();
+    const fileConfig = fileAttachmentsEnabled ? loadFileAttachmentsConfig() : null;
 
     return reply.send({
       success: true,
@@ -24,6 +27,9 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         enabledModes,
         googleClientId: enabledModes.includes('google') ? googleClientId : null,
         mcpEnabled: isMcpEnabled(),
+        fileAttachmentsEnabled,
+        fileAllowedExtensions: fileConfig?.allowedExtensions ?? [],
+        fileMaxSizeMb: fileConfig?.maxSizeMb ?? 0,
       },
     });
   });

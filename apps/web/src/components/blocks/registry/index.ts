@@ -8,6 +8,7 @@ import NumberedListEdit from './NumberedListEdit';
 import ChecklistEdit from './ChecklistEdit';
 import CodeBlockEdit from './CodeBlockEdit';
 import ImageEdit from './ImageEdit';
+import FileEdit from './FileEdit';
 import DividerEdit from './DividerEdit';
 import PageLinkEdit from './PageLinkEdit';
 import DatabaseViewEdit from './DatabaseViewEdit';
@@ -130,6 +131,14 @@ export const blockRegistry: Record<BlockType, BlockDefinition> = {
     EditComponent: ImageEdit,
     defaultContent: { url: '', alt: '', caption: '' },
   },
+  file: {
+    type: 'file',
+    label: 'File',
+    icon: '📎',
+    shortcuts: ['file', 'attachment', 'upload'],
+    EditComponent: FileEdit,
+    defaultContent: { fileId: '', filename: '', size: 0, mimeType: '' } as BlockContent,
+  },
   divider: {
     type: 'divider',
     label: 'Divider',
@@ -225,6 +234,7 @@ function getSlashItemDescription(type: BlockType): string {
     case 'checklist': return 'Track tasks with a to-do list';
     case 'code_block': return 'Capture code snippet';
     case 'image': return 'Upload or embed an image';
+    case 'file': return 'Upload a downloadable file';
     case 'divider': return 'Visual divider line';
     case 'database_view': return 'Embed an existing database';
     default: return '';
@@ -242,6 +252,7 @@ export function getHtmlTag(type: BlockType): string {
     case 'checklist': return 'li';
     case 'code_block': return 'pre';
     case 'image': return 'img';
+    case 'file': return 'a';
     case 'divider': return 'hr';
     case 'page_link': return 'a';
     case 'database_view': return 'div';

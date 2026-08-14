@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { mcpApi } from '@/api/client';
+import { useAuthStore } from '@/stores/authStore';
 
 interface McpAccessPopoverProps {
   databaseId: string;
@@ -20,8 +21,10 @@ export default function McpAccessPopover({ databaseId, onClose, anchorRef, onCha
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [allowImages, setAllowImages] = useState(false);
+  const [allowFiles, setAllowFiles] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fileAttachmentsEnabled = useAuthStore((s) => s.authConfig?.fileAttachmentsEnabled ?? false);
 
   useEffect(() => {
     if (!anchorRef.current) return;
@@ -62,6 +65,7 @@ export default function McpAccessPopover({ databaseId, onClose, anchorRef, onCha
         if (cancelled) return;
         setEnabled(access?.enabled ?? false);
         setAllowImages(access?.allowImages ?? false);
+        setAllowFiles(access?.allowFiles ?? false);
       } catch {
         if (!cancelled) setError('Failed to load MCP settings');
       } finally {
@@ -74,17 +78,23 @@ export default function McpAccessPopover({ databaseId, onClose, anchorRef, onCha
   }, [databaseId]);
 
   // Optimistic save: flip local state immediately, revert on error.
-  const save = async (nextEnabled: boolean, nextAllowImages: boolean) => {
-    const prev = { enabled, allowImages };
+  const save = async (nextEnabled: boolean, nextAllowImages: boolean, nextAllowFiles: boolean) => {
+    const prev = { enabled, allowImages, allowFiles };
     setEnabled(nextEnabled);
     setAllowImages(nextAllowImages);
+    setAllowFiles(nextAllowFiles);
     setError(null);
     try {
-      await mcpApi.setAccess(databaseId, { enabled: nextEnabled, allowImages: nextAllowImages });
+      await mcpApi.setAccess(databaseId, {
+        enabled: nextEnabled,
+        allowImages: nextAllowImages,
+        allowFiles: nextAllowFiles,
+      });
       onChanged?.(nextEnabled);
     } catch (err) {
       setEnabled(prev.enabled);
       setAllowImages(prev.allowImages);
+      setAllowFiles(prev.allowFiles);
       setError(err instanceof Error ? err.message : 'Failed to save');
     }
   };
@@ -115,7 +125,7 @@ export default function McpAccessPopover({ databaseId, onClose, anchorRef, onCha
               <input
                 type="checkbox"
                 checked={enabled}
-                onChange={(e) => save(e.target.checked, allowImages)}
+                onChange={(e) => save(e.target.checked, allowImages, allowFiles)}
                 className="h-4 w-4 shrink-0 accent-blue-600"
               />
             </label>
@@ -135,19 +145,30 @@ export default function McpAccessPopover({ databaseId, onClose, anchorRef, onCha
                 type="checkbox"
                 checked={allowImages}
                 disabled={!enabled}
-                onChange={(e) => save(enabled, e.target.checked)}
+                onChange={(e) => save(enabled, e.target.checked, allowFiles)}
                 className="h-4 w-4 shrink-0 accent-blue-600"
               />
             </label>
 
-            <label className="flex items-center justify-between gap-3 opacity-50" title="File uploads are currently images-only; this option becomes available when other file types are supported">
+            <label
+              className={`flex items-center justify-between gap-3 ${
+                enabled && fileAttachmentsEnabled ? 'cursor-pointer' : 'opacity-50'
+              }`}
+              title={fileAttachmentsEnabled ? undefined : 'File attachments are not enabled on this server'}
+            >
               <div>
                 <div className="text-sm text-notion-text">Allow file access</div>
                 <div className="text-xs text-notion-text-secondary mt-0.5">
-                  Uploads are currently images-only
+                  Let clients fetch files attached to pages
                 </div>
               </div>
-              <input type="checkbox" checked={false} disabled className="h-4 w-4 shrink-0" />
+              <input
+                type="checkbox"
+                checked={allowFiles}
+                disabled={!enabled || !fileAttachmentsEnabled}
+                onChange={(e) => save(enabled, allowImages, e.target.checked)}
+                className="h-4 w-4 shrink-0 accent-blue-600"
+              />
             </label>
 
             {error && <p className="text-xs text-red-600">{error}</p>}

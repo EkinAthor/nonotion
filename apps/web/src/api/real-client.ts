@@ -22,6 +22,10 @@ import type {
   UpdatePropertiesInput,
   UpdateKanbanCardOrderInput,
   FileUploadResponse,
+  AttachmentInitiateResponse,
+  AttachmentMeta,
+  FileDownloadUrlResponse,
+  FileDownloadDisposition,
   ImportResult,
   GoogleLoginInput,
   AuthConfigResponse,
@@ -395,6 +399,62 @@ export const filesApi = {
 
     const blob = await response.blob();
     return URL.createObjectURL(blob);
+  },
+
+  // Attachment upload: initiate → (direct upload through API | signed PUT to storage → confirm)
+  uploadAttachment: async (file: File, pageId: string): Promise<AttachmentMeta> => {
+    const { fileId, mode, uploadUrl } = await request<AttachmentInitiateResponse>(
+      '/files/attachments/initiate',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          pageId,
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type || 'application/octet-stream',
+        }),
+      }
+    );
+
+    if (mode === 'signed-upload' && uploadUrl) {
+      const putResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!putResponse.ok) {
+        throw new Error('Upload to storage failed');
+      }
+      return request<AttachmentMeta>(`/files/attachments/${fileId}/confirm`, { method: 'POST' });
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_BASE}/files/attachments/${fileId}/content`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json() as ApiError;
+      throw new Error(error.error?.message || 'Upload failed');
+    }
+    const result = await response.json() as ApiResponse<AttachmentMeta>;
+    return result.data;
+  },
+
+  getDownloadUrl: async (
+    fileId: string,
+    disposition: FileDownloadDisposition
+  ): Promise<FileDownloadUrlResponse> => {
+    const { url, expiresAt } = await request<FileDownloadUrlResponse>(
+      `/files/${fileId}/download-url?disposition=${disposition}`
+    );
+    // db-backend URLs are API-relative; resolve against the API base.
+    return { url: url.startsWith('/api/') ? `${API_BASE}${url.replace('/api', '')}` : url, expiresAt };
   },
 };
 

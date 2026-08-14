@@ -78,6 +78,7 @@ export const blocks = pgTable(
         'checklist',
         'code_block',
         'image',
+        'file',
         'divider',
         'page_link',
         'database_view',
@@ -136,16 +137,22 @@ const bytea = customType<{ data: Buffer }>({
   },
 });
 
-// Files table
+// Files table (embedded images + file attachments; attachment bytes may live in Supabase Storage)
 export const files = pgTable('files', {
   id: text('id').primaryKey(), // file_xxx
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   size: integer('size').notNull(),
-  data: bytea('data').notNull(),
+  data: bytea('data'), // null when storage_backend != 'db'
   uploadedBy: text('uploaded_by').notNull(),
+  pageId: text('page_id'), // attachment→page linkage; null for legacy image rows
+  storageBackend: text('storage_backend').notNull().default('db'), // 'db' | 'supabase'
+  status: text('status').notNull().default('ready'), // 'pending' | 'ready'
+  detachedAt: timestamp('detached_at', { withTimezone: true }), // set when the owning block is deleted/replaced
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-});
+}, (table) => [
+  index('idx_files_page_id').on(table.pageId),
+]);
 
 // Settings table (key-value store for workspace settings)
 export const settings = pgTable('settings', {

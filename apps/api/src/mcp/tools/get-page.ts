@@ -99,7 +99,10 @@ export function registerGetPage(server: McpServer, viewer: McpViewer): void {
 
       // Body
       const blocks = await blockService.getBlocksByPage(page.id);
-      const body = blocksToMarkdown(blocks, await buildMarkdownContext(blocks, access.allowImages, accessCache));
+      const body = blocksToMarkdown(
+        blocks,
+        await buildMarkdownContext(blocks, access.allowImages, access.allowFiles, accessCache)
+      );
       if (body.trim()) {
         sections.push(`## Content\n\n${body}`);
       }
@@ -133,6 +136,7 @@ function formatPropertyLine(name: string, value: unknown): string {
 async function buildMarkdownContext(
   blocks: Block[],
   allowImages: boolean,
+  allowFiles: boolean,
   accessCache: McpAccessCache
 ): Promise<BlocksToMarkdownContext> {
   const storage = getStorage();
@@ -165,5 +169,5 @@ async function buildMarkdownContext(
     }
   }
 
-  return { allowImages, linkedPageTitles, embeddedDatabases };
+  return { allowImages, allowFiles, linkedPageTitles, embeddedDatabases };
 }

@@ -4,3 +4,4 @@ export * from './user.js';
 export * from './permission.js';
 export * from './database.js';
 export * from './mcp.js';
+export * from './file.js';

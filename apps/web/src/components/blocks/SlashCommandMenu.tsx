@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react
 import { createPortal } from 'react-dom';
 import type { BlockType } from '@nonotion/shared';
 import { getSlashMenuItems } from './registry';
+import { useAuthStore } from '@/stores/authStore';
 
 interface SlashCommandMenuProps {
   query: string;
@@ -23,7 +24,10 @@ export default function SlashCommandMenu({
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   // Filter options based on query (matches label, type, or shortcuts)
-  const allOptions = getSlashMenuItems();
+  const fileAttachmentsEnabled = useAuthStore((s) => s.authConfig?.fileAttachmentsEnabled ?? false);
+  const allOptions = getSlashMenuItems().filter(
+    (opt) => opt.type !== 'file' || fileAttachmentsEnabled
+  );
   const queryLower = query.toLowerCase();
   const filteredOptions = query
     ? allOptions.filter(

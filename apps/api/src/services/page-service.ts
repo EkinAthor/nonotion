@@ -214,6 +214,15 @@ export async function deletePage(id: string): Promise<boolean> {
   // Delete all blocks for this page
   await getStorage().deleteBlocksByPage(id);
 
+  // Delete file attachments linked to this page (blob + metadata row).
+  // Unconditional: attachment rows may exist from a period when the feature was enabled.
+  try {
+    const { deleteAttachmentsByPage } = await import('./attachment-service.js');
+    await deleteAttachmentsByPage(id);
+  } catch (error) {
+    console.warn(`Attachment cleanup failed for page ${id}:`, error);
+  }
+
   return getStorage().deletePage(id);
 }
 
