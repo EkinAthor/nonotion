@@ -79,6 +79,7 @@ export const blocks = sqliteTable('blocks', {
       'checklist',
       'code_block',
       'image',
+      'file',
       'divider',
       'page_link',
       'database_view',
@@ -93,16 +94,22 @@ export const blocks = sqliteTable('blocks', {
   index('idx_blocks_page_order').on(table.pageId, table.order),
 ]);
 
-// Files table
+// Files table (embedded images + file attachments; attachment bytes may live in Supabase Storage)
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(), // file_xxx
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   size: integer('size').notNull(),
-  data: blob('data', { mode: 'buffer' }).notNull(),
+  data: blob('data', { mode: 'buffer' }), // null when storage_backend != 'db'
   uploadedBy: text('uploaded_by').notNull(),
+  pageId: text('page_id'), // attachment→page linkage; null for legacy image rows
+  storageBackend: text('storage_backend').notNull().default('db'), // 'db' | 'supabase'
+  status: text('status').notNull().default('ready'), // 'pending' | 'ready'
+  detachedAt: text('detached_at'), // set when the owning block is deleted/replaced; GC'd after grace period
   createdAt: text('created_at').notNull(),
-});
+}, (table) => [
+  index('idx_files_page_id').on(table.pageId),
+]);
 
 // Settings table (key-value store for workspace settings)
 export const settings = sqliteTable('settings', {

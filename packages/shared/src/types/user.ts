@@ -123,4 +123,7 @@ export interface AuthConfigResponse {
   enabledModes: AuthMode[];
   googleClientId: string | null;
   mcpEnabled: boolean;
+  fileAttachmentsEnabled: boolean;
+  fileAllowedExtensions: string[]; // lowercase, no leading dot
+  fileMaxSizeMb: number;
 }

@@ -4,6 +4,7 @@ export interface ToolTextResult {
   content: Array<
     | { type: 'text'; text: string }
     | { type: 'image'; data: string; mimeType: string }
+    | { type: 'resource'; resource: { uri: string; mimeType: string; blob: string } }
   >;
   isError?: boolean;
   [key: string]: unknown;

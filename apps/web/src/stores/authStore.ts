@@ -195,7 +195,14 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // Fallback to db-only if config fetch fails
           set({
-            authConfig: { enabledModes: ['db'], googleClientId: null, mcpEnabled: false },
+            authConfig: {
+              enabledModes: ['db'],
+              googleClientId: null,
+              mcpEnabled: false,
+              fileAttachmentsEnabled: false,
+              fileAllowedExtensions: [],
+              fileMaxSizeMb: 0,
+            },
             authConfigLoading: false,
           });
         }

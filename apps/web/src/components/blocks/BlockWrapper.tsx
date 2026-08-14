@@ -19,6 +19,7 @@ import NumberedListEdit from './registry/NumberedListEdit';
 import ChecklistEdit from './registry/ChecklistEdit';
 import CodeBlockEdit from './registry/CodeBlockEdit';
 import ImageEdit from './registry/ImageEdit';
+import FileEdit from './registry/FileEdit';
 import DividerEdit from './registry/DividerEdit';
 import PageLinkEdit from './registry/PageLinkEdit';
 import DatabaseViewEdit from './registry/DatabaseViewEdit';
@@ -265,6 +266,8 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
         return <CodeBlockEdit block={block} readOnly={readOnly} />;
       case 'image':
         return <ImageEdit block={block} readOnly={readOnly} />;
+      case 'file':
+        return <FileEdit block={block} readOnly={readOnly} />;
       case 'divider':
         return <DividerEdit block={block} readOnly={readOnly} />;
       case 'page_link':

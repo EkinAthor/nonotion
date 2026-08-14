@@ -13,7 +13,7 @@ import {
   mcpOauthCodes,
   mcpOauthRefreshTokens,
 } from '../db/schema.js';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, lt, isNotNull, inArray, sql } from 'drizzle-orm';
 import type {
   Page,
   Block,
@@ -31,7 +31,7 @@ import type {
   McpOAuthRefreshToken,
 } from '@nonotion/shared';
 import type { StorageAdapter, UserStorageAdapter } from './storage-adapter.js';
-import type { FileStorageAdapter, StoredFile } from './file-storage-adapter.js';
+import type { FileStorageAdapter, StoredFile, FileStorageBackendKind, FileStatus } from './file-storage-adapter.js';
 import type { McpStorageAdapter } from './mcp-storage-adapter.js';
 import type { PageRow, BlockRow } from '../db/schema.js';
 
@@ -417,6 +417,31 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
 
   // ==================== FileStorageAdapter ====================
 
+  private static readonly fileMetaColumns = {
+    id: files.id,
+    filename: files.filename,
+    mimeType: files.mimeType,
+    size: files.size,
+    uploadedBy: files.uploadedBy,
+    pageId: files.pageId,
+    storageBackend: files.storageBackend,
+    status: files.status,
+    detachedAt: files.detachedAt,
+    createdAt: files.createdAt,
+  };
+
+  private static toStoredFile(row: {
+    id: string; filename: string; mimeType: string; size: number; uploadedBy: string;
+    pageId: string | null; storageBackend: string; status: string;
+    detachedAt: string | null; createdAt: string;
+  }): StoredFile {
+    return {
+      ...row,
+      storageBackend: row.storageBackend as FileStorageBackendKind,
+      status: row.status as FileStatus,
+    };
+  }
+
   async saveFile(file: {
     id: string;
     filename: string;
@@ -441,25 +466,68 @@ export class SqliteFullStorage implements StorageAdapter, UserStorageAdapter, Fi
       mimeType: file.mimeType,
       size: file.size,
       uploadedBy: file.uploadedBy,
+      pageId: null,
+      storageBackend: 'db',
+      status: 'ready',
+      detachedAt: null,
       createdAt,
     };
   }
 
+  async createFileMeta(meta: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    uploadedBy: string;
+    pageId: string;
+    storageBackend: FileStorageBackendKind;
+    status: FileStatus;
+  }): Promise<StoredFile> {
+    const createdAt = new Date().toISOString();
+    db.insert(files).values({ ...meta, data: null, createdAt }).run();
+    return { ...meta, detachedAt: null, createdAt };
+  }
+
+  async updateFileMeta(
+    id: string,
+    patch: { status?: FileStatus; size?: number; detachedAt?: string | null }
+  ): Promise<boolean> {
+    const result = db.update(files).set(patch).where(eq(files.id, id)).run();
+    return result.changes > 0;
+  }
+
+  async writeFileData(id: string, data: Buffer): Promise<boolean> {
+    const result = db.update(files).set({ data }).where(eq(files.id, id)).run();
+    return result.changes > 0;
+  }
+
   async getFileMeta(id: string): Promise<StoredFile | null> {
-    const rows = db.select({
-      id: files.id,
-      filename: files.filename,
-      mimeType: files.mimeType,
-      size: files.size,
-      uploadedBy: files.uploadedBy,
-      createdAt: files.createdAt,
-    }).from(files).where(eq(files.id, id)).all();
-    return rows.length > 0 ? rows[0] : null;
+    const rows = db.select(SqliteFullStorage.fileMetaColumns)
+      .from(files).where(eq(files.id, id)).all();
+    return rows.length > 0 ? SqliteFullStorage.toStoredFile(rows[0]) : null;
   }
 
   async getFileData(id: string): Promise<Buffer | null> {
     const rows = db.select({ data: files.data }).from(files).where(eq(files.id, id)).all();
     return rows.length > 0 ? rows[0].data : null;
+  }
+
+  async getFilesByPage(pageId: string): Promise<StoredFile[]> {
+    const rows = db.select(SqliteFullStorage.fileMetaColumns)
+      .from(files).where(eq(files.pageId, pageId)).all();
+    return rows.map(SqliteFullStorage.toStoredFile);
+  }
+
+  async listFilesForGc(cutoffIso: string): Promise<StoredFile[]> {
+    const rows = db.select(SqliteFullStorage.fileMetaColumns)
+      .from(files)
+      .where(or(
+        and(eq(files.status, 'pending'), lt(files.createdAt, cutoffIso)),
+        and(isNotNull(files.detachedAt), lt(files.detachedAt, cutoffIso))
+      ))
+      .all();
+    return rows.map(SqliteFullStorage.toStoredFile);
   }
 
   async deleteFile(id: string): Promise<boolean> {

@@ -18,7 +18,7 @@ export const databaseApi = trackMutations(client.databaseApi, [
   'updateProperties',
   'updateKanbanCardOrder',
 ]);
-export const filesApi = trackMutations(client.filesApi, ['upload']);
+export const filesApi = trackMutations(client.filesApi, ['upload', 'uploadAttachment']);
 export const searchApi = client.searchApi;
 export const importApi = client.importApi;
 export const realtimeApi = client.realtimeApi;

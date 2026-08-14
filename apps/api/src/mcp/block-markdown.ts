@@ -40,6 +40,8 @@ export function extractFileId(url: string): string | null {
 export interface BlocksToMarkdownContext {
   /** Whether the scope database allows image access via MCP. */
   allowImages: boolean;
+  /** Whether the scope database allows file attachment access via MCP. */
+  allowFiles: boolean;
   /** Titles for page_link targets (pre-resolved in bulk by the caller). */
   linkedPageTitles: Map<string, string>;
   /** Info for database_view targets (pre-resolved in bulk by the caller). */
@@ -134,6 +136,20 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
           lines.push(`![${alt}](${url})`);
         }
         if (caption) lines.push(`*${caption}*`);
+        break;
+      }
+      case 'file': {
+        const fileId = String(content.fileId ?? '');
+        const filename = String(content.filename ?? 'file');
+        const size = Number(content.size ?? 0);
+        if (!fileId) break;
+        if (ctx.allowFiles) {
+          const sizeNote = size > 0 ? `, ${(size / 1024 / 1024).toFixed(1)}MB` : '';
+          lines.push(`[${filename}](file: ${fileId})`);
+          lines.push(`*Attached file — fetch with get_file (fileId: "${fileId}"${sizeNote}).*`);
+        } else {
+          lines.push(`[file omitted — file access is not enabled for this database]`);
+        }
         break;
       }
       case 'page_link': {

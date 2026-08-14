@@ -18,7 +18,10 @@ declare module '@fastify/jwt' {
       | { userId: string; twoFactorPending: true }
       // MCP access tokens — accepted only by the /mcp endpoint, rejected by
       // authMiddleware/optionalAuthMiddleware (see mcpScope guard below).
-      | { userId: string; mcpScope: 'read'; aud: string };
+      | { userId: string; mcpScope: 'read'; aud: string }
+      // File download tokens — accepted only by GET /api/files/:id/download
+      // (no userId; carries no application-API authority).
+      | { fileId: string; disposition: 'attachment' | 'inline'; aud: 'file-download' };
     user: { userId: string; role: 'admin' | 'user'; isOwner: boolean; twoFactorPending?: boolean };
   }
 }
@@ -33,6 +36,10 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     // Reject MCP access tokens — they are only valid on the /mcp endpoint.
     if (decoded.mcpScope) {
       throw new Error('MCP tokens cannot access the application API');
+    }
+    // Reject non-session tokens (e.g. file-download tokens carry no userId).
+    if (!decoded.userId) {
+      throw new Error('Not a session token');
     }
     request.userId = decoded.userId;
     request.userRole = decoded.role;
@@ -53,6 +60,9 @@ export async function optionalAuthMiddleware(request: FastifyRequest): Promise<v
     }
     if (decoded.mcpScope) {
       throw new Error('MCP tokens cannot access the application API');
+    }
+    if (!decoded.userId) {
+      throw new Error('Not a session token');
     }
     request.userId = decoded.userId;
     request.userRole = decoded.role;

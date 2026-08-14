@@ -334,6 +334,19 @@ A search box in the `DatabaseToolbar` that full-text filters the current databas
 - **UI** (`DatabaseToolbar.tsx`): a compact debounced (250ms) `<input>` with magnifier icon + clear button, placed after the Filter button. Since there is a single `DatabaseView` for both full-screen and embedded, it appears in both automatically; kanban narrows cards across columns (column counts reflect the searched set).
 - **Demo parity** (`demo-client.ts`): mirrored `applySearch` (title OR block text via `storage.getAllBlocks()`), applied after `applyFilter` before `slice`, so `total` matches.
 
+### 31. File Attachments (Optional)
+Upload arbitrary files to pages via a `file` block (chip with Open/Download actions). Env-gated: `FILE_ATTACHMENTS_ENABLED=true` registers `routes/attachments.ts` (dynamic import in `index.ts`, MCP pattern) and flips `AuthConfigResponse.fileAttachmentsEnabled` (+ `fileAllowedExtensions`, `fileMaxSizeMb`), which gates the slash-menu item (`SlashCommandMenu.tsx`) and the MCP "Allow file access" checkbox. Full docs: `docs/file-attachments.md`.
+
+- **Metadata vs bytes**: metadata always in the `files` table (new columns `page_id`, `storage_backend` `'db'|'supabase'`, `status` `'pending'|'ready'`, `detached_at`; `data` now nullable). Bytes go through `AttachmentBlobBackend` (`storage/attachment-backend.ts`) — `DbAttachmentBackend` (BLOB, multipart through API) or `SupabaseAttachmentBackend` (private bucket, signed upload/download URLs, AES-256 at rest — the encryption story). Rows remember their own backend, so switching `FILE_STORAGE_BACKEND` keeps old files working. Legacy image rows have `page_id NULL` and are untouched (`POST /api/files` + `GET /api/files/:id` unchanged).
+- **Upload flow**: `POST /api/files/attachments/initiate` (Zod `attachmentInitiateInputSchema`, extension allowlist + size + `canEdit(pageId)`, creates `pending` row) → supabase: browser PUTs to signed URL then `POST .../:id/confirm` (verifies object + real size, deletes on over-cap); db: multipart `POST .../:id/content` (terminal). All on the upload rate-limit tier. Frontend orchestration in one method: `filesApi.uploadAttachment(file, pageId)` (in the save-tracking allowlist).
+- **Download flow**: `GET /api/files/:id/download-url?disposition=` — requires `canRead` on the linked page (fixes the any-authed-user hole for new files), returns a Supabase signed URL or a JWT-tokenized `GET /api/files/:id/download?token=` public route (`aud:'file-download'` tokens are rejected by `authMiddleware`; route sets `Content-Disposition`, `nosniff`, `no-store`; `inline` only for safe MIMEs). `FileEdit.tsx` never branches on backend.
+- **Content shape**: `FileContent { fileId, filename, size, mimeType }` — deliberately **no `url` key** (`getBlockText()` keys off `'url'` for images; file blocks return `filename`, making them searchable).
+- **Lifecycle**: block delete/replace → `markDetached` (undo-safe; block re-create calls `markReattached`); page delete → hard delete blob+row (`deleteAttachmentsByPage` in `page-service.deletePage`); opportunistic `gcSweep()` on initiate reaps pending/detached rows >24h. Hooks live in `block-service.ts`/`page-service.ts`.
+- **Validation**: extension allowlist (`FILE_ALLOWED_EXTENSIONS`, default pdf/doc/docx/xls/xlsx/ppt/pptx/csv/txt/md/zip/json), `FILE_MAX_SIZE_MB` (default 25), html/svg/js **always** rejected (stored-XSS). Config in `config/files.ts` (throw in prod / warn+fallback-to-db in dev when supabase creds missing).
+- **MCP**: `get_file` tool (`mcp/tools/get-file.ts`, clone of get-image with `allowFiles` gate + fileId page-scan + 4MB cap; text MIMEs → text, else base64 resource). `block-markdown.ts` renders `[name](file: file_x)` or an omission notice via `ctx.allowFiles`. `McpAccessPopover` "Allow file access" checkbox is now live (disabled when the feature is off server-side).
+- **Demo mode**: `uploadAttachment`/`getDownloadUrl` throw; config stub reports `fileAttachmentsEnabled: false` → slash item hidden.
+- **Env vars**: `FILE_ATTACHMENTS_ENABLED`, `FILE_STORAGE_BACKEND` (`db` default; db+Vercel caps uploads ~4.5MB), `FILE_BUCKET`, `FILE_ALLOWED_EXTENSIONS`, `FILE_MAX_SIZE_MB`, `FILE_SIGNED_URL_TTL_SECONDS`; supabase backend reuses `SUPABASE_URL`/`SUPABASE_SECRET_KEY`.
+
 ## Critical Files
 
 | File | Purpose |
@@ -350,7 +363,14 @@ A search box in the `DatabaseToolbar` that full-text filters the current databas
 | `apps/web/src/contexts/BlockContext.tsx` | Context for block operations (create, change type, navigate) |
 | `apps/web/src/components/blocks/SlashCommandMenu.tsx` | Slash command popup for changing block types |
 | `apps/web/src/components/blocks/registry/index.ts` | Block type registry with shortcuts |
-| `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface for file BLOB storage |
+| `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface (metadata + BLOB) incl. attachment lifecycle methods |
+| `apps/api/src/storage/attachment-backend.ts` | `AttachmentBlobBackend` interface + per-kind singleton factory (db/supabase bytes path) |
+| `apps/api/src/storage/supabase-attachment-backend.ts` | Supabase Storage backend (signed upload/download URLs, verify, delete) |
+| `apps/api/src/services/attachment-service.ts` | Attachment validation, initiate/confirm, download authorization, detach + GC |
+| `apps/api/src/routes/attachments.ts` | Attachment routes (initiate/content/confirm/download-url + public tokenized download) |
+| `apps/api/src/config/files.ts` | File attachments env config (`isFileAttachmentsEnabled`, `loadFileAttachmentsConfig`) |
+| `apps/web/src/components/blocks/registry/FileEdit.tsx` | File block: upload drop-zone + chip with Open/Download/Replace/Remove |
+| `apps/api/src/mcp/tools/get-file.ts` | MCP get_file tool (allowFiles gate, 4MB cap, text/resource result) |
 | `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
 | `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
 | `apps/web/src/api/client.ts` | Conditional re-export hub (`IS_DEMO_MODE` switches between real and demo client); applies save-tracking allowlists |
@@ -517,7 +537,8 @@ pnpm --filter @nonotion/api tsc --noEmit
 
 These are planned but NOT yet implemented:
 - Additional block types (tables)
-- S3/external file storage backend (currently BLOB in DB)
+- Embedded rendering of attachments (e.g. pptx as slideshow) — attachments are download/open links for now
+- Migrating embedded images off DB BLOB storage (attachments already support Supabase Storage)
 
 When implementing these, check `docs/implementation-plan.md` for architectural guidance.
 

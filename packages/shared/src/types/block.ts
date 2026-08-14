@@ -8,6 +8,7 @@ export type BlockType =
   | 'checklist'
   | 'code_block'
   | 'image'
+  | 'file'
   | 'divider'
   | 'page_link'
   | 'database_view';
@@ -59,6 +60,13 @@ export interface ImageContent {
   caption?: string;
 }
 
+export interface FileContent {
+  fileId: string; // "file_xxxxx" — no `url` key here (getBlockText keys off 'url' for images)
+  filename: string;
+  size: number; // bytes
+  mimeType: string;
+}
+
 export interface DividerContent {}
 
 export interface PageLinkContent {
@@ -79,6 +87,7 @@ export type BlockContent =
   | ChecklistContent
   | CodeBlockContent
   | ImageContent
+  | FileContent
   | DividerContent
   | PageLinkContent
   | DatabaseViewContent;
@@ -116,6 +125,9 @@ export function getBlockText(content: BlockContent): string {
   }
   if ('code' in content) {
     return content.code;
+  }
+  if ('fileId' in content) {
+    return content.filename;
   }
   if ('url' in content) {
     return content.caption || content.alt || '';

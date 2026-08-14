@@ -19,6 +19,7 @@ import { ensureAdminPasswordReset } from './services/auth-service.js';
 import { runWithRequestContext } from './services/request-context.js';
 import { registerRateLimit } from './config/rate-limit.js';
 import { isMcpEnabled } from './config/mcp.js';
+import { isFileAttachmentsEnabled } from './config/files.js';
 import { loadRealtimeConfig } from './config/realtime.js';
 import { initializeBroadcaster } from './realtime/realtime-factory.js';
 import { clientIdMiddleware } from './middleware/client-id.js';
@@ -160,6 +161,12 @@ await fastify.register(filesRoutes);
 await fastify.register(importRoutes);
 await fastify.register(searchRoutes);
 await fastify.register(realtimeRoutes);
+
+// File attachments (optional) — zero overhead when disabled
+if (isFileAttachmentsEnabled()) {
+  const { attachmentsRoutes } = await import('./routes/attachments.js');
+  await fastify.register(attachmentsRoutes);
+}
 
 // MCP server (read-only Model Context Protocol access) — zero overhead when disabled
 if (isMcpEnabled()) {

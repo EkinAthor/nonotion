@@ -125,7 +125,14 @@ export const authApi = {
     }),
 
   getConfig: (): Promise<AuthConfigResponse> =>
-    Promise.resolve({ enabledModes: ['db'], googleClientId: null, mcpEnabled: false }),
+    Promise.resolve({
+      enabledModes: ['db'],
+      googleClientId: null,
+      mcpEnabled: false,
+      fileAttachmentsEnabled: false,
+      fileAllowedExtensions: [],
+      fileMaxSizeMb: 0,
+    }),
 };
 
 // ============ USERS API ============
@@ -829,6 +836,14 @@ export const filesApi = {
   getImageBlobUrl: async (fileUrl: string): Promise<string> => {
     // In demo mode, return the URL as-is (demo data uses external URLs if any)
     return fileUrl;
+  },
+
+  uploadAttachment: async (_file: File, _pageId: string): Promise<never> => {
+    throw new Error('File attachments are not available in demo mode');
+  },
+
+  getDownloadUrl: async (_fileId: string, _disposition: string): Promise<never> => {
+    throw new Error('File attachments are not available in demo mode');
   },
 };
 

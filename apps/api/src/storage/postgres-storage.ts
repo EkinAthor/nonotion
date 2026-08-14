@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, lt, isNotNull, inArray, sql } from 'drizzle-orm';
 import type {
   Page,
   Block,
@@ -529,6 +529,35 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
 
   // ==================== FileStorageAdapter ====================
 
+  private fileMetaColumns() {
+    return {
+      id: pgSchema.files.id,
+      filename: pgSchema.files.filename,
+      mimeType: pgSchema.files.mimeType,
+      size: pgSchema.files.size,
+      uploadedBy: pgSchema.files.uploadedBy,
+      pageId: pgSchema.files.pageId,
+      storageBackend: pgSchema.files.storageBackend,
+      status: pgSchema.files.status,
+      detachedAt: pgSchema.files.detachedAt,
+      createdAt: pgSchema.files.createdAt,
+    };
+  }
+
+  private toStoredFile(row: {
+    id: string; filename: string; mimeType: string; size: number; uploadedBy: string;
+    pageId: string | null; storageBackend: string; status: string;
+    detachedAt: Date | null; createdAt: Date;
+  }): StoredFile {
+    return {
+      ...row,
+      storageBackend: row.storageBackend as StoredFile['storageBackend'],
+      status: row.status as StoredFile['status'],
+      detachedAt: row.detachedAt ? row.detachedAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
   async saveFile(file: {
     id: string;
     filename: string;
@@ -553,28 +582,59 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       mimeType: file.mimeType,
       size: file.size,
       uploadedBy: file.uploadedBy,
+      pageId: null,
+      storageBackend: 'db',
+      status: 'ready',
+      detachedAt: null,
       createdAt,
     };
   }
 
+  async createFileMeta(meta: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    uploadedBy: string;
+    pageId: string;
+    storageBackend: StoredFile['storageBackend'];
+    status: StoredFile['status'];
+  }): Promise<StoredFile> {
+    const createdAt = new Date().toISOString();
+    await this.db.insert(pgSchema.files).values({
+      ...meta,
+      data: null,
+      createdAt: new Date(createdAt),
+    });
+    return { ...meta, detachedAt: null, createdAt };
+  }
+
+  async updateFileMeta(
+    id: string,
+    patch: { status?: StoredFile['status']; size?: number; detachedAt?: string | null }
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = {};
+    if (patch.status !== undefined) set.status = patch.status;
+    if (patch.size !== undefined) set.size = patch.size;
+    if (patch.detachedAt !== undefined) {
+      set.detachedAt = patch.detachedAt === null ? null : new Date(patch.detachedAt);
+    }
+    if (Object.keys(set).length === 0) return true;
+    const result = await this.db.update(pgSchema.files).set(set).where(eq(pgSchema.files.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async writeFileData(id: string, data: Buffer): Promise<boolean> {
+    const result = await this.db.update(pgSchema.files).set({ data }).where(eq(pgSchema.files.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async getFileMeta(id: string): Promise<StoredFile | null> {
     const rows = await this.db
-      .select({
-        id: pgSchema.files.id,
-        filename: pgSchema.files.filename,
-        mimeType: pgSchema.files.mimeType,
-        size: pgSchema.files.size,
-        uploadedBy: pgSchema.files.uploadedBy,
-        createdAt: pgSchema.files.createdAt,
-      })
+      .select(this.fileMetaColumns())
       .from(pgSchema.files)
       .where(eq(pgSchema.files.id, id));
-    if (rows.length === 0) return null;
-    const row = rows[0];
-    return {
-      ...row,
-      createdAt: row.createdAt.toISOString(),
-    };
+    return rows.length > 0 ? this.toStoredFile(rows[0]) : null;
   }
 
   async getFileData(id: string): Promise<Buffer | null> {
@@ -583,6 +643,26 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
       .from(pgSchema.files)
       .where(eq(pgSchema.files.id, id));
     return rows.length > 0 ? rows[0].data : null;
+  }
+
+  async getFilesByPage(pageId: string): Promise<StoredFile[]> {
+    const rows = await this.db
+      .select(this.fileMetaColumns())
+      .from(pgSchema.files)
+      .where(eq(pgSchema.files.pageId, pageId));
+    return rows.map((r) => this.toStoredFile(r));
+  }
+
+  async listFilesForGc(cutoffIso: string): Promise<StoredFile[]> {
+    const cutoff = new Date(cutoffIso);
+    const rows = await this.db
+      .select(this.fileMetaColumns())
+      .from(pgSchema.files)
+      .where(or(
+        and(eq(pgSchema.files.status, 'pending'), lt(pgSchema.files.createdAt, cutoff)),
+        and(isNotNull(pgSchema.files.detachedAt), lt(pgSchema.files.detachedAt, cutoff))
+      ));
+    return rows.map((r) => this.toStoredFile(r));
   }
 
   async deleteFile(id: string): Promise<boolean> {

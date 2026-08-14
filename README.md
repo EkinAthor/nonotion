@@ -32,6 +32,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Read-only "Created" system property on every database: the row's creation timestamp, hidden by default, sortable (time precision) and filterable (date range), displayed as a date
 - Save/revert default database view config (filters, sort, hidden columns, property order) for all users
 - Image upload (file picker + clipboard paste) with BLOB storage
+- File attachments (optional): upload files to pages as download/open links via a `file` block, with a configurable extension allowlist and either DB BLOB or encrypted Supabase Storage (signed URLs) as the backend — see `docs/file-attachments.md`
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Database quicksearch: a search box in the database toolbar that full-text filters the current view (table or kanban, full-screen or embedded) by row title and page body text, combined on top of any active filter
@@ -242,6 +243,12 @@ All perf entities carry a `_perf_` id infix, so `--clean` can never touch real d
 | `RATE_LIMIT_IMPORT_WINDOW_MINUTES` | Import: window duration in minutes | `1` |
 | `RATE_LIMIT_SEARCH_MAX` | Search: max requests per window | `30` |
 | `RATE_LIMIT_SEARCH_WINDOW_MINUTES` | Search: window duration in minutes | `1` |
+| `FILE_ATTACHMENTS_ENABLED` | Enable file attachments (file block + upload/download routes) | `false` |
+| `FILE_STORAGE_BACKEND` | Attachment bytes backend: `db` or `supabase` (private bucket, signed URLs) | `db` |
+| `FILE_BUCKET` | Supabase Storage bucket for attachments (private, created manually) | `nonotion-files` |
+| `FILE_ALLOWED_EXTENSIONS` | Accepted attachment extensions (comma-separated; html/svg/js always rejected) | `pdf,doc,docx,xls,xlsx,ppt,pptx,csv,txt,md,zip,json` |
+| `FILE_MAX_SIZE_MB` | Maximum attachment size in MB | `25` |
+| `FILE_SIGNED_URL_TTL_SECONDS` | TTL of signed/tokenized download URLs | `300` |
 | `REALTIME_ENABLED` | Enable real-time collaboration (requires Supabase) | `false` |
 | `SUPABASE_URL` | Supabase project URL | - |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable API key (`sb_publishable_...`) | - |

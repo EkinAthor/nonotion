@@ -10,6 +10,7 @@ export const blockTypeSchema = z.enum([
   'checklist',
   'code_block',
   'image',
+  'file',
   'divider',
   'page_link',
   'database_view',
@@ -62,6 +63,13 @@ export const imageContentSchema = z.object({
   caption: z.string().optional(),
 }).strict();
 
+export const fileContentSchema = z.object({
+  fileId: z.string(),
+  filename: z.string(),
+  size: z.number().int().nonnegative(),
+  mimeType: z.string(),
+}).strict();
+
 export const dividerContentSchema = z.object({}).strict();
 
 export const pageLinkContentSchema = z.object({
@@ -81,6 +89,7 @@ export const blockContentSchema = z.union([
   heading3ContentSchema,
   codeBlockContentSchema,
   imageContentSchema,
+  fileContentSchema,
   pageLinkContentSchema,
   databaseViewContentSchema,
   dividerContentSchema,
