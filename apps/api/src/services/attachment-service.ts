@@ -28,7 +28,9 @@ export class AttachmentError extends Error {
 const GC_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /** Extensions that are never accepted regardless of FILE_ALLOWED_EXTENSIONS (stored-XSS / active content). */
-const FORBIDDEN_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'svg', 'xml', 'js', 'mjs']);
+// (xml is allowed: downloads are attachment-only + nosniff, and inline is
+// restricted to SAFE_INLINE_MIME_TYPES, so it can never render on our origin.)
+const FORBIDDEN_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'svg', 'js', 'mjs']);
 const FORBIDDEN_MIME_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml', 'text/javascript', 'application/javascript']);
 
 /** MIME types allowed to render inline (open in a new tab); everything else downloads. */

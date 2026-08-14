@@ -3,6 +3,7 @@ import type { Block, ImageContent } from '@nonotion/shared';
 import { useBlockStore } from '@/stores/blockStore';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { filesApi } from '@/api/client';
+import { claimPendingUpload } from '@/lib/pending-drop-uploads';
 
 interface ImageEditProps {
   block: Block;
@@ -117,6 +118,15 @@ export default function ImageEdit({ block, readOnly = false }: ImageEditProps) {
     // Reset so the same file can be re-selected
     e.target.value = '';
   }, [handleFileUpload]);
+
+  // Canvas drag-and-drop handoff: an image dropped on the page canvas creates
+  // this block and stashes the File under its id — claim it and upload.
+  const handleFileUploadRef = useRef(handleFileUpload);
+  handleFileUploadRef.current = handleFileUpload;
+  useEffect(() => {
+    if (content.url) return;
+    return claimPendingUpload(block.id, (file) => handleFileUploadRef.current(file));
+  }, [block.id, content.url]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;

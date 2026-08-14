@@ -246,7 +246,7 @@ All perf entities carry a `_perf_` id infix, so `--clean` can never touch real d
 | `FILE_ATTACHMENTS_ENABLED` | Enable file attachments (file block + upload/download routes) | `false` |
 | `FILE_STORAGE_BACKEND` | Attachment bytes backend: `db` or `supabase` (private bucket, signed URLs) | `db` |
 | `FILE_BUCKET` | Supabase Storage bucket for attachments (private, created manually) | `nonotion-files` |
-| `FILE_ALLOWED_EXTENSIONS` | Accepted attachment extensions (comma-separated; html/svg/js always rejected) | `pdf,doc,docx,xls,xlsx,ppt,pptx,csv,txt,md,zip,json` |
+| `FILE_ALLOWED_EXTENSIONS` | Accepted attachment extensions (comma-separated; html/svg/js always rejected) | ~38 common extensions: office docs, text/data, archives, images, audio/video (see `.env.example`) |
 | `FILE_MAX_SIZE_MB` | Maximum attachment size in MB | `25` |
 | `FILE_SIGNED_URL_TTL_SECONDS` | TTL of signed/tokenized download URLs | `300` |
 | `REALTIME_ENABLED` | Enable real-time collaboration (requires Supabase) | `false` |
