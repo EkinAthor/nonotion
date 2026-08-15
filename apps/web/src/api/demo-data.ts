@@ -258,6 +258,35 @@ function createShowcaseBlocks(): Block[] {
 
     blk('blk_demo_dv_002', PG_SHOWCASE, 'divider', {}),
     blk('blk_demo_p4_001', PG_SHOWCASE, 'paragraph', { text: 'That\'s it! Try editing any of these blocks, or create new ones by pressing <code>/</code> in an empty block.' }),
+
+    // Mentions section stays LAST — createMentionShowcaseBlocks end-appends for
+    // already-seeded browsers (demo-init), so fresh-seed order must match
+    ...createMentionShowcaseBlocks(blockOrder),
+  ];
+}
+
+// Shared between the fresh seed above and the demo-init retrofit for
+// already-seeded browsers. Orders are explicit so the retrofit can append at
+// the showcase page's current max order.
+export const MENTION_DEMO_BLOCK_IDS = ['blk_demo_mn_001', 'blk_demo_mn_002', 'blk_demo_mn_003'];
+
+export function createMentionShowcaseBlocks(startOrder: number): Block[] {
+  const make = (id: string, type: Block['type'], order: number, content: Block['content']): Block =>
+    ({ id, type, pageId: PG_SHOWCASE, order, content, version: 1 });
+  blockOrder = Math.max(blockOrder, startOrder + 3);
+  return [
+    make('blk_demo_mn_001', 'heading2', startOrder, { text: 'Mentions', level: 2 }),
+    make('blk_demo_mn_002', 'paragraph', startOrder + 1, {
+      text:
+        'Type <code>@</code> to link internal resources inline — click ' +
+        `<span data-mention-type="page" data-mention-id="${PG_GETTING_STARTED}">Getting Started</span> or ` +
+        `<span data-mention-type="page" data-mention-id="${PG_BOOKS}">My Book Database</span> to open them in split view.`,
+    }),
+    make('blk_demo_mn_003', 'paragraph', startOrder + 2, {
+      text:
+        'You can also mention people like ' +
+        `<span data-mention-type="user" data-mention-id="${DEMO_USER_ID}">Demo User</span> — click the mention to see their info.`,
+    }),
   ];
 }
 

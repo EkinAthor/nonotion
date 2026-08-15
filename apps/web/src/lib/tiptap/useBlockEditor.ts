@@ -4,6 +4,7 @@ import { Extension } from '@tiptap/core';
 import { getRealtimeManager } from '@/lib/realtime';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DOMSerializer } from '@tiptap/pm/model';
+import type { Node as PMNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
@@ -21,6 +22,8 @@ import { stripOuterPTag } from './html-utils';
 import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { inlineMarkdownToHtml } from '@/lib/html-markdown';
 import { undoManager } from '@/lib/undo/undo-manager';
+import { MentionNode, type MentionType } from './mention-node';
+import { recordRecentUser } from '@/lib/mention-recents';
 
 // One undo step per typing burst; a burst commits after this pause (or on
 // blur / structural op / undo keypress)
@@ -64,6 +67,20 @@ interface SlashMenuState {
   position: { top: number; left: number };
 }
 
+export interface MentionMenuState {
+  isOpen: boolean;
+  query: string;
+  position: { top: number; left: number };
+}
+
+// leafText for doc.textBetween when string offsets must equal doc positions:
+// every leaf node (mention atoms, images...) becomes exactly 1 char. Hard
+// breaks map to '\n' so line starts count as an "@"-trigger boundary.
+const ATOM_CHAR = '￼';
+function mentionLeafText(leaf: PMNode): string {
+  return leaf.type.name === 'hardBreak' ? '\n' : ATOM_CHAR;
+}
+
 interface UseBlockEditorOptions {
   block: Block;
   placeholder?: string;
@@ -91,6 +108,9 @@ interface UseBlockEditorResult {
   slashMenu: SlashMenuState;
   closeSlashMenu: () => void;
   selectSlashCommand: (type: BlockType, action?: string) => void;
+  mentionMenu: MentionMenuState;
+  closeMentionMenu: () => void;
+  insertMention: (kind: MentionType, id: string, label: string) => void;
 }
 
 export function useBlockEditor({
@@ -118,6 +138,13 @@ export function useBlockEditor({
   });
   const slashStartPosRef = useRef<number | null>(null);
   const slashMenuOpenRef = useRef(false);
+  const [mentionMenu, setMentionMenu] = useState<MentionMenuState>({
+    isOpen: false,
+    query: '',
+    position: { top: 0, left: 0 },
+  });
+  const mentionStartPosRef = useRef<number | null>(null);
+  const mentionMenuOpenRef = useRef(false);
   const blockRef = useRef(block);
 
   // Keep ref in sync with block prop
@@ -129,6 +156,10 @@ export function useBlockEditor({
   useEffect(() => {
     slashMenuOpenRef.current = slashMenu.isOpen;
   }, [slashMenu.isOpen]);
+
+  useEffect(() => {
+    mentionMenuOpenRef.current = mentionMenu.isOpen;
+  }, [mentionMenu.isOpen]);
 
   const saveContent = useCallback(
     (text: string) => {
@@ -335,6 +366,39 @@ export function useBlockEditor({
     slashStartPosRef.current = null;
   }, []);
 
+  const closeMentionMenu = useCallback(() => {
+    setMentionMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
+    mentionStartPosRef.current = null;
+  }, []);
+
+  const insertMention = useCallback(
+    (kind: MentionType, id: string, label: string) => {
+      const currentEditor = editorRef.current;
+      const atPos = mentionStartPosRef.current;
+      closeMentionMenu();
+      if (!currentEditor || atPos === null) return;
+      // transact flushes the open typing burst first, so the "@query" typing
+      // lands as its own undo entry; the replace-with-mention below becomes the
+      // next entry via the burst that the chain's onUpdate opens (Ctrl+Z after
+      // insert restores the typed "@query" text).
+      undoManager.transact(blockRef.current.pageId, () => {
+        currentEditor
+          .chain()
+          .focus()
+          .deleteRange({ from: atPos, to: currentEditor.state.selection.from })
+          .insertContent([
+            { type: 'mention', attrs: { mentionType: kind, mentionId: id, label } },
+            { type: 'text', text: ' ' },
+          ])
+          .run();
+      });
+      if (kind === 'user') {
+        recordRecentUser(id);
+      }
+    },
+    [closeMentionMenu]
+  );
+
   const selectSlashCommand = useCallback(
     async (type: BlockType, action?: string) => {
       // Group the slash-text cleanup + type conversion as ONE undo entry (the
@@ -525,7 +589,9 @@ export function useBlockEditor({
             clipboardTextSerializer: (slice) => {
               let text = '';
               slice.content.forEach((node) => {
-                if (node.isText && node.text) {
+                if (node.type.name === 'mention') {
+                  text += node.attrs.mentionType === 'user' ? `@${node.attrs.label}` : node.attrs.label;
+                } else if (node.isText && node.text) {
                   let chunk = node.text;
                   // Apply marks in markdown notation
                   for (const mark of node.marks) {
@@ -548,7 +614,9 @@ export function useBlockEditor({
                 } else if (node.isBlock) {
                   // Recurse into block nodes
                   node.content.forEach((child) => {
-                    if (child.isText && child.text) {
+                    if (child.type.name === 'mention') {
+                      text += child.attrs.mentionType === 'user' ? `@${child.attrs.label}` : child.attrs.label;
+                    } else if (child.isText && child.text) {
                       let chunk = child.text;
                       for (const mark of child.marks) {
                         switch (mark.type.name) {
@@ -595,8 +663,8 @@ export function useBlockEditor({
           return true;
         },
         Enter: ({ editor }) => {
-          // If slash menu is open, don't handle Enter (let menu handle it)
-          if (slashMenuOpenRef.current) {
+          // If slash/mention menu is open, don't handle Enter (let menu handle it)
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
             return true;
           }
 
@@ -654,11 +722,15 @@ export function useBlockEditor({
             closeSlashMenu();
             return true;
           }
+          if (mentionMenuOpenRef.current) {
+            closeMentionMenu();
+            return true;
+          }
           return false;
         },
         ArrowUp: ({ editor }) => {
-          // If slash menu is open, let it handle navigation
-          if (slashMenuOpenRef.current) {
+          // If slash/mention menu is open, let it handle navigation
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
             return false;
           }
 
@@ -682,8 +754,8 @@ export function useBlockEditor({
           return false;
         },
         ArrowDown: ({ editor }) => {
-          // If slash menu is open, let it handle navigation
-          if (slashMenuOpenRef.current) {
+          // If slash/mention menu is open, let it handle navigation
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
             return false;
           }
 
@@ -815,6 +887,7 @@ export function useBlockEditor({
       Highlight.configure({
         multicolor: true,
       }),
+      MentionNode,
       BlockKeyboardExtension,
       ClipboardExtension,
     ],
@@ -857,14 +930,15 @@ export function useBlockEditor({
         }
       }
 
-      // Check for slash command using plain text
+      // Check for slash command / mention trigger using plain text
       const { from } = editor.state.selection;
+      const doc = editor.state.doc;
 
       if (slashStartPosRef.current !== null) {
         // Slash menu is tracking - update query (text after the slash)
         // slashStartPosRef.current is position of "/" (1), so +1 gives position after "/"
         const queryStart = slashStartPosRef.current + 1;
-        const query = from > queryStart ? editor.state.doc.textBetween(queryStart, from) : '';
+        const query = from > queryStart ? doc.textBetween(queryStart, from) : '';
 
         // Close on space or if backspaced past slash
         if (query.includes(' ') || from <= slashStartPosRef.current) {
@@ -872,14 +946,48 @@ export function useBlockEditor({
         } else {
           setSlashMenu((prev) => ({ ...prev, query }));
         }
-      } else {
-        // Check if we should open slash menu
-        // Only at start of empty block when "/" is typed
-        if (text === '/') {
+      } else if (mentionStartPosRef.current !== null) {
+        // Mention menu is tracking — update query (text after the "@")
+        const atPos = mentionStartPosRef.current;
+        let stillValid = false;
+        if (from > atPos) {
+          // The tracked position must still hold the "@" (guards against
+          // deletions/replacements that shifted content under the ref)
+          const atChar = doc.textBetween(atPos, atPos + 1, '\n', mentionLeafText);
+          if (atChar === '@') {
+            const query =
+              from > atPos + 1 ? doc.textBetween(atPos + 1, from, '\n', mentionLeafText) : '';
+            // Space right after "@" (or anywhere in the query) closes the menu
+            // and leaves the text as-is
+            if (!query.includes(' ') && !query.includes('\n') && !query.includes(ATOM_CHAR)) {
+              stillValid = true;
+              setMentionMenu((prev) => ({ ...prev, query }));
+            }
+          }
+        }
+        if (!stillValid) {
+          closeMentionMenu();
+        }
+      } else if (text === '/' && doc.content.size === 3) {
+        // Open slash menu: only when "/" is the sole character in the block.
+        // The doc-size guard keeps atom nodes (mentions) from satisfying the
+        // text check — getText() is blind to atoms, but they occupy doc size.
+        const coords = editor.view.coordsAtPos(from);
+        // Position 1 is where the "/" character is in the document
+        slashStartPosRef.current = 1;
+        setSlashMenu({
+          isOpen: true,
+          query: '',
+          position: { top: coords.bottom, left: coords.left },
+        });
+      } else if (from > 1) {
+        // Open mention menu: the caret is right after an "@" that sits at block
+        // start or after whitespace (emails like a@b never trigger).
+        const before = doc.textBetween(1, from, '\n', mentionLeafText);
+        if (/(^|\s)@$/.test(before)) {
           const coords = editor.view.coordsAtPos(from);
-          // Position 1 is where the "/" character is in the document
-          slashStartPosRef.current = 1;
-          setSlashMenu({
+          mentionStartPosRef.current = from - 1;
+          setMentionMenu({
             isOpen: true,
             query: '',
             position: { top: coords.bottom, left: coords.left },
@@ -949,6 +1057,11 @@ export function useBlockEditor({
         burstTimerRef.current = undefined;
       }
 
+      // Open inline menus track doc positions that setContent invalidates
+      if (mentionStartPosRef.current !== null) {
+        closeMentionMenu();
+      }
+
       // Set flag to prevent onUpdate from saving during sync
       isSyncingExternalContentRef.current = true;
 
@@ -965,5 +1078,13 @@ export function useBlockEditor({
     lastKnownContentRef.current = blockText;
   }, [editor, blockText]);
 
-  return { editor, slashMenu, closeSlashMenu, selectSlashCommand };
+  return {
+    editor,
+    slashMenu,
+    closeSlashMenu,
+    selectSlashCommand,
+    mentionMenu,
+    closeMentionMenu,
+    insertMention,
+  };
 }

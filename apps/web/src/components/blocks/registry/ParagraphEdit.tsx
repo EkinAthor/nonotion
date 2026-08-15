@@ -5,6 +5,7 @@ import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
+import MentionMenu from '../MentionMenu';
 import FormatToolbar from '../FormatToolbar';
 
 interface ParagraphEditProps {
@@ -16,7 +17,7 @@ export default function ParagraphEdit({ block, readOnly = false }: ParagraphEdit
   const { createBlockBelow, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
-  const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
+  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention } = useBlockEditor({
     block,
     placeholder: readOnly ? '' : "Type '/' for commands...",
     readOnly,
@@ -61,6 +62,14 @@ export default function ParagraphEdit({ block, readOnly = false }: ParagraphEdit
           position={slashMenu.position}
           onSelect={selectSlashCommand}
           onClose={closeSlashMenu}
+        />
+      )}
+      {!readOnly && mentionMenu.isOpen && (
+        <MentionMenu
+          query={mentionMenu.query}
+          position={mentionMenu.position}
+          onSelect={insertMention}
+          onClose={closeMentionMenu}
         />
       )}
     </div>

@@ -5,6 +5,17 @@
 export function htmlToInlineMarkdown(html: string): string {
   let result = html;
 
+  // @-mentions: user -> @Name, page -> title only (before the generic strip
+  // so the user prefix survives)
+  result = result.replace(
+    /<span[^>]*data-mention-type="user"[^>]*>(.*?)<\/span>/gi,
+    '@$1'
+  );
+  result = result.replace(
+    /<span[^>]*data-mention-type="page"[^>]*>(.*?)<\/span>/gi,
+    '$1'
+  );
+
   // Bold: <strong> or <b> -> **text**
   result = result.replace(/<(?:strong|b)>(.*?)<\/(?:strong|b)>/gi, '**$1**');
 

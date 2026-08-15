@@ -15,6 +15,7 @@ import DatabaseView from '../database/DatabaseView';
 import ShareModal from '@/components/sharing/ShareModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import SaveIndicator from '@/components/common/SaveIndicator';
+import { recordRecentPage } from '@/lib/mention-recents';
 
 type PermissionLevel = 'owner' | 'full_access' | 'editor' | 'viewer';
 
@@ -78,6 +79,9 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
   useEffect(() => {
     if (page) {
       setNotFound(false);
+      // Page successfully opened (full view or peek) — feed the @-mention
+      // menu's "recent pages" section
+      recordRecentPage(pageId);
       return;
     }
     let cancelled = false;
@@ -95,7 +99,18 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
   if (!page) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-notion-text-secondary">{notFound ? 'Page not found' : 'Loading...'}</p>
+        {notFound ? (
+          // Deleted and inaccessible pages are indistinguishable by design (the
+          // backend returns the same 404 for both to prevent enumeration)
+          <div className="text-center" data-page-not-found>
+            <div className="text-3xl mb-2">🗑️</div>
+            <p className="text-notion-text font-medium">
+              This page was deleted or you don't have access
+            </p>
+          </div>
+        ) : (
+          <p className="text-notion-text-secondary">Loading...</p>
+        )}
       </div>
     );
   }

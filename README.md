@@ -15,6 +15,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Block-based editor (Heading 1/2/3 + Paragraph)
 - Drag-and-drop block reordering
 - Slash commands for block type changes
+- Inline @-mentions: type `@` in any text block to link a page (opens in split view) or mention a user (click shows an info popover); the menu shows recently used pages/users and searches by title/name as you type
 - Auto-save with debounce and a live save-status indicator in the page top bar (green Saved / Saving… / Save failed / Offline) — green means all changes are persisted and it's safe to close; the browser warns before closing the tab while changes are unsaved
 - Document-wide undo/redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y) — one unified per-page history across text edits and block operations (create/delete/split/merge, type changes, reorder), Google-Docs-style typing bursts; only your own changes are undone under real-time collaboration
 - Star/unstar pages

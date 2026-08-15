@@ -7,6 +7,19 @@ import type { Block } from '@nonotion/shared';
  */
 export function htmlToMarkdown(html: string): string {
   let text = html;
+  // Inline @-mentions before the generic rules: page mentions use the same
+  // `(page: pg_x)` convention as page_link blocks so the agent can follow them
+  // with get_page; user mentions become @Name. Attribute-order-lenient even
+  // though the editor writes a fixed order.
+  text = text.replace(
+    /<span\s+[^>]*data-mention-type="page"[^>]*data-mention-id="([^"]+)"[^>]*>(.*?)<\/span>/gi,
+    '[$2](page: $1)'
+  );
+  text = text.replace(
+    /<span\s+[^>]*data-mention-id="([^"]+)"[^>]*data-mention-type="page"[^>]*>(.*?)<\/span>/gi,
+    '[$2](page: $1)'
+  );
+  text = text.replace(/<span\s+[^>]*data-mention-type="user"[^>]*>(.*?)<\/span>/gi, '@$1');
   // Links first so their inner formatting still converts afterwards.
   text = text.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
   text = text.replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**');

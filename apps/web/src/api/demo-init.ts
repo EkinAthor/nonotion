@@ -5,7 +5,14 @@
 import { createCreatedTimeProperty } from '@nonotion/shared';
 import * as storage from './demo-storage';
 import { isDemoSeeded } from './demo-storage';
-import { seedDemoData, DEMO_USER } from './demo-data';
+import {
+  seedDemoData,
+  DEMO_USER,
+  MENTION_DEMO_BLOCK_IDS,
+  createMentionShowcaseBlocks,
+} from './demo-data';
+
+const PG_SHOWCASE = 'pg_demo_showcs1';
 
 /**
  * Idempotent reconciliation for already-seeded demo users: ensure every
@@ -26,12 +33,27 @@ function ensureCreatedTimeProperty(): void {
   }
 }
 
+/**
+ * Idempotent reconciliation for already-seeded demo users: end-append the
+ * @-mention showcase blocks if they're missing.
+ */
+function ensureMentionShowcaseBlocks(): void {
+  if (storage.getBlock(MENTION_DEMO_BLOCK_IDS[0])) return;
+  if (!storage.getPage(PG_SHOWCASE)) return;
+  const existing = storage.getBlocksByPage(PG_SHOWCASE);
+  const maxOrder = existing.reduce((max, b) => Math.max(max, b.order), -1);
+  for (const block of createMentionShowcaseBlocks(maxOrder + 1)) {
+    storage.createBlock(block);
+  }
+}
+
 export function initDemoMode(): void {
   // 1. Seed demo content if not already seeded
   if (!isDemoSeeded()) {
     seedDemoData();
   }
   ensureCreatedTimeProperty();
+  ensureMentionShowcaseBlocks();
 
   // 2. Always ensure auth store has demo user + token in localStorage
   // so Zustand persist picks it up on hydration

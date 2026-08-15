@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import SidePanel from './SidePanel';
 import SearchModal from './SearchModal';
 import DemoBanner from './DemoBanner';
+import UserMentionPopover from '@/components/mentions/UserMentionPopover';
 
 export default function MainLayout() {
   const { fetchPages, fetchPageOrder } = usePageStore();
@@ -135,6 +136,7 @@ export default function MainLayout() {
       </main>
       <SidePanel />
       <SearchModal />
+      <UserMentionPopover />
       </div>
     </div>
   );
