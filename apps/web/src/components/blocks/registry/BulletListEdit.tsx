@@ -5,6 +5,7 @@ import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
+import MentionMenu from '../MentionMenu';
 import FormatToolbar from '../FormatToolbar';
 
 const MAX_INDENT = 4;
@@ -37,7 +38,7 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
     }
   }, [block.id, content, indent, updateBlock]);
 
-  const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
+  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention } = useBlockEditor({
     block,
     placeholder: readOnly ? '' : 'List item',
     readOnly,
@@ -123,6 +124,14 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
             position={slashMenu.position}
             onSelect={selectSlashCommand}
             onClose={closeSlashMenu}
+          />
+        )}
+        {!readOnly && mentionMenu.isOpen && (
+          <MentionMenu
+            query={mentionMenu.query}
+            position={mentionMenu.position}
+            onSelect={insertMention}
+            onClose={closeMentionMenu}
           />
         )}
       </div>

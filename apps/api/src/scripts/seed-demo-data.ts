@@ -220,7 +220,7 @@ function blk(id: string, pageId: string, type: Block['type'], content: Block['co
   return { id, type, pageId, order: blockOrder++, content, version: 1 };
 }
 
-function createShowcaseBlocks(): Block[] {
+function createShowcaseBlocks(mentionUser: { id: string; name: string }): Block[] {
   blockOrder = 0;
   return [
     blk('blk_demo_h1_001', PG_SHOWCASE, 'heading', { text: 'Welcome to Nonotion', level: 1 }),
@@ -257,6 +257,19 @@ function createShowcaseBlocks(): Block[] {
 
     blk('blk_demo_dv_002', PG_SHOWCASE, 'divider', {}),
     blk('blk_demo_p4_001', PG_SHOWCASE, 'paragraph', { text: "That's it! Try editing any of these blocks, or create new ones by pressing <code>/</code> in an empty block." }),
+
+    blk('blk_demo_mn_001', PG_SHOWCASE, 'heading2', { text: 'Mentions', level: 2 }),
+    blk('blk_demo_mn_002', PG_SHOWCASE, 'paragraph', {
+      text:
+        'Type <code>@</code> to link internal resources inline — click ' +
+        `<span data-mention-type="page" data-mention-id="${PG_GETTING_STARTED}">Getting Started</span> or ` +
+        `<span data-mention-type="page" data-mention-id="${PG_BOOKS}">My Book Database</span> to open them in split view.`,
+    }),
+    blk('blk_demo_mn_003', PG_SHOWCASE, 'paragraph', {
+      text:
+        'You can also mention people like ' +
+        `<span data-mention-type="user" data-mention-id="${mentionUser.id}">${mentionUser.name}</span> — click the mention to see their info.`,
+    }),
   ];
 }
 
@@ -375,7 +388,10 @@ async function seed(): Promise<void> {
   console.log(`Pages: ${pagesCreated} created, ${pagesSkipped} skipped (already exist)`);
 
   // ── Blocks ─────────────────────────────────────────────────────────────────
-  const blocks = [...createShowcaseBlocks(), ...createGettingStartedBlocks()];
+  const blocks = [
+    ...createShowcaseBlocks({ id: ownerId, name: user.name || user.email }),
+    ...createGettingStartedBlocks(),
+  ];
   let blocksCreated = 0;
   let blocksSkipped = 0;
 

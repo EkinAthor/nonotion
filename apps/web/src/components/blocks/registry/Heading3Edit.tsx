@@ -5,6 +5,7 @@ import { useBlockEditor } from '@/lib/tiptap/useBlockEditor';
 import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
+import MentionMenu from '../MentionMenu';
 import FormatToolbar from '../FormatToolbar';
 
 interface HeadingEditProps {
@@ -16,7 +17,7 @@ export default function Heading3Edit({ block, readOnly = false }: HeadingEditPro
   const { createBlockBelow, insertParagraphAbove, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
-  const { editor, slashMenu, closeSlashMenu, selectSlashCommand } = useBlockEditor({
+  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention } = useBlockEditor({
     block,
     placeholder: readOnly ? '' : 'Heading 3',
     headingLevel: 3,
@@ -63,6 +64,14 @@ export default function Heading3Edit({ block, readOnly = false }: HeadingEditPro
           position={slashMenu.position}
           onSelect={selectSlashCommand}
           onClose={closeSlashMenu}
+        />
+      )}
+      {!readOnly && mentionMenu.isOpen && (
+        <MentionMenu
+          query={mentionMenu.query}
+          position={mentionMenu.position}
+          onSelect={insertMention}
+          onClose={closeMentionMenu}
         />
       )}
     </div>

@@ -347,6 +347,18 @@ Upload arbitrary files to pages via a `file` block (chip with Open/Download acti
 - **Demo mode**: `uploadAttachment`/`getDownloadUrl` throw; config stub reports `fileAttachmentsEnabled: false` → slash item hidden.
 - **Env vars**: `FILE_ATTACHMENTS_ENABLED`, `FILE_STORAGE_BACKEND` (`db` default; db+Vercel caps uploads ~4.5MB), `FILE_BUCKET`, `FILE_ALLOWED_EXTENSIONS`, `FILE_MAX_SIZE_MB`, `FILE_SIGNED_URL_TTL_SECONDS`; supabase backend reuses `SUPABASE_URL`/`SUPABASE_SECRET_KEY`.
 
+### 32. Inline @-Mentions
+Typing `@` in any TipTap text block (paragraph, heading/2/3, bullet/numbered list, checklist) opens a caret-anchored menu (`MentionMenu.tsx`, modeled on `SlashCommandMenu.tsx` — portal, flip-above, document-level keydown so the editor keeps focus) with **Users** and **Pages** sections plus an always-present "Keep as plain text" row. Selecting inserts an inline mention atom. **No backend/shared changes** — mentions live inside the block's HTML `text` string, so demo mode works with mirrored seed content.
+
+- **Trigger rule**: opens only when the `@` is at block start or preceded by whitespace (`/(^|\s)@$/` against `doc.textBetween(1, from, '\n', mentionLeafText)`) — emails like `a@b` never trigger. Space right after `@` (or in the query) closes the menu leaving plain text. Detection lives in `useBlockEditor.ts` `onUpdate`, mirroring the slash-menu pattern (`mentionStartPosRef` holds the real `@` doc position, `mentionMenuOpenRef` for keyboard-extension closures; Enter consumed / Escape closes / arrows deferred to the menu's document listener). **`mentionLeafText` is load-bearing**: it maps every leaf atom to a 1-char `￼` (hard breaks to `\n`) so string offsets equal doc positions in blocks that already contain mentions.
+- **Mention node** (`apps/web/src/lib/tiptap/mention-node.ts` — the repo's first custom TipTap node): inline atom serialized as `<span data-mention-type="page|user" data-mention-id="…">Label</span>` (label = text child → server search keeps working via its generic tag-strip). **Byte-stability invariant: `renderHTML` is the only writer of the persisted shape — fixed attribute order, no classes/extra attributes ever.** The pending-save echo check and undo `text_edit` steps compare exact HTML strings; all styling lives in the NodeView. The NodeView (plain JS) handles clicks in both editable and read-only editors: page → `openPeekPanel(id)` (replaces content if already open), user → `openUserMentionPopover(id, rect)` (uiStore) → `UserMentionPopover.tsx` (mounted once in `MainLayout`, PersonCell-style initials + name/email, "User no longer exists" on 404).
+- **Insertion** (`insertMention` in `useBlockEditor.ts`): `undoManager.transact` → `deleteRange(@query)` + `insertContent(mention + space)`; the normal onUpdate→debounce persists. Ctrl+Z restores the typed `@query`. Labels are baked at insert time (stale on rename — accepted; live resolution is future work).
+- **Menu data**: Users = `usersApi.list()` filtered client-side by name/email (cap 5). Pages = instant local filter over `pageStore.pages` + debounced (250ms) `searchApi.search` merge for row-pages absent from the store (cap 5, results filtered to title matches). Empty query → 2 recents per section from `apps/web/src/lib/mention-recents.ts` (localStorage; pages recorded on open in `PageContent`, users on mention), padded with newest pages / first users.
+- **Serializer touch-points** (update when changing the node's HTML): `clipboardTextSerializer` + node case (`useBlockEditor.ts`), `htmlToInlineMarkdown` (`html-markdown.ts`, user → `@Name`), MCP `htmlToMarkdown` (`block-markdown.ts`, page → `[Title](page: pg_x)` matching the page_link convention, user → `@Name`).
+- **Deleted/inaccessible pages**: hard-deleted pages and no-access pages both 404 (anti-enumeration), so `PageContent`'s not-found state says "This page was deleted or you don't have access" (works in peek automatically).
+- **Slash-menu guard**: the slash open condition gained `doc.content.size === 3` — `getText()` is blind to atoms, so without it typing `/` after a mention would open the slash menu with its hardcoded position pointing into the atom.
+- **Demo**: mention showcase blocks (`blk_demo_mn_*`) seeded in `demo-data.ts` (shared factory `createMentionShowcaseBlocks`), retrofitted for already-seeded browsers via `ensureMentionShowcaseBlocks()` in `demo-init.ts` (end-append keeps orders identical), mirrored in `seed-demo-data.ts` with the runtime admin user id.
+
 ## Critical Files
 
 | File | Purpose |
@@ -362,6 +374,10 @@ Upload arbitrary files to pages via a `file` block (chip with Open/Download acti
 | `apps/web/src/lib/tiptap/useBlockEditor.ts` | Shared TipTap editor hook with auto-save, keyboard handling, slash commands |
 | `apps/web/src/contexts/BlockContext.tsx` | Context for block operations (create, change type, navigate) |
 | `apps/web/src/components/blocks/SlashCommandMenu.tsx` | Slash command popup for changing block types |
+| `apps/web/src/lib/tiptap/mention-node.ts` | Inline @-mention TipTap atom node (byte-stable span serialization + click NodeView) |
+| `apps/web/src/components/blocks/MentionMenu.tsx` | Caret-anchored @ menu (Users/Pages sections, recents, hybrid page search) |
+| `apps/web/src/components/mentions/UserMentionPopover.tsx` | Info popover shown when a user mention is clicked |
+| `apps/web/src/lib/mention-recents.ts` | localStorage recency tracking for the @ menu (pages on open, users on mention) |
 | `apps/web/src/components/blocks/registry/index.ts` | Block type registry with shortcuts |
 | `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface (metadata + BLOB) incl. attachment lifecycle methods |
 | `apps/api/src/storage/attachment-backend.ts` | `AttachmentBlobBackend` interface + per-kind singleton factory (db/supabase bytes path) |

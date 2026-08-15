@@ -22,6 +22,13 @@ function loadInitialPeek(): string | null {
   }
 }
 
+// Anchor rect for the user-mention popover — plain numbers (not a DOMRect) so
+// the state stays serializable
+export interface UserMentionPopoverState {
+  userId: string;
+  anchor: { top: number; left: number; bottom: number; right: number };
+}
+
 interface UiState {
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -29,6 +36,7 @@ interface UiState {
   peekPageId: string | null;
   peekPanelWidth: number;
   sidebarAutoCollapsed: boolean;
+  userMentionPopover: UserMentionPopoverState | null;
 
   // Actions
   toggleSidebar: () => void;
@@ -39,6 +47,8 @@ interface UiState {
   openPeekPanel: (pageId: string) => void;
   closePeekPanel: () => void;
   setPeekPanelWidth: (width: number) => void;
+  openUserMentionPopover: (userId: string, anchor: UserMentionPopoverState['anchor']) => void;
+  closeUserMentionPopover: () => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -48,6 +58,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   peekPageId: loadInitialPeek(),
   peekPanelWidth: 0,
   sidebarAutoCollapsed: false,
+  userMentionPopover: null,
 
   toggleSidebar: () => {
     set((state) => {
@@ -90,4 +101,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     const max = window.innerWidth - 400;
     set({ peekPanelWidth: Math.max(min, Math.min(max, width)) });
   },
+
+  openUserMentionPopover: (userId, anchor) => set({ userMentionPopover: { userId, anchor } }),
+
+  closeUserMentionPopover: () => set({ userMentionPopover: null }),
 }));
