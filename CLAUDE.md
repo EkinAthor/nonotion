@@ -359,6 +359,15 @@ Typing `@` in any TipTap text block (paragraph, heading/2/3, bullet/numbered lis
 - **Slash-menu guard**: the slash open condition gained `doc.content.size === 3` — `getText()` is blind to atoms, so without it typing `/` after a mention would open the slash menu with its hardcoded position pointing into the atom.
 - **Demo**: mention showcase blocks (`blk_demo_mn_*`) seeded in `demo-data.ts` (shared factory `createMentionShowcaseBlocks`), retrofitted for already-seeded browsers via `ensureMentionShowcaseBlocks()` in `demo-init.ts` (end-append keeps orders identical), mirrored in `seed-demo-data.ts` with the runtime admin user id.
 
+### 33. Simple Export (Database → Markdown ZIP)
+`GET /api/databases/:id/export` builds a self-contained ZIP of a database in memory (`adm-zip`, already a dep): `index.md` (per-row link + created date + select/multi_select tag names — grep-friendly) and a **single `pages/` folder** holding every row-page as markdown **and** all referenced image/file assets. **No entity ids anywhere in the output** — references become archive-relative paths (targets inside the export) or plain-text names (outside). Env-gated by `SIMPLE_EXPORT_ENABLED` — **default ENABLED** (`!== 'false'`, inverted vs. every other flag's `=== 'true'`; don't "harmonize" it). Docs: `docs/simple-export.md`.
+
+- **Serializer reuse — resolver hooks**: `mcp/block-markdown.ts` gained optional `BlocksToMarkdownContext.resolvers` (`ExportLinkResolvers { image(fileId), file(fileId), page(pageId, fallbackTitle?) }`) and an optional 2nd param on `htmlToMarkdown`. With resolvers set, images/files render as relative paths (null → `*[image unavailable]*` / plain filename), page links/mentions/pasted internal URLs (`/page/pg_x`, `/api/files/file_x`) resolve to local links or plain titles, and `database_view` renders `[Embedded database: Title]`. **Invariant: without resolvers, MCP output is byte-identical to before** — every branch is `ctx.resolvers ? … : <original>`.
+- **Service** (`services/export/simple-export-service.ts`): rows via `getPagesByParent` ordered by `childIds` (no pagination), `resolveReferencesForRows` for per-viewer reference names, blocks via `getBlocksByPages` grouped by pageId. **Naming pass before rendering** so cross-row links resolve: `slug(title)_<YYYY-MM-DD>.md`, duplicate slugs numbered **before** the date (`slug_1_<date>.md`), one case-insensitive `NameAllocator` shared by pages and assets. File bytes are pre-fetched (resolvers are synchronous): `fileService.getFile` first, then `attachmentService.getAttachmentData` when `isFileAttachmentsEnabled()` — any miss degrades to text, never fails the export. Inaccessible references are omitted entirely (no `#ref`, no ids).
+- **Route** (`routes/export.ts`, dynamic-import-registered in `index.ts`): databases-route middleware stack, `canRead` → 404 (anti-enumeration), import rate-limit tier, ZIP sent with `contentDisposition()` from `utils/http.ts` (extracted from attachments route, now shared).
+- **Frontend**: `exportApi.exportDatabase(id)` in real-client (hand-rolled authed fetch → blob + filename from Content-Disposition; NOT in the save-tracking allowlist — it's a read), throwing stub in demo-client. Export button in `DatabaseToolbar` (MCP-button pattern: `simpleExportEnabled && !IS_DEMO_MODE && activeDatabaseId`, **not** gated on `canEdit` — read access suffices), anchor-click download with busy/error state.
+- Flag exposed via `AuthConfigResponse.simpleExportEnabled` (`routes/auth.ts`, authStore fallback, demo-client `getConfig`).
+
 ## Critical Files
 
 | File | Purpose |
@@ -387,6 +396,9 @@ Typing `@` in any TipTap text block (paragraph, heading/2/3, bullet/numbered lis
 | `apps/api/src/config/files.ts` | File attachments env config (`isFileAttachmentsEnabled`, `loadFileAttachmentsConfig`) |
 | `apps/web/src/components/blocks/registry/FileEdit.tsx` | File block: upload drop-zone + chip with Open/Download/Replace/Remove |
 | `apps/api/src/mcp/tools/get-file.ts` | MCP get_file tool (allowFiles gate, 4MB cap, text/resource result) |
+| `apps/api/src/services/export/simple-export-service.ts` | Simple export: database → markdown ZIP (naming/dedup, property rendering, asset embedding) |
+| `apps/api/src/routes/export.ts` | `GET /api/databases/:id/export` (canRead, import rate tier, ZIP response) |
+| `apps/api/src/utils/http.ts` | Shared `contentDisposition()` RFC 5987 helper (attachments + export) |
 | `apps/api/src/services/file-service.ts` | File upload validation, MIME checks, size limits |
 | `apps/api/src/routes/files.ts` | File upload/download endpoints (`@fastify/multipart`) |
 | `apps/web/src/api/client.ts` | Conditional re-export hub (`IS_DEMO_MODE` switches between real and demo client); applies save-tracking allowlists |

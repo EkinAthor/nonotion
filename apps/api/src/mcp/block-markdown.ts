@@ -1,27 +1,75 @@
 import type { Block } from '@nonotion/shared';
 
 /**
+ * Optional link resolvers used by the simple-export feature to rewrite entity
+ * references as archive-local paths (or plain text) instead of the MCP
+ * `(page: pg_x)` / `(file: file_x)` conventions. When absent, output is
+ * byte-identical to the original MCP serialization.
+ */
+export interface ExportLinkResolvers {
+  /** ZIP-relative path (e.g. "photo.png") for an internal image, or null to fall back to text. */
+  image(fileId: string): string | null;
+  /** ZIP-relative path for a file attachment, or null to fall back to the plain filename. */
+  file(fileId: string): string | null;
+  /**
+   * Local link within the export, or a plain-text title when the target is
+   * outside it. `fallbackTitle` is the label already present in the source
+   * (e.g. a mention's baked label) for targets the resolver can't name.
+   */
+  page(
+    pageId: string,
+    fallbackTitle?: string
+  ): { kind: 'link'; href: string; title: string } | { kind: 'text'; title: string };
+}
+
+/** Matches internal page URLs like /page/pg_abc123def456 (pasted links). */
+const INTERNAL_PAGE_URL = /^(?:https?:\/\/[^/]+)?\/page\/(pg_[a-z0-9]{12})$/;
+
+function renderResolvedPage(
+  resolved: { kind: 'link'; href: string; title: string } | { kind: 'text'; title: string }
+): string {
+  return resolved.kind === 'link' ? `[${resolved.title}](${resolved.href})` : resolved.title;
+}
+
+/**
  * Converts TipTap inline HTML (bold/italic/strike/code/links) to markdown and
  * strips any remaining tags. Regex-based on purpose — block text only ever
  * contains the small inline vocabulary TipTap emits.
  */
-export function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string, resolvers?: ExportLinkResolvers): string {
   let text = html;
   // Inline @-mentions before the generic rules: page mentions use the same
   // `(page: pg_x)` convention as page_link blocks so the agent can follow them
   // with get_page; user mentions become @Name. Attribute-order-lenient even
   // though the editor writes a fixed order.
-  text = text.replace(
-    /<span\s+[^>]*data-mention-type="page"[^>]*data-mention-id="([^"]+)"[^>]*>(.*?)<\/span>/gi,
-    '[$2](page: $1)'
-  );
-  text = text.replace(
-    /<span\s+[^>]*data-mention-id="([^"]+)"[^>]*data-mention-type="page"[^>]*>(.*?)<\/span>/gi,
-    '[$2](page: $1)'
-  );
+  const pageMentionA = /<span\s+[^>]*data-mention-type="page"[^>]*data-mention-id="([^"]+)"[^>]*>(.*?)<\/span>/gi;
+  const pageMentionB = /<span\s+[^>]*data-mention-id="([^"]+)"[^>]*data-mention-type="page"[^>]*>(.*?)<\/span>/gi;
+  if (resolvers) {
+    const renderMention = (_m: string, id: string, label: string) =>
+      renderResolvedPage(resolvers.page(id, label));
+    text = text.replace(pageMentionA, renderMention);
+    text = text.replace(pageMentionB, renderMention);
+  } else {
+    text = text.replace(pageMentionA, '[$2](page: $1)');
+    text = text.replace(pageMentionB, '[$2](page: $1)');
+  }
   text = text.replace(/<span\s+[^>]*data-mention-type="user"[^>]*>(.*?)<\/span>/gi, '@$1');
   // Links first so their inner formatting still converts afterwards.
-  text = text.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+  if (resolvers) {
+    // Internal URLs must not leak ids into an export — rewrite or degrade.
+    text = text.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, (_m, href: string, label: string) => {
+      const fileId = extractFileId(href);
+      if (fileId) {
+        const path = resolvers.file(fileId);
+        return path ? `[${label}](${path})` : label;
+      }
+      const pageMatch = INTERNAL_PAGE_URL.exec(href);
+      if (pageMatch) return renderResolvedPage(resolvers.page(pageMatch[1], label));
+      return `[${label}](${href})`;
+    });
+  } else {
+    text = text.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+  }
   text = text.replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**');
   text = text.replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*');
   text = text.replace(/<(s|strike|del)>(.*?)<\/\1>/gi, '~~$2~~');
@@ -59,6 +107,13 @@ export interface BlocksToMarkdownContext {
   linkedPageTitles: Map<string, string>;
   /** Info for database_view targets (pre-resolved in bulk by the caller). */
   embeddedDatabases: Map<string, { title: string; mcpAccessible: boolean }>;
+  /**
+   * When set (simple export), entity references are rewritten as archive-local
+   * paths or plain text — no ids and no MCP fetch hints may appear in the
+   * output. When absent, MCP output is byte-identical to before this field
+   * existed.
+   */
+  resolvers?: ExportLinkResolvers;
 }
 
 /**
@@ -85,22 +140,22 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
 
     switch (block.type) {
       case 'heading':
-        lines.push(`# ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`# ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       case 'heading2':
-        lines.push(`## ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`## ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       case 'heading3':
-        lines.push(`### ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`### ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       case 'paragraph': {
-        const text = htmlToMarkdown(String(content.text ?? ''));
+        const text = htmlToMarkdown(String(content.text ?? ''), ctx.resolvers);
         if (text.trim()) lines.push(text);
         break;
       }
       case 'bullet_list': {
         const indent = '  '.repeat(Number(content.indent ?? 0));
-        lines.push(`${indent}- ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`${indent}- ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       }
       case 'numbered_list': {
@@ -113,13 +168,13 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
           if (key > level) numberedCounters.delete(key);
         }
         const indent = '  '.repeat(level);
-        lines.push(`${indent}${n}. ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`${indent}${n}. ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       }
       case 'checklist': {
         const indent = '  '.repeat(Number(content.indent ?? 0));
         const box = content.checked ? '[x]' : '[ ]';
-        lines.push(`${indent}- ${box} ${htmlToMarkdown(String(content.text ?? ''))}`);
+        lines.push(`${indent}- ${box} ${htmlToMarkdown(String(content.text ?? ''), ctx.resolvers)}`);
         break;
       }
       case 'code_block': {
@@ -134,11 +189,14 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
         break;
       case 'image': {
         const url = String(content.url ?? '');
-        const alt = htmlToMarkdown(String(content.alt ?? '')) || 'image';
-        const caption = htmlToMarkdown(String(content.caption ?? ''));
+        const alt = htmlToMarkdown(String(content.alt ?? ''), ctx.resolvers) || 'image';
+        const caption = htmlToMarkdown(String(content.caption ?? ''), ctx.resolvers);
         const fileId = extractFileId(url);
         if (fileId) {
-          if (ctx.allowImages) {
+          if (ctx.resolvers) {
+            const path = ctx.resolvers.image(fileId);
+            lines.push(path ? `![${alt}](${path})` : `*[image unavailable]*`);
+          } else if (ctx.allowImages) {
             lines.push(`![${alt}](image: ${fileId})`);
             lines.push(`*Embedded image — fetch with get_image (fileId: "${fileId}").*`);
           } else {
@@ -156,7 +214,10 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
         const filename = String(content.filename ?? 'file');
         const size = Number(content.size ?? 0);
         if (!fileId) break;
-        if (ctx.allowFiles) {
+        if (ctx.resolvers) {
+          const path = ctx.resolvers.file(fileId);
+          lines.push(path ? `[${filename}](${path})` : filename);
+        } else if (ctx.allowFiles) {
           const sizeNote = size > 0 ? `, ${(size / 1024 / 1024).toFixed(1)}MB` : '';
           lines.push(`[${filename}](file: ${fileId})`);
           lines.push(`*Attached file — fetch with get_file (fileId: "${fileId}"${sizeNote}).*`);
@@ -168,13 +229,19 @@ export function blocksToMarkdown(blocks: Block[], ctx: BlocksToMarkdownContext):
       case 'page_link': {
         const pageId = String(content.linkedPageId ?? '');
         const title = ctx.linkedPageTitles.get(pageId) ?? 'Linked page';
-        lines.push(`[${title}](page: ${pageId})`);
+        if (ctx.resolvers) {
+          lines.push(renderResolvedPage(ctx.resolvers.page(pageId, title)));
+        } else {
+          lines.push(`[${title}](page: ${pageId})`);
+        }
         break;
       }
       case 'database_view': {
         const databaseId = String(content.databaseId ?? '');
         const info = ctx.embeddedDatabases.get(databaseId);
-        if (info) {
+        if (ctx.resolvers) {
+          lines.push(info ? `[Embedded database: ${info.title}]` : `[Embedded database]`);
+        } else if (info) {
           const note = info.mcpAccessible
             ? 'queryable via query_database'
             : 'not accessible via MCP';

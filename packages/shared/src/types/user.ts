@@ -126,4 +126,5 @@ export interface AuthConfigResponse {
   fileAttachmentsEnabled: boolean;
   fileAllowedExtensions: string[]; // lowercase, no leading dot
   fileMaxSizeMb: number;
+  simpleExportEnabled: boolean;
 }

@@ -5,6 +5,7 @@ import * as attachmentService from '../services/attachment-service.js';
 import { AttachmentError, isSafeInlineMime } from '../services/attachment-service.js';
 import { loadFileAttachmentsConfig } from '../config/files.js';
 import { authMiddleware, mustChangePasswordMiddleware, approvedUserMiddleware } from '../middleware/auth.js';
+import { contentDisposition } from '../utils/http.js';
 
 function statusForError(code: AttachmentError['code']): number {
   switch (code) {
@@ -24,12 +25,6 @@ function sendAttachmentError(reply: { status: (code: number) => { send: (body: u
   }
   const message = error instanceof Error ? error.message : 'Attachment operation failed';
   return reply.status(500).send({ success: false, error: { code: 'INTERNAL_ERROR', message } });
-}
-
-/** RFC 5987 Content-Disposition with a plain-ASCII fallback. */
-function contentDisposition(disposition: 'attachment' | 'inline', filename: string): string {
-  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 export async function attachmentsRoutes(fastify: FastifyInstance): Promise<void> {

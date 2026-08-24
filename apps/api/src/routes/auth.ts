@@ -12,6 +12,7 @@ import * as authService from '../services/auth-service.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { isMcpEnabled } from '../config/mcp.js';
 import { isFileAttachmentsEnabled, loadFileAttachmentsConfig } from '../config/files.js';
+import { isSimpleExportEnabled } from '../config/export.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Get auth config (public, no auth needed)
@@ -30,6 +31,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         fileAttachmentsEnabled,
         fileAllowedExtensions: fileConfig?.allowedExtensions ?? [],
         fileMaxSizeMb: fileConfig?.maxSizeMb ?? 0,
+        simpleExportEnabled: isSimpleExportEnabled(),
       },
     });
   });

@@ -20,6 +20,7 @@ import { runWithRequestContext } from './services/request-context.js';
 import { registerRateLimit } from './config/rate-limit.js';
 import { isMcpEnabled } from './config/mcp.js';
 import { isFileAttachmentsEnabled } from './config/files.js';
+import { isSimpleExportEnabled } from './config/export.js';
 import { loadRealtimeConfig } from './config/realtime.js';
 import { initializeBroadcaster } from './realtime/realtime-factory.js';
 import { clientIdMiddleware } from './middleware/client-id.js';
@@ -166,6 +167,12 @@ await fastify.register(realtimeRoutes);
 if (isFileAttachmentsEnabled()) {
   const { attachmentsRoutes } = await import('./routes/attachments.js');
   await fastify.register(attachmentsRoutes);
+}
+
+// Simple export (default enabled) — set SIMPLE_EXPORT_ENABLED=false to disable
+if (isSimpleExportEnabled()) {
+  const { exportRoutes } = await import('./routes/export.js');
+  await fastify.register(exportRoutes);
 }
 
 // MCP server (read-only Model Context Protocol access) — zero overhead when disabled

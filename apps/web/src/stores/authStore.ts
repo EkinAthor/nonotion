@@ -202,6 +202,7 @@ export const useAuthStore = create<AuthState>()(
               fileAttachmentsEnabled: false,
               fileAllowedExtensions: [],
               fileMaxSizeMb: 0,
+              simpleExportEnabled: false,
             },
             authConfigLoading: false,
           });

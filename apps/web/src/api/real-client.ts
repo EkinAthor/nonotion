@@ -555,3 +555,39 @@ export const importApi = {
     return result.data;
   },
 };
+
+// ============ EXPORT API ============
+
+export const exportApi = {
+  /** Downloads a database's simple-export ZIP. Returns the blob + server-suggested filename. */
+  exportDatabase: async (databaseId: string): Promise<{ blob: Blob; filename: string }> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}/databases/${databaseId}/export`, { headers });
+    if (!response.ok) {
+      let message = 'Export failed';
+      try {
+        const error = await response.json() as ApiError;
+        message = error.error?.message || message;
+      } catch {
+        // Non-JSON error body — keep the generic message.
+      }
+      throw new Error(message);
+    }
+
+    // Prefer the RFC 5987 filename*, fall back to the plain filename= token.
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const plainMatch = /filename="([^"]+)"/i.exec(disposition);
+    const filename = utf8Match
+      ? decodeURIComponent(utf8Match[1])
+      : plainMatch?.[1] || 'export.zip';
+
+    const blob = await response.blob();
+    return { blob, filename };
+  },
+};
