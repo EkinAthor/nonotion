@@ -23,5 +23,6 @@ export const searchApi = client.searchApi;
 export const importApi = client.importApi;
 export const realtimeApi = client.realtimeApi;
 export const mcpApi = client.mcpApi;
+export const exportApi = client.exportApi;
 
 export type { SearchResult, ShareWithUser, GetRowsOptions, GetRowsResult, RealtimeTokenResponse, McpAccessWithTitle } from './real-client';

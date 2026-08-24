@@ -132,6 +132,7 @@ export const authApi = {
       fileAttachmentsEnabled: false,
       fileAllowedExtensions: [],
       fileMaxSizeMb: 0,
+      simpleExportEnabled: false,
     }),
 };
 
@@ -1015,5 +1016,11 @@ export const mcpApi = {
 export const importApi = {
   importZip: async (_file: File): Promise<ImportResult> => {
     throw new Error('Import is not available in demo mode');
+  },
+};
+
+export const exportApi = {
+  exportDatabase: async (_databaseId: string): Promise<{ blob: Blob; filename: string }> => {
+    throw new Error('Export is not available in demo mode');
   },
 };

@@ -35,6 +35,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Image upload (file picker + clipboard paste) with BLOB storage
 - File attachments (optional): upload files to pages as download/open links via a `file` block, with a configurable extension allowlist and either DB BLOB or encrypted Supabase Storage (signed URLs) as the backend — see `docs/file-attachments.md`
 - Notion export import (ZIP upload with pages, databases, images, and inline formatting)
+- Simple export: download any database as a self-contained markdown ZIP (index + one `.md` per row + embedded images/files, no internal IDs) — see `docs/simple-export.md`
 - Quick search (Ctrl+K) across pages, block content, and database properties
 - Database quicksearch: a search box in the database toolbar that full-text filters the current view (table or kanban, full-screen or embedded) by row title and page body text, combined on top of any active filter
 - Configurable storage (JSON/SQLite or PostgreSQL)

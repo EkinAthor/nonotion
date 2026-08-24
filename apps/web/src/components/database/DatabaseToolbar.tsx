@@ -17,7 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
-import { IS_DEMO_MODE } from '@/api/client';
+import { IS_DEMO_MODE, exportApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 import FilterPopover, { getFilterSummary } from './FilterPopover';
 import PropertiesPanel from './PropertiesPanel';
@@ -50,7 +50,10 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
   const { createPage } = usePageStore();
   const { openPeekPanel } = useUiStore();
   const mcpEnabled = useAuthStore((s) => s.authConfig?.mcpEnabled ?? false);
+  const simpleExportEnabled = useAuthStore((s) => s.authConfig?.simpleExportEnabled ?? false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
   const [showMcpPopover, setShowMcpPopover] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
@@ -111,6 +114,28 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
       openPeekPanel(page.id);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!activeDatabaseId || isExporting) return;
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const { blob, filename } = await exportApi.exportDatabase(activeDatabaseId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export failed');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -312,6 +337,21 @@ export default function DatabaseToolbar({ canEdit }: DatabaseToolbarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
             {isSaving ? 'Saving...' : 'Save as default'}
+          </button>
+        )}
+
+        {/* Simple export — needs only read access (enforced server-side); hidden in demo mode */}
+        {simpleExportEnabled && !IS_DEMO_MODE && activeDatabaseId && (
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="flex items-center gap-1 px-2 py-1 text-sm text-notion-text-secondary rounded hover:bg-notion-hover disabled:opacity-50"
+            title={exportError ?? 'Download this database as a markdown ZIP'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+            </svg>
+            {isExporting ? 'Exporting...' : exportError ? 'Export failed' : 'Export'}
           </button>
         )}
 
