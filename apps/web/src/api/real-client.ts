@@ -315,6 +315,9 @@ export interface GetRowsOptions {
   search?: string;
   limit?: number;
   offset?: number;
+  // Targeted fetch-by-ids (max 200): bypasses filter/sort/search/pagination,
+  // returns rows in requested order, restricted to rows of this database.
+  ids?: string[];
 }
 
 export interface GetRowsResult {
@@ -330,6 +333,7 @@ export const databaseApi = {
     if (options.search) params.set('search', options.search);
     if (options.limit) params.set('limit', String(options.limit));
     if (options.offset) params.set('offset', String(options.offset));
+    if (options.ids !== undefined) params.set('ids', options.ids.join(','));
 
     const query = params.toString();
     const url = `/databases/${databaseId}/rows${query ? `?${query}` : ''}`;

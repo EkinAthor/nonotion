@@ -525,6 +525,9 @@ function ReferenceFilterInput({
   const [accessError, setAccessError] = useState(false);
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  // id → title for the selected chips, resolved by id on mount (independent of
+  // the dropdown's candidate fetch, which only covers the first 1000 rows).
+  const [chipNames, setChipNames] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -540,6 +543,27 @@ function ReferenceFilterInput({
     }
   }, [isOpen, loaded, property.referencedDatabaseId]);
 
+  // Resolve chip names for selected ids by targeted fetch. Ids that don't
+  // resolve (deleted rows) get an explicit '' entry (→ 'Untitled', no refetch).
+  const selectedKey = selectedIds.join(',');
+  useEffect(() => {
+    if (!property.referencedDatabaseId || selectedIds.length === 0) return;
+    const missing = selectedIds.filter((id) => !(id in chipNames));
+    if (missing.length === 0) return;
+    databaseApi
+      .getRows(property.referencedDatabaseId, { ids: missing })
+      .then((r) => {
+        const byId = new Map(r.rows.map((row) => [row.id, row.title ?? '']));
+        setChipNames((prev) => {
+          const next = { ...prev };
+          for (const id of missing) next[id] = byId.get(id) ?? '';
+          return next;
+        });
+      })
+      .catch(() => setAccessError(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, property.referencedDatabaseId, chipNames]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -550,7 +574,14 @@ function ReferenceFilterInput({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const titleFor = (id: string) => rows.find((r) => r.id === id)?.title || id;
+  // Never render the raw id: resolved name → candidate-list name → 'Untitled'
+  // for a known-missing id → '…' while the by-id resolve is in flight.
+  const titleFor = (id: string) =>
+    accessError
+      ? '#ref'
+      : chipNames[id] ||
+        rows.find((r) => r.id === id)?.title ||
+        (id in chipNames ? 'Untitled' : '…');
 
   const filteredRows = search
     ? rows.filter((r) => (r.title || 'Untitled').toLowerCase().includes(search.toLowerCase()))

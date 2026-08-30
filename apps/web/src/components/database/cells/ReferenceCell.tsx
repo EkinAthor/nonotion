@@ -55,16 +55,32 @@ export default function ReferenceCell({
     });
   }, [resolved]);
 
-  // When there is no server-resolved data (e.g. row-detail page), best-effort
-  // fetch names for display without loading the whole database.
+  // When there is no server-resolved data (e.g. row-detail page), fetch the
+  // referenced rows by id — works at any referenced-database size. Ids that
+  // don't resolve (deleted rows) get an explicit '' entry so they render as
+  // 'Untitled' without being refetched.
+  const requestedIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (resolved || !referencedDatabaseId || value.length === 0) return;
+    const missing = value.filter(
+      (id) => !(id in nameCache) && !requestedIdsRef.current.has(id)
+    );
+    if (missing.length === 0) return;
+    for (const id of missing) requestedIdsRef.current.add(id);
     databaseApi
-      .getRows(referencedDatabaseId, { limit: 100 })
-      .then((r) => mergeNames(r.rows))
+      .getRows(referencedDatabaseId, { ids: missing })
+      .then((r) => {
+        const byId = new Map(r.rows.map((row) => [row.id, row.title ?? '']));
+        setNameCache((prev) => {
+          const next = { ...prev };
+          for (const id of missing) {
+            if (!(id in next)) next[id] = byId.get(id) ?? '';
+          }
+          return next;
+        });
+      })
       .catch(() => setAccessError(true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved, referencedDatabaseId]);
+  }, [resolved, referencedDatabaseId, value, nameCache]);
 
   // Resolve the referenced DB's title property id once (for server-side search).
   useEffect(() => {

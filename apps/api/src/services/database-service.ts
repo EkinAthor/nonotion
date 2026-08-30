@@ -25,6 +25,10 @@ export interface GetRowsOptions {
   search?: string; // transient full-text quicksearch over row title + block body
   limit?: number;
   offset?: number;
+  // Comma-separated row page ids. Targeted fetch-by-ids: bypasses
+  // filter/sort/search/limit/offset, returns rows in requested order,
+  // restricted to rows of this database (unknown/foreign ids are dropped).
+  ids?: string;
 }
 
 function stripHtml(html: string): string {
@@ -114,7 +118,19 @@ export async function getRows(
   // block body text (not visible to the title-only SQL path), so it forces
   // the JS path.
   const titleContains = extractTitleOnlyContains(options.filter, database.databaseSchema);
-  if (!options.sort && !search && titleContains !== undefined && storage.queryDatabaseRows) {
+  const idList =
+    options.ids !== undefined
+      ? [...new Set(options.ids.split(',').map((s) => s.trim()).filter(Boolean))]
+      : undefined;
+  if (idList !== undefined) {
+    // Targeted fetch-by-ids (reference name resolution): indexed bulk fetch,
+    // restricted to this database's rows so a readable database can never be
+    // used to read arbitrary pages. Requested-id order, no pagination.
+    const pages = await storage.getPagesByIds(idList);
+    const byId = new Map(pages.filter((p) => p.parentId === databaseId).map((p) => [p.id, p]));
+    rows = idList.map((id) => byId.get(id)).filter((p): p is Page => p !== undefined);
+    total = rows.length;
+  } else if (!options.sort && !search && titleContains !== undefined && storage.queryDatabaseRows) {
     const result = await storage.queryDatabaseRows({
       databaseId,
       titleContains,

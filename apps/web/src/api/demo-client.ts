@@ -437,6 +437,9 @@ export interface GetRowsOptions {
   search?: string;
   limit?: number;
   offset?: number;
+  // Targeted fetch-by-ids (max 200): bypasses filter/sort/search/pagination,
+  // returns rows in requested order, restricted to rows of this database.
+  ids?: string[];
 }
 
 export interface GetRowsResult {
@@ -653,28 +656,39 @@ export const databaseApi = {
 
     const allPages = storage.getAllPages();
     let rows = allPages.filter((p) => p.parentId === databaseId);
+    let total: number;
 
-    if (options.filter) {
-      rows = applyFilter(rows, options.filter, database.databaseSchema);
-    }
-    if (options.search?.trim()) {
-      rows = applySearch(rows, options.search.trim());
-    }
-    if (options.sort) {
-      rows = applySort(rows, options.sort, database.databaseSchema);
-    } else if (database.childIds.length > 0) {
-      const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
-      rows.sort((a, b) => {
-        const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-        const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-        return aIdx - bIdx;
-      });
-    }
+    if (options.ids !== undefined) {
+      // Targeted fetch-by-ids (mirrors database-service.ts): requested order,
+      // restricted to this database's rows, no filter/sort/search/pagination.
+      const rowsById = new Map(rows.map((p) => [p.id, p]));
+      rows = [...new Set(options.ids)]
+        .map((id) => rowsById.get(id))
+        .filter((p): p is Page => p !== undefined);
+      total = rows.length;
+    } else {
+      if (options.filter) {
+        rows = applyFilter(rows, options.filter, database.databaseSchema);
+      }
+      if (options.search?.trim()) {
+        rows = applySearch(rows, options.search.trim());
+      }
+      if (options.sort) {
+        rows = applySort(rows, options.sort, database.databaseSchema);
+      } else if (database.childIds.length > 0) {
+        const orderMap = new Map(database.childIds.map((id, idx) => [id, idx]));
+        rows.sort((a, b) => {
+          const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+          const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+          return aIdx - bIdx;
+        });
+      }
 
-    const total = rows.length;
-    const offset = options.offset ?? 0;
-    const limit = options.limit ?? 50;
-    rows = rows.slice(offset, offset + limit);
+      total = rows.length;
+      const offset = options.offset ?? 0;
+      const limit = options.limit ?? 50;
+      rows = rows.slice(offset, offset + limit);
+    }
 
     // Resolve reference display names. Demo mode has no permissions — everything
     // is accessible — so we always resolve titles from local storage.

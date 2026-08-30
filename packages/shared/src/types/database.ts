@@ -153,6 +153,10 @@ export interface DatabaseRowsQuery {
   search?: string; // transient full-text quicksearch over row title + block body
   limit?: number;
   offset?: number;
+  // Comma-separated row page ids (max 200). When present, bypasses
+  // filter/sort/search/limit/offset; rows are returned in requested order,
+  // restricted to rows of this database (unknown/foreign ids are dropped).
+  ids?: string;
 }
 
 // Resolved display data for a 'reference' property, computed server-side per viewer.
