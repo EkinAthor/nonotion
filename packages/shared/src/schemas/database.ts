@@ -216,6 +216,12 @@ export const databaseRowsQuerySchema = z.object({
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(10000).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  ids: z
+    .string()
+    .optional()
+    .refine((v) => v === undefined || v.split(',').filter(Boolean).length <= 200, {
+      message: 'ids: at most 200 ids per request',
+    }),
 });
 
 // Inferred types
