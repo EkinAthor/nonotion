@@ -101,6 +101,7 @@ export interface DatabaseInstanceState {
   total: number;
   isLoading: boolean;
   isLoadingMore: boolean;
+  /** Load errors only (loadDatabase/fetchRows/loadMore) — write failures revert optimistically and surface via the save indicator. */
   error: string | null;
 
   // View configuration
@@ -397,7 +398,8 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
           }
           return page;
         } catch (error) {
-          set({ error: (error as Error).message });
+          // Write failure — surfaced via the save indicator, not the view-level error.
+          console.error('Failed to update schema:', error);
           return null;
         }
       }
@@ -437,7 +439,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         }
       }).catch((error) => {
         console.error('Failed to update schema:', error);
-        set({ schema: previousSchema, error: (error as Error).message });
+        set({ schema: previousSchema });
       });
 
       return null;
@@ -460,7 +462,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
 
       databaseApi.updateProperties(rowId, { properties }).catch((error) => {
         console.error('Failed to update row properties:', error);
-        set({ rows: previousRows, error: (error as Error).message });
+        set({ rows: previousRows });
         // Revert pageStore too
         if (previousRowProps) {
           usePageStore.getState().patchPageLocal(rowId, { properties: previousRowProps });
@@ -588,7 +590,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         await runWithConcurrency(idsToDelete, DELETE_CONCURRENCY, (id) => pagesApi.delete(id));
       } catch (error) {
         console.error('Failed to delete rows:', error);
-        set({ rows: previousRows, total: previousTotal, error: (error as Error).message });
+        set({ rows: previousRows, total: previousTotal });
       }
     },
 
@@ -912,7 +914,7 @@ export function createDatabaseInstanceStore(persistenceKey?: string): StoreApi<D
         }
       } catch (error) {
         console.error('Failed to save default view config:', error);
-        set({ schema: previousSchema, error: (error as Error).message });
+        set({ schema: previousSchema });
       }
     },
 

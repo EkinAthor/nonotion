@@ -79,6 +79,13 @@ export function getMcpStorage(): McpStorageAdapter {
   return mcpStorageInstance;
 }
 
+export function getPostgresStorage(): PostgresStorage {
+  if (!postgresInstance) {
+    throw new Error('Postgres storage not initialized. Call initializeStorage() first.');
+  }
+  return postgresInstance;
+}
+
 export function getStorageType(): StorageType {
   if (postgresInstance) {
     return 'postgres';

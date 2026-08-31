@@ -25,6 +25,7 @@ class RealtimeManager {
   // different clientIds, so their events pass through and update local state.
   private readonly clientId: string = getClientId();
   private tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private tokenRefreshDueAt: number | null = null;
   private activeBlockDebounce: ReturnType<typeof setTimeout> | null = null;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
@@ -188,6 +189,7 @@ class RealtimeManager {
    */
   disconnect(): void {
     if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+    this.tokenRefreshDueAt = null;
     if (this.activeBlockDebounce) clearTimeout(this.activeBlockDebounce);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
 
@@ -296,22 +298,38 @@ class RealtimeManager {
       const store = getDatabaseInstance(this.currentDatabaseId);
       store?.getState().fetchRows();
     }
+
+    // Background tabs throttle timers — if the scheduled refresh is overdue,
+    // run it now instead of waiting for the (possibly hours-late) timeout.
+    if (this.tokenRefreshDueAt !== null && Date.now() >= this.tokenRefreshDueAt) {
+      if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+      void this.refreshTokenNow();
+    }
   };
 
-  private scheduleTokenRefresh(): void {
-    // Refresh 10 minutes before expiry (50 minutes after issue)
-    this.tokenRefreshTimer = setTimeout(async () => {
-      try {
-        const tokenData = await realtimeApi.getToken();
-        if (tokenData.enabled && tokenData.token) {
-          this.adapter?.refreshToken(tokenData.token);
-          this.scheduleTokenRefresh();
-        }
-      } catch (err) {
-        console.warn('Realtime token refresh failed:', err);
-        // Keep existing connection alive; it'll fail on next reconnect
+  private scheduleTokenRefresh(delayMs = 50 * 60 * 1000): void {
+    // Default: refresh 10 minutes before expiry (50 minutes after issue)
+    this.tokenRefreshDueAt = Date.now() + delayMs;
+    this.tokenRefreshTimer = setTimeout(() => {
+      void this.refreshTokenNow();
+    }, delayMs);
+  }
+
+  private async refreshTokenNow(): Promise<void> {
+    this.tokenRefreshDueAt = null;
+    try {
+      const tokenData = await realtimeApi.getToken();
+      if (tokenData.enabled && tokenData.token) {
+        this.adapter?.refreshToken(tokenData.token);
+        this.scheduleTokenRefresh();
+        return;
       }
-    }, 50 * 60 * 1000);
+    } catch (err) {
+      console.warn('Realtime token refresh failed:', err);
+    }
+    // Failure (e.g. API cold start) — retry with a short delay instead of
+    // giving up permanently, which would silently kill realtime for the session.
+    this.scheduleTokenRefresh(60 * 1000);
   }
 }
 

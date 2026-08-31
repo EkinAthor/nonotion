@@ -14,7 +14,7 @@ import { filesRoutes } from './routes/files.js';
 import { importRoutes } from './routes/import.js';
 import { searchRoutes } from './routes/search.js';
 import { realtimeRoutes } from './routes/realtime.js';
-import { initializeStorage, getStorageType, type StorageType } from './storage/storage-factory.js';
+import { initializeStorage, getStorageType, getPostgresStorage, type StorageType } from './storage/storage-factory.js';
 import { ensureAdminPasswordReset } from './services/auth-service.js';
 import { runWithRequestContext } from './services/request-context.js';
 import { registerRateLimit } from './config/rate-limit.js';
@@ -36,13 +36,10 @@ await initializeStorage({
 
 // Run appropriate migrations based on storage type
 if (getStorageType() === 'postgres') {
-  // PostgreSQL migrations
+  // PostgreSQL migrations — reuse the storage pool (a dedicated pool would add
+  // a full extra connection handshake to every serverless cold start)
   const { migrate } = await import('drizzle-orm/node-postgres/migrator');
-  const { Pool } = await import('pg');
-  const { drizzle } = await import('drizzle-orm/node-postgres');
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const db = drizzle(pool);
   // process.cwd() is apps/api locally, but the monorepo root on Vercel
   const pgCandidates = [
     path.resolve(process.cwd(), 'drizzle-pg'),
@@ -51,12 +48,10 @@ if (getStorageType() === 'postgres') {
   const pgMigrationsFolder = pgCandidates.find(p => fs.existsSync(p)) || pgCandidates[0];
 
   try {
-    await migrate(db, { migrationsFolder: pgMigrationsFolder });
+    await migrate(getPostgresStorage().getDb(), { migrationsFolder: pgMigrationsFolder });
     console.log('PostgreSQL migrations complete');
   } catch (error) {
     console.error('PostgreSQL migration error:', error);
-  } finally {
-    await pool.end();
   }
 } else {
   // SQLite migrations (default)

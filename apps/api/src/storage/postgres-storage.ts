@@ -120,8 +120,25 @@ export class PostgresStorage implements StorageAdapter, UserStorageAdapter, File
   private pool: Pool;
 
   constructor(connectionString: string) {
-    this.pool = new Pool({ connectionString });
+    // Serverless-safe pool settings: without connectionTimeoutMillis, pg waits
+    // forever on an unreachable pooler, turning a blip into a function timeout.
+    this.pool = new Pool({
+      connectionString,
+      connectionTimeoutMillis: 10_000,
+      max: process.env.VERCEL ? 3 : 10,
+      idleTimeoutMillis: 30_000,
+      allowExitOnIdle: Boolean(process.env.VERCEL),
+    });
+    // Idle clients can be killed by the pooler; without a listener that crashes the process.
+    this.pool.on('error', (err) => {
+      console.error('pg pool idle client error:', err);
+    });
     this.db = drizzle(this.pool, { schema: pgSchema });
+  }
+
+  /** Drizzle instance accessor — lets boot-time migrations reuse this pool. */
+  getDb(): PgDatabase {
+    return this.db;
   }
 
   async close(): Promise<void> {
