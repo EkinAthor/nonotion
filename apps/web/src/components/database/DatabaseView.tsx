@@ -59,8 +59,17 @@ function DatabaseViewInner({ page, canEdit }: DatabaseViewProps) {
 
   if (error) {
     return (
-      <div className="p-4 text-red-600 bg-red-50 rounded-md">
-        Error loading database: {error}
+      <div className="p-4 text-red-600 bg-red-50 rounded-md flex items-center justify-between gap-4">
+        <span>Error loading database: {error}</span>
+        <button
+          onClick={() => {
+            loadDatabase(page);
+            fetchRows();
+          }}
+          className="shrink-0 px-3 py-1 text-sm font-medium text-red-700 bg-white border border-red-300 rounded hover:bg-red-100"
+        >
+          Retry
+        </button>
       </div>
     );
   }

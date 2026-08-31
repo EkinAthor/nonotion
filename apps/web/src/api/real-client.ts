@@ -96,8 +96,16 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    const error = await response.json() as ApiError;
-    throw new Error(error.error?.message || 'Request failed');
+    // Platform errors (e.g. gateway timeouts) return HTML/empty bodies —
+    // fall back to the status line instead of throwing a JSON SyntaxError.
+    let message = `HTTP ${response.status} ${response.statusText}`.trim();
+    try {
+      const error = await response.json() as ApiError;
+      message = error.error?.message || message;
+    } catch {
+      // non-JSON body — keep the status-line message
+    }
+    throw new Error(message);
   }
 
   // Handle 204 No Content

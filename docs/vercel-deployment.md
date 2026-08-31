@@ -52,7 +52,12 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
 > **Email 2FA (Resend).** The email two-factor auth feature sends codes via [Resend](https://resend.com), a native Vercel Marketplace integration. Install it from **Vercel → Marketplace → Resend** to auto-provision `RESEND_API_KEY` into your project, then set `EMAIL_FROM` to a Resend-verified sender address. Both are required for 2FA to work; without them, login for any 2FA-enabled account will fail at the code-sending step.
 
 > [!NOTE]
-> The API automatically runs Drizzle migrations on startup when `STORAGE_TYPE=postgres` is set.
+> The API automatically runs Drizzle migrations on startup when `STORAGE_TYPE=postgres` is set. One-time data backfills (reference index, created_time property) are marker-gated via the `settings` table — they run once per backfill version, not on every cold start. To force a re-run, delete the corresponding `backfill_*_version` row from `settings` and redeploy/restart.
+
+6.  **Function Settings** (important for cold-start behavior):
+    *   `apps/api/vercel.json` sets `maxDuration: 60` for the API function. Ensure **Fluid compute** is enabled on the API project (Project Settings → Functions) — it is the default for new projects and allows the 60s duration on all plans.
+    *   **Region**: set the function region (Project Settings → Functions → Region) to match your Supabase project's region (e.g. Supabase host `aws-0-us-west-2.pooler.supabase.com` → pick the matching AWS region). Cross-region round-trips multiply cold-start latency.
+    *   **Deployment Protection** must be **disabled** (or configured with a bypass) for the API project — a protection challenge returns a 401 page without CORS headers, which browsers report as a CORS failure.
 
 > [!NOTE]
 > **Rate Limiting:** The built-in rate limiting is automatically disabled on Vercel because it uses an in-memory store that doesn't persist between serverless invocations. For production rate limiting on Vercel, configure [Vercel Firewall / WAF rules](https://vercel.com/docs/security/firewall) to set IP-based rate limits at the edge.
@@ -94,7 +99,8 @@ The Web client is a Vite/React SPA.
 
 *   **Build Failures (Missing Shared Package)**: Ensure you are using the `pnpm --filter ...` command. Vercel automatically detects the monorepo root and includes necessary workspace files even when the **Root Directory** is set to a subfolder.
 *   **Output Directory**: The API project's Output Directory should be left **empty** (it runs as a serverless function). Only the Web project should use `dist` as its Output Directory.
-*   **CORS Errors**: Verify `CORS_ORIGINS` is set on the API project to your Web deployment URL (without a trailing slash). Check that the API function is actually running by hitting the `/health` endpoint.
+*   **CORS Errors**: Verify `CORS_ORIGINS` is set on the API project to your Web deployment URL (without a trailing slash). Check that the API function is actually running by hitting the `/health` endpoint (registered at the root, not under `/api`).
+*   **CORS errors after the tab was idle for a few minutes**: this is almost never a CORS misconfiguration — it is a **cold-start failure**. When the serverless function times out or crashes during boot, Vercel answers with a platform 504/500 that carries no `Access-Control-Allow-Origin` header, and the browser reports it as a CORS error. Check the API project → **Logs** for `FUNCTION_INVOCATION_TIMEOUT` or init errors around the incident time. Mitigations (all in place as of this doc): marker-gated boot backfills, pool `connectionTimeoutMillis`, `maxDuration: 60`, and region co-location with Supabase (see Function Settings above). If it persists, a follow-up option is moving app initialization into the request handler behind a memoized promise so failures return a CORS-bearing 503.
 
 ---
 

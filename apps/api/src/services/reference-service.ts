@@ -70,12 +70,22 @@ export async function resolveReferencesForRows(
   }
 }
 
+// Bump to force a one-time re-run of the backfill on next boot (e.g. after a
+// change to how the index is derived). Marker lives in the settings KV table.
+const REFERENCE_BACKFILL_MARKER_KEY = 'backfill_reference_index_version';
+const REFERENCE_BACKFILL_VERSION = '1';
+
 /**
  * Rebuild the page_references index table from the canonical JSON blobs.
- * Safe to run at boot: the index is derived data, so this is idempotent.
+ * Idempotent, but scans the whole pages table — marker-gated so it runs once
+ * per version, not on every boot (serverless cold starts must stay cheap).
  */
 export async function backfillReferenceIndex(): Promise<void> {
   const storage = getStorage();
+  if ((await storage.getSetting(REFERENCE_BACKFILL_MARKER_KEY)) === REFERENCE_BACKFILL_VERSION) {
+    console.log(`Reference index backfill skipped (marker v${REFERENCE_BACKFILL_VERSION})`);
+    return;
+  }
   const allPages = await storage.getAllPages();
   for (const page of allPages) {
     if (!page.properties) continue;
@@ -85,4 +95,6 @@ export async function backfillReferenceIndex(): Promise<void> {
       }
     }
   }
+  await storage.setSetting(REFERENCE_BACKFILL_MARKER_KEY, REFERENCE_BACKFILL_VERSION);
+  console.log(`Reference index backfill complete (marker v${REFERENCE_BACKFILL_VERSION})`);
 }

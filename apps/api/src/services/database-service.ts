@@ -359,13 +359,23 @@ export function createDefaultSchema(): DatabaseSchema {
   };
 }
 
+// Bump to force a one-time re-run of the backfill on next boot.
+// Marker lives in the settings KV table (mirrors backfillReferenceIndex).
+const CREATED_TIME_BACKFILL_MARKER_KEY = 'backfill_created_time_version';
+const CREATED_TIME_BACKFILL_VERSION = '1';
+
 /**
  * One-time backfill: ensure every database schema has the created_time
- * system property. Idempotent — skips databases that already have one.
- * Called at boot (mirrors backfillReferenceIndex).
+ * system property. Idempotent, but scans the whole pages table — marker-gated
+ * so it runs once per version, not on every boot (serverless cold starts must
+ * stay cheap). Called at boot (mirrors backfillReferenceIndex).
  */
 export async function backfillCreatedTimeProperty(): Promise<void> {
   const storage = getStorage();
+  if ((await storage.getSetting(CREATED_TIME_BACKFILL_MARKER_KEY)) === CREATED_TIME_BACKFILL_VERSION) {
+    console.log(`Created-time backfill skipped (marker v${CREATED_TIME_BACKFILL_VERSION})`);
+    return;
+  }
   const pages = await storage.getAllPages();
   for (const page of pages) {
     if (page.type !== 'database') continue;
@@ -381,6 +391,8 @@ export async function backfillCreatedTimeProperty(): Promise<void> {
       version: page.version + 1,
     });
   }
+  await storage.setSetting(CREATED_TIME_BACKFILL_MARKER_KEY, CREATED_TIME_BACKFILL_VERSION);
+  console.log(`Created-time backfill complete (marker v${CREATED_TIME_BACKFILL_VERSION})`);
 }
 
 // Helper functions
