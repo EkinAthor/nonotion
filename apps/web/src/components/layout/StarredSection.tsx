@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { usePageStore } from '@/stores/pageStore';
 import type { Page, PageTreeNode } from '@nonotion/shared';
 import PageTree from './PageTree';
+import { pageHref, isNewTabClick, suppressNativeNavForPlainClick } from '@/lib/page-links';
 
 export default function StarredSection() {
   const navigate = useNavigate();
@@ -151,11 +152,17 @@ function SortableStarredItem({ page, treeNode, hasChildren, isExpanded, isSelect
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div
+      <a
+        href={pageHref(page.id)}
+        draggable={false}
         className={`flex items-center px-1 py-0.5 rounded cursor-pointer group ${
           isSelected ? 'bg-notion-hover' : 'hover:bg-notion-hover'
         }`}
-        onClick={onNavigate}
+        onClick={(e) => {
+          if (isNewTabClick(e)) return;
+          onNavigate();
+        }}
+        onClickCapture={suppressNativeNavForPlainClick}
       >
         {/* Drag handle */}
         <button
@@ -209,7 +216,7 @@ function SortableStarredItem({ page, treeNode, hasChildren, isExpanded, isSelect
         <span className="ml-1 text-sm text-notion-text truncate">
           {page.title || 'Untitled'}
         </span>
-      </div>
+      </a>
 
       {/* Children — uses starred-specific expanded state */}
       {isExpanded && hasChildren && treeNode && (

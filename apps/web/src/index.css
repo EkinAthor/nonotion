@@ -52,8 +52,21 @@ body {
   color: #1a6bc4;
 }
 
+/* Page mentions render as anchors (NodeView) but must keep mention styling,
+   not the generic in-content link styling above. */
+.ProseMirror a[data-mention-type] {
+  color: inherit;
+  text-decoration-color: #e9e9e7; /* notion-border, matches decoration-notion-border */
+  text-underline-offset: 2px;
+}
+
+.ProseMirror a[data-mention-type]:hover {
+  color: inherit;
+}
+
 /* Inline @-mention atoms — selection ring when arrowed onto / selected */
-.ProseMirror span[data-mention-type].ProseMirror-selectednode {
+.ProseMirror span[data-mention-type].ProseMirror-selectednode,
+.ProseMirror a[data-mention-type].ProseMirror-selectednode {
   background: rgba(35, 131, 226, 0.28);
   border-radius: 3px;
 }

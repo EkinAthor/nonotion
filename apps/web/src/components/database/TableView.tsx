@@ -21,6 +21,7 @@ import { useDatabaseInstance } from '@/contexts/DatabaseInstanceContext';
 import { usePageStore } from '@/stores/pageStore';
 import { useUiStore } from '@/stores/uiStore';
 import CellRenderer from './cells/CellRenderer';
+import { pageHref, isNewTabClick } from '@/lib/page-links';
 
 interface TableViewProps {
   canEdit: boolean;
@@ -190,8 +191,15 @@ export default function TableView({ canEdit }: TableViewProps) {
                   }}
                 >
                   {index === 0 && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openPeekPanel(row.id); }}
+                    <a
+                      href={pageHref(row.id)}
+                      draggable={false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isNewTabClick(e)) return;
+                        e.preventDefault();
+                        openPeekPanel(row.id);
+                      }}
                       className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 px-1.5 py-0.5 text-xs text-notion-text-secondary hover:bg-gray-200 rounded bg-white/90 z-10 flex items-center gap-1"
                       title="Open in side peek"
                     >
@@ -199,7 +207,7 @@ export default function TableView({ canEdit }: TableViewProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                       Open
-                    </button>
+                    </a>
                   )}
                   <CellRenderer
                     property={prop}
@@ -394,8 +402,15 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
           }}
         >
           {index === 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPeekOpen(row.id); }}
+            <a
+              href={pageHref(row.id)}
+              draggable={false}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isNewTabClick(e)) return;
+                e.preventDefault();
+                onPeekOpen(row.id);
+              }}
               className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 px-1.5 py-0.5 text-xs text-notion-text-secondary hover:bg-gray-200 rounded bg-white/90 z-10 flex items-center gap-1"
               title="Open in side peek"
             >
@@ -403,7 +418,7 @@ function SortableRow({ row, properties, canEdit, onCellChange, onRowClick, onPee
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
               Open
-            </button>
+            </a>
           )}
           <CellRenderer
             property={prop}

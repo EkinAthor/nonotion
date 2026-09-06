@@ -25,6 +25,7 @@ import { usersApi } from '@/api/client';
 import { COLOR_CLASSES } from '@/lib/select-colors';
 import { formatPropertyDate } from '@/lib/format-date';
 import CellRenderer from './cells/CellRenderer';
+import { pageHref, isNewTabClick, suppressNativeNavForPlainClick } from '@/lib/page-links';
 
 /** Check if a property value is empty (no meaningful data to display) */
 function isEmptyValue(value: PropertyValue | undefined): boolean {
@@ -475,18 +476,25 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }
   const visibleProps = cardProperties.filter((prop) => !isEmptyValue(getCardValue(row, prop)));
 
   return (
-    <div
+    <a
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      href={pageHref(row.id)}
+      draggable={false}
+      role={undefined}
       onClick={(e) => {
-        if (!isDragging) {
-          e.stopPropagation();
-          onClick();
+        if (isDragging) {
+          e.preventDefault();
+          return;
         }
+        if (isNewTabClick(e)) return;
+        e.stopPropagation();
+        onClick();
       }}
-      className={`bg-white rounded-lg border border-notion-border shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+      onClickCapture={suppressNativeNavForPlainClick}
+      className={`block bg-white rounded-lg border border-notion-border shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
         isDragging || isOverlay ? 'opacity-50' : ''
       }`}
     >
@@ -512,7 +520,7 @@ function SortableKanbanCard({ row, cardProperties, canEdit, onClick, isOverlay }
           ))}
         </div>
       )}
-    </div>
+    </a>
   );
 }
 
