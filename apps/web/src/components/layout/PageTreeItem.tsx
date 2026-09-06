@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { PageTreeNode } from '@nonotion/shared';
 import { usePageStore } from '@/stores/pageStore';
 import PageTree from './PageTree';
+import { pageHref, isNewTabClick, suppressNativeNavForPlainClick } from '@/lib/page-links';
 
 interface PageTreeItemProps {
   node: PageTreeNode;
@@ -24,8 +25,9 @@ export default function PageTreeItem({ node, depth, expandedNodesOverride, toggl
   const isSelected = currentPageId === node.id;
   const hasChildren = node.children.length > 0;
 
-  const handleClick = () => {
-    navigate(`/page/${node.id}`);
+  const handleClick = (e: React.MouseEvent) => {
+    if (isNewTabClick(e)) return;
+    navigate(pageHref(node.id));
   };
 
   const handleToggle = (e: React.MouseEvent) => {
@@ -62,12 +64,15 @@ export default function PageTreeItem({ node, depth, expandedNodesOverride, toggl
 
   return (
     <div>
-      <div
+      <a
+        href={pageHref(node.id)}
+        draggable={false}
         className={`flex items-center px-1 py-0.5 rounded cursor-pointer group ${
           isSelected ? 'bg-notion-hover' : 'hover:bg-notion-hover'
         }`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         onClick={handleClick}
+        onClickCapture={suppressNativeNavForPlainClick}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -149,7 +154,7 @@ export default function PageTreeItem({ node, depth, expandedNodesOverride, toggl
             </button>
           </div>
         )}
-      </div>
+      </a>
 
       {/* Children */}
       {isExpanded && hasChildren && (

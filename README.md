@@ -18,6 +18,7 @@ Running demo can be found at: [Nonotion Demo](https://nonotion-web-demo.vercel.a
 - Inline @-mentions: type `@` in any text block to link a page (opens in split view) or mention a user (click shows an info popover); the menu shows recently used pages/users and searches by title/name as you type
 - Auto-save with debounce and a live save-status indicator in the page top bar (green Saved / Saving… / Save failed / Offline) — green means all changes are persisted and it's safe to close; the browser warns before closing the tab while changes are unsaved
 - Document-wide undo/redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y) — one unified per-page history across text edits and block operations (create/delete/split/merge, type changes, reorder), Google-Docs-style typing bursts; only your own changes are undone under real-time collaboration
+- Internal page links are real browser links: sidebar pages, kanban cards, the table "Open" button, reference chips, and page @-mentions all support the native right-click "Open in new tab" menu and middle-click, while a plain left-click keeps the in-app behavior (navigate or split view)
 - Star/unstar pages
 - Delete pages from the page view (full-screen or split view) and bulk-delete rows from the database table view (multi-select with select-all across pages), each with a confirmation prompt
 - Multi-user authentication with JWT (email/password)

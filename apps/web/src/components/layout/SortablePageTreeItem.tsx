@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { usePageStore } from '@/stores/pageStore';
 import type { FlattenedItem } from '@/lib/sidebar-dnd';
+import { pageHref, isNewTabClick, suppressNativeNavForPlainClick } from '@/lib/page-links';
 
 interface SortablePageTreeItemProps {
   item: FlattenedItem;
@@ -37,8 +38,9 @@ export default function SortablePageTreeItem({ item, showIndicator }: SortablePa
   const isSelected = currentPageId === node.id;
   const hasChildren = node.children.length > 0;
 
-  const handleClick = () => {
-    navigate(`/page/${node.id}`);
+  const handleClick = (e: React.MouseEvent) => {
+    if (isNewTabClick(e)) return;
+    navigate(pageHref(node.id));
   };
 
   const handleToggle = (e: React.MouseEvent) => {
@@ -73,12 +75,15 @@ export default function SortablePageTreeItem({ item, showIndicator }: SortablePa
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div
+      <a
+        href={pageHref(node.id)}
+        draggable={false}
         className={`flex items-center px-1 py-0.5 rounded cursor-pointer group ${
           isSelected ? 'bg-notion-hover' : 'hover:bg-notion-hover'
         }`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         onClick={handleClick}
+        onClickCapture={suppressNativeNavForPlainClick}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -183,7 +188,7 @@ export default function SortablePageTreeItem({ item, showIndicator }: SortablePa
             </button>
           </div>
         )}
-      </div>
+      </a>
       {showIndicator && (
         <div
           className="h-0.5 bg-blue-500 rounded-full"

@@ -1,5 +1,6 @@
 import { Node } from '@tiptap/core';
 import { useUiStore } from '@/stores/uiStore';
+import { pageHref, isNewTabClick } from '@/lib/page-links';
 
 export type MentionType = 'page' | 'user';
 
@@ -71,7 +72,15 @@ export const MentionNode = Node.create({
     return ({ node }) => {
       const { mentionType, mentionId, label } = node.attrs as MentionAttrs;
 
-      const dom = document.createElement('span');
+      // Page mentions render as real anchors in the live editor so the browser's
+      // "Open in new tab" / middle-click work. Persisted HTML is untouched:
+      // renderHTML/parseHTML keep the byte-stable <span> shape.
+      const isPageLink = mentionType === 'page' && !!mentionId;
+      const dom: HTMLElement = document.createElement(isPageLink ? 'a' : 'span');
+      if (isPageLink) {
+        dom.setAttribute('href', pageHref(mentionId));
+        (dom as HTMLAnchorElement).draggable = false;
+      }
       dom.setAttribute('data-mention-type', mentionType);
       dom.setAttribute('data-mention-id', mentionId);
       dom.setAttribute('contenteditable', 'false');
@@ -92,12 +101,16 @@ export const MentionNode = Node.create({
         dom.title = label;
       }
 
-      // Prevent ProseMirror caret placement / selection churn on press
+      // Prevent ProseMirror caret placement / selection churn on press.
+      // Primary button only — preventing middle-click mousedown would break
+      // the native open-in-new-tab chain on the anchor.
       dom.addEventListener('mousedown', (e) => {
-        e.preventDefault();
+        if (e.button === 0) e.preventDefault();
       });
 
       dom.addEventListener('click', (e) => {
+        // Modified/middle clicks fall through to the browser (new tab via href).
+        if (isPageLink && isNewTabClick(e)) return;
         e.preventDefault();
         e.stopPropagation();
         if (!mentionId) return;

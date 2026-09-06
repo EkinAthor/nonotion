@@ -4,6 +4,7 @@ import { databaseApi, pagesApi } from '@/api/client';
 import { usePageStore } from '@/stores/pageStore';
 import type { DatabaseRow, ResolvedReference } from '@nonotion/shared';
 import OptionPickerMenu, { type OptionPickerItem } from './OptionPickerMenu';
+import { pageHref, isNewTabClick } from '@/lib/page-links';
 
 interface ReferenceCellProps {
   value: string[]; // referenced row ids
@@ -187,29 +188,34 @@ export default function ReferenceCell({
     ),
   }));
 
-  const chip = (item: { id: string; name: string }, clickable: boolean) => (
-    <span
-      key={item.id}
-      onClick={
-        clickable
-          ? (e) => {
-              e.stopPropagation();
-              navigate(`/page/${item.id}`);
-            }
-          : undefined
-      }
-      className={`inline-flex items-center max-w-full truncate rounded px-1.5 py-0.5 text-sm ${
-        redacted
-          ? 'bg-gray-100 text-notion-text-secondary'
-          : clickable
-            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer underline decoration-dotted'
-            : 'bg-blue-50 text-blue-700'
-      }`}
-      title={redacted ? 'No access to referenced database' : item.name}
-    >
-      {item.name}
-    </span>
-  );
+  const chip = (item: { id: string; name: string }, clickable: boolean) =>
+    clickable ? (
+      <a
+        key={item.id}
+        href={pageHref(item.id)}
+        draggable={false}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isNewTabClick(e)) return;
+          e.preventDefault();
+          navigate(pageHref(item.id));
+        }}
+        className="inline-flex items-center max-w-full truncate rounded px-1.5 py-0.5 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer underline decoration-dotted"
+        title={item.name}
+      >
+        {item.name}
+      </a>
+    ) : (
+      <span
+        key={item.id}
+        className={`inline-flex items-center max-w-full truncate rounded px-1.5 py-0.5 text-sm ${
+          redacted ? 'bg-gray-100 text-notion-text-secondary' : 'bg-blue-50 text-blue-700'
+        }`}
+        title={redacted ? 'No access to referenced database' : item.name}
+      >
+        {item.name}
+      </span>
+    );
 
   // Read-only, or redacted (cannot edit references you can't resolve).
   if (!canEdit || redacted) {
@@ -239,16 +245,20 @@ export default function ReferenceCell({
               key={item.id}
               className="inline-flex items-center gap-1 max-w-full truncate rounded bg-blue-50 px-1.5 py-0.5 text-sm text-blue-700"
             >
-              <span
+              <a
+                href={pageHref(item.id)}
+                draggable={false}
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/page/${item.id}`);
+                  if (isNewTabClick(e)) return;
+                  e.preventDefault();
+                  navigate(pageHref(item.id));
                 }}
                 className="truncate underline decoration-dotted hover:text-blue-900"
                 title={item.name}
               >
                 {item.name}
-              </span>
+              </a>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
