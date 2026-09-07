@@ -152,6 +152,7 @@ There are multiple ways to run the application. For testing purposes, or very sm
  **Deployment Guides:**
  - [Docker Deployment](./docs/docker-deployment.md)
  - [Vercel Deployment](./docs/vercel-deployment.md)
+ - [Custom Domain](./docs/custom-domain.md) — serve the app from your own (sub)domain instead of `*.vercel.app`
 # IMPORTANT: Change POSTGRES_PASSWORD in docker-compose.yml or use .env in production!
 
 ---
@@ -231,7 +232,10 @@ All perf entities carry a `_perf_` id infix, so `--clean` can never touch real d
 | `STORAGE_TYPE` | `sqlite` (default) or `postgres` | `sqlite` |
 | `DATABASE_URL` | PostgreSQL connection URL | - |
 | `PORT` | API server port | `3001` |
-| `CORS_ORIGINS` | Allowed origins (comma-separated) | `localhost:5173,localhost:3000` |
+| `CORS_ORIGINS` | Allowed origins (comma-separated, exact match, no trailing slashes) | `localhost:5173,localhost:3000` |
+| `VITE_API_URL` | API base URL baked into the web build (must end in `/api`; set on the web app, requires rebuild) | `/api` |
+| `MCP_PUBLIC_URL` | Public URL of the API deployment — MCP OAuth issuer/audience (required in production when `MCP_ENABLED=true`) | `http://localhost:3001` |
+| `FRONTEND_URL` | Public URL of the web app (MCP OAuth consent redirect) | First `CORS_ORIGINS` entry |
 | `MAX_FILE_SIZE_MB` | Maximum file upload size in MB | `10` |
 | `MAX_IMPORT_SIZE_MB` | Maximum Notion import ZIP size in MB | `100` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
