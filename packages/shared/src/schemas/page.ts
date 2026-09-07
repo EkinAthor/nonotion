@@ -23,7 +23,8 @@ export const createPageInputSchema = z.object({
   title: z.string().min(1).max(255),
   type: pageTypeSchema.optional(),
   parentId: z.string().startsWith('pg_').nullable().optional(),
-  icon: z.string().max(10).nullable().optional(),
+  // 32 covers multi-codepoint ZWJ sequences (e.g. family emoji = 11 UTF-16 units)
+  icon: z.string().max(32).nullable().optional(),
   databaseSchema: databaseSchemaSchema.optional(),
   properties: z.record(z.string(), propertyValueSchema).optional(),
 });
@@ -31,7 +32,7 @@ export const createPageInputSchema = z.object({
 export const updatePageInputSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   parentId: z.string().startsWith('pg_').nullable().optional(),
-  icon: z.string().max(10).nullable().optional(),
+  icon: z.string().max(32).nullable().optional(),
   isStarred: z.boolean().optional(),
   childIds: z.array(z.string().startsWith('pg_')).optional(),
   properties: z.record(z.string(), propertyValueSchema).optional(),

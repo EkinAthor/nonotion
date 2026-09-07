@@ -24,6 +24,8 @@ import { inlineMarkdownToHtml } from '@/lib/html-markdown';
 import { undoManager } from '@/lib/undo/undo-manager';
 import { MentionNode, type MentionType } from './mention-node';
 import { recordRecentUser } from '@/lib/mention-recents';
+import type { EmojiItem } from '@/lib/emoji/emoji-data';
+import { recordEmojiUsage } from '@/lib/emoji/emoji-usage';
 
 // One undo step per typing burst; a burst commits after this pause (or on
 // blur / structural op / undo keypress)
@@ -73,6 +75,12 @@ export interface MentionMenuState {
   position: { top: number; left: number };
 }
 
+export interface EmojiMenuState {
+  isOpen: boolean;
+  query: string;
+  position: { top: number; left: number };
+}
+
 // leafText for doc.textBetween when string offsets must equal doc positions:
 // every leaf node (mention atoms, images...) becomes exactly 1 char. Hard
 // breaks map to '\n' so line starts count as an "@"-trigger boundary.
@@ -111,6 +119,9 @@ interface UseBlockEditorResult {
   mentionMenu: MentionMenuState;
   closeMentionMenu: () => void;
   insertMention: (kind: MentionType, id: string, label: string) => void;
+  emojiMenu: EmojiMenuState;
+  closeEmojiMenu: () => void;
+  insertEmoji: (item: EmojiItem) => void;
 }
 
 export function useBlockEditor({
@@ -145,6 +156,13 @@ export function useBlockEditor({
   });
   const mentionStartPosRef = useRef<number | null>(null);
   const mentionMenuOpenRef = useRef(false);
+  const [emojiMenu, setEmojiMenu] = useState<EmojiMenuState>({
+    isOpen: false,
+    query: '',
+    position: { top: 0, left: 0 },
+  });
+  const colonStartPosRef = useRef<number | null>(null);
+  const emojiMenuOpenRef = useRef(false);
   const blockRef = useRef(block);
 
   // Keep ref in sync with block prop
@@ -160,6 +178,10 @@ export function useBlockEditor({
   useEffect(() => {
     mentionMenuOpenRef.current = mentionMenu.isOpen;
   }, [mentionMenu.isOpen]);
+
+  useEffect(() => {
+    emojiMenuOpenRef.current = emojiMenu.isOpen;
+  }, [emojiMenu.isOpen]);
 
   const saveContent = useCallback(
     (text: string) => {
@@ -370,6 +392,33 @@ export function useBlockEditor({
     setMentionMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
     mentionStartPosRef.current = null;
   }, []);
+
+  const closeEmojiMenu = useCallback(() => {
+    setEmojiMenu({ isOpen: false, query: '', position: { top: 0, left: 0 } });
+    colonStartPosRef.current = null;
+  }, []);
+
+  const insertEmoji = useCallback(
+    (item: EmojiItem) => {
+      const currentEditor = editorRef.current;
+      const colonPos = colonStartPosRef.current;
+      closeEmojiMenu();
+      if (!currentEditor || colonPos === null) return;
+      // transact flushes the typing burst first, so Ctrl+Z after insert
+      // restores the typed ":query" text (same as insertMention). No trailing
+      // space — the emoji is plain text and needs no caret landing spot.
+      undoManager.transact(blockRef.current.pageId, () => {
+        currentEditor
+          .chain()
+          .focus()
+          .deleteRange({ from: colonPos, to: currentEditor.state.selection.from })
+          .insertContent([{ type: 'text', text: item.char }])
+          .run();
+      });
+      recordEmojiUsage(item.id);
+    },
+    [closeEmojiMenu]
+  );
 
   const insertMention = useCallback(
     (kind: MentionType, id: string, label: string) => {
@@ -663,8 +712,8 @@ export function useBlockEditor({
           return true;
         },
         Enter: ({ editor }) => {
-          // If slash/mention menu is open, don't handle Enter (let menu handle it)
-          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
+          // If slash/mention/emoji menu is open, don't handle Enter (let menu handle it)
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current || emojiMenuOpenRef.current) {
             return true;
           }
 
@@ -726,11 +775,15 @@ export function useBlockEditor({
             closeMentionMenu();
             return true;
           }
+          if (emojiMenuOpenRef.current) {
+            closeEmojiMenu();
+            return true;
+          }
           return false;
         },
         ArrowUp: ({ editor }) => {
-          // If slash/mention menu is open, let it handle navigation
-          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
+          // If slash/mention/emoji menu is open, let it handle navigation
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current || emojiMenuOpenRef.current) {
             return false;
           }
 
@@ -754,8 +807,8 @@ export function useBlockEditor({
           return false;
         },
         ArrowDown: ({ editor }) => {
-          // If slash/mention menu is open, let it handle navigation
-          if (slashMenuOpenRef.current || mentionMenuOpenRef.current) {
+          // If slash/mention/emoji menu is open, let it handle navigation
+          if (slashMenuOpenRef.current || mentionMenuOpenRef.current || emojiMenuOpenRef.current) {
             return false;
           }
 
@@ -968,6 +1021,34 @@ export function useBlockEditor({
         if (!stillValid) {
           closeMentionMenu();
         }
+      } else if (colonStartPosRef.current !== null) {
+        // Emoji menu is tracking — update query (text after the ":")
+        const colonPos = colonStartPosRef.current;
+        let stillValid = false;
+        // Menu stays open only while there is ≥1 query char (backspacing to a
+        // bare ":" closes it; retyping a char reopens via the open arm below)
+        if (from > colonPos + 1) {
+          // The tracked position must still hold the ":" (guards against
+          // deletions/replacements that shifted content under the ref)
+          const colonChar = doc.textBetween(colonPos, colonPos + 1, '\n', mentionLeafText);
+          if (colonChar === ':') {
+            const query = doc.textBetween(colonPos + 1, from, '\n', mentionLeafText);
+            // Space/newline in the query closes the menu leaving the text
+            // as-is; a second ":" closes too (":smile:" autocomplete punted)
+            if (
+              !query.includes(' ') &&
+              !query.includes('\n') &&
+              !query.includes(ATOM_CHAR) &&
+              !query.includes(':')
+            ) {
+              stillValid = true;
+              setEmojiMenu((prev) => ({ ...prev, query }));
+            }
+          }
+        }
+        if (!stillValid) {
+          closeEmojiMenu();
+        }
       } else if (text === '/' && doc.content.size === 3) {
         // Open slash menu: only when "/" is the sole character in the block.
         // The doc-size guard keeps atom nodes (mentions) from satisfying the
@@ -990,6 +1071,17 @@ export function useBlockEditor({
           setMentionMenu({
             isOpen: true,
             query: '',
+            position: { top: coords.bottom, left: coords.left },
+          });
+        } else if (/(^|\s):[^\s:￼]$/.test(before)) {
+          // Open emoji menu: caret right after a word-start ":" plus exactly
+          // one query char ("12:30", "note:", bare ":" never trigger; ￼ =
+          // ATOM_CHAR keeps a mention atom from acting as the query char)
+          const coords = editor.view.coordsAtPos(from);
+          colonStartPosRef.current = from - 2;
+          setEmojiMenu({
+            isOpen: true,
+            query: before.slice(-1),
             position: { top: coords.bottom, left: coords.left },
           });
         }
@@ -1061,6 +1153,9 @@ export function useBlockEditor({
       if (mentionStartPosRef.current !== null) {
         closeMentionMenu();
       }
+      if (colonStartPosRef.current !== null) {
+        closeEmojiMenu();
+      }
 
       // Set flag to prevent onUpdate from saving during sync
       isSyncingExternalContentRef.current = true;
@@ -1086,5 +1181,8 @@ export function useBlockEditor({
     mentionMenu,
     closeMentionMenu,
     insertMention,
+    emojiMenu,
+    closeEmojiMenu,
+    insertEmoji,
   };
 }
