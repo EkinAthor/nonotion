@@ -40,7 +40,7 @@ The API is a Fastify application that will run as a Vercel Serverless Function.
     *   `STORAGE_TYPE`: `postgres`
     *   `DATABASE_URL`: Your Supabase connection string.
     *   `JWT_SECRET`: A secure random string (32+ characters). **Required** — the API will refuse to start without it.
-    *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://your-nonotion-project-web.vercel.app`).
+    *   `CORS_ORIGINS`: The URL of your Web deployment (e.g., `https://your-nonotion-project-web.vercel.app`, or your custom domain — see [Custom Domain Guide](./custom-domain.md)).
     *   `ADMIN_EMAIL`: Your initial admin email.
     *   `RESEND_API_KEY` + `EMAIL_FROM`: Required only if you use email two-factor authentication (see the Resend note below).
     *   `MCP_ENABLED` + `MCP_PUBLIC_URL` + `FRONTEND_URL`: Required only if you enable the MCP server (see the MCP note below).
@@ -91,20 +91,26 @@ The Web client is a Vite/React SPA.
 4.  **SPA Routing**:
     The repo includes `apps/web/vercel.json` with a rewrite rule that sends all paths to `index.html`, allowing React Router to handle client-side routing.
 5.  **Environment Variables**:
-    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://your-nonotion-project-api.vercel.app/api`). Note: the `/api` suffix is required because all routes are registered under `/api/`.
+    *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://your-nonotion-project-api.vercel.app/api`, or your custom API domain). Note: the `/api` suffix is required because all routes are registered under `/api/`.
 
 ---
 
-## 4. Troubleshooting
+## 4. Custom Domain (Optional)
+
+To serve the app from your own domain (e.g. `nonotion.example.com` + `api.nonotion.example.com`) instead of the `*.vercel.app` URLs, follow the [Custom Domain Guide](./custom-domain.md). It covers the Vercel domain setup, DNS records at your registrar, the env var changes (`CORS_ORIGINS`, `FRONTEND_URL`, `MCP_PUBLIC_URL`, `VITE_API_URL` + web redeploy), and reconfiguring Google OAuth, Resend, and MCP connectors.
+
+---
+
+## 5. Troubleshooting
 
 *   **Build Failures (Missing Shared Package)**: Ensure you are using the `pnpm --filter ...` command. Vercel automatically detects the monorepo root and includes necessary workspace files even when the **Root Directory** is set to a subfolder.
 *   **Output Directory**: The API project's Output Directory should be left **empty** (it runs as a serverless function). Only the Web project should use `dist` as its Output Directory.
-*   **CORS Errors**: Verify `CORS_ORIGINS` is set on the API project to your Web deployment URL (without a trailing slash). Check that the API function is actually running by hitting the `/health` endpoint (registered at the root, not under `/api`).
+*   **CORS Errors**: Verify `CORS_ORIGINS` is set on the API project to your Web deployment URL (without a trailing slash). The list is exact-match — if you added a custom domain, its origin must be listed explicitly (see [Custom Domain Guide](./custom-domain.md)). Check that the API function is actually running by hitting the `/health` endpoint (registered at the root, not under `/api`).
 *   **CORS errors after the tab was idle for a few minutes**: this is almost never a CORS misconfiguration — it is a **cold-start failure**. When the serverless function times out or crashes during boot, Vercel answers with a platform 504/500 that carries no `Access-Control-Allow-Origin` header, and the browser reports it as a CORS error. Check the API project → **Logs** for `FUNCTION_INVOCATION_TIMEOUT` or init errors around the incident time. Mitigations (all in place as of this doc): marker-gated boot backfills, pool `connectionTimeoutMillis`, `maxDuration: 60`, and region co-location with Supabase (see Function Settings above). If it persists, a follow-up option is moving app initialization into the request handler behind a memoized promise so failures return a CORS-bearing 503.
 
 ---
 
-## 5. Updates & Migrations
+## 6. Updates & Migrations
 
 Whenever you push changes:
 1.  Vercel will automatically redeploy.
