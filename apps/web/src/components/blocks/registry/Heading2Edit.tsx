@@ -6,6 +6,7 @@ import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
 import MentionMenu from '../MentionMenu';
+import EmojiMenu from '../EmojiMenu';
 import FormatToolbar from '../FormatToolbar';
 
 interface HeadingEditProps {
@@ -17,7 +18,7 @@ export default function Heading2Edit({ block, readOnly = false }: HeadingEditPro
   const { createBlockBelow, insertParagraphAbove, changeBlockType, focusPreviousBlock, focusNextBlock, pasteMultipleBlocks, deleteAndMergeToPrevious, pasteImage } = useBlockContext();
   const { focusBlockId, focusPosition, setFocusBlock } = useBlockStore();
 
-  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention } = useBlockEditor({
+  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention, emojiMenu, closeEmojiMenu, insertEmoji } = useBlockEditor({
     block,
     placeholder: readOnly ? '' : 'Heading 2',
     headingLevel: 2,
@@ -72,6 +73,14 @@ export default function Heading2Edit({ block, readOnly = false }: HeadingEditPro
           position={mentionMenu.position}
           onSelect={insertMention}
           onClose={closeMentionMenu}
+        />
+      )}
+      {!readOnly && emojiMenu.isOpen && (
+        <EmojiMenu
+          query={emojiMenu.query}
+          position={emojiMenu.position}
+          onSelect={insertEmoji}
+          onClose={closeEmojiMenu}
         />
       )}
     </div>

@@ -80,6 +80,32 @@ test.describe('Block Editing', () => {
     await expect(page.getByText('Block to delete')).not.toBeVisible();
   });
 
+  test('emoji picker inserts emoji via : trigger', async ({ page }) => {
+    await page.getByRole('button', { name: 'Add a block' }).click();
+    await page.getByText('Paragraph').click();
+
+    await page.locator('.ProseMirror').first().click();
+    await page.keyboard.type('Launch :rocket');
+
+    await expect(page.locator('[data-emoji-menu]')).toBeVisible();
+
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('.ProseMirror').first()).toContainText('🚀');
+    await expect(page.locator('[data-emoji-menu]')).not.toBeVisible();
+  });
+
+  test('colon in times does not open the emoji menu', async ({ page }) => {
+    await page.getByRole('button', { name: 'Add a block' }).click();
+    await page.getByText('Paragraph').click();
+
+    await page.locator('.ProseMirror').first().click();
+    await page.keyboard.type('Meet at 12:30');
+
+    await expect(page.locator('[data-emoji-menu]')).not.toBeVisible();
+    await expect(page.getByText('Meet at 12:30')).toBeVisible();
+  });
+
   test('block content persists after refresh', async ({ page }) => {
     // Add a heading block
     await page.getByRole('button', { name: 'Add a block' }).click();

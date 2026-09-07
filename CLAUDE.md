@@ -379,6 +379,19 @@ Internal page-navigation affordances render real `<a href="/page/<id>">` element
 - **Styling**: Tailwind preflight resets anchors to `color/text-decoration: inherit`, so swaps are visually invisible — except inside `.ProseMirror`, where `index.css` adds `a[data-mention-type]` overrides (and widens the mention selection-ring selector to `span`+`a`).
 - **New nav affordances should follow this pattern** (anchor + `pageHref` + `isNewTabClick` guard). Deliberately NOT converted this pass: `PageBreadcrumb`, `SearchModal`, `SidePanel`, `PageLinkEdit`, `DatabaseViewEdit`, `BlockWrapper` (still plain `navigate()` calls), and the table `<td>` background click.
 
+### 35. Inline Emoji Picker
+Typing `:` + ≥1 character at word start (start-of-text or after whitespace — `12:30`, `note:`, bare `:` never trigger) opens a searchable emoji menu, Slack/Notion-style. Selecting inserts the native emoji character as **plain text** — no custom TipTap node (deliberate contrast with §32's mention atom: no serializer touch-points, no byte-stability constraints, copy/paste and search work for free). Frontend-only except the icon schema bump; demo mode works automatically.
+
+- **Dataset**: `@emoji-mart/data` (data-only, ~1.9k emoji, Slack-style shortcode ids), **lazy-loaded** via `import()` in `apps/web/src/lib/emoji/emoji-data.ts` — its JSON lives in its own async chunk (~82KB gzip, fetched on first trigger; main bundle unchanged). Everything downstream consumes the normalized **`EmojiItem { id, name, keywords, char, category }`** model — the swap point for future user-created custom emoji (an `imageUrl` variant) or a dataset change. `searchEmoji(data, query, limit, usage?)` ranks: exact id match first, then **most-used** (usage count desc, recency tiebreak), then match tier (id starts-with > id contains > name contains > keyword starts-with) in stable dataset order. No skin-tone selector (base skin only).
+- **Usage tracking** (`apps/web/src/lib/emoji/emoji-usage.ts`): localStorage map `nonotion_emoji_usage` (`{id: {count, lastUsed}}`, pruned to top 100). Every selection on any surface calls `recordEmojiUsage(id)`; powers search ranking + the icon picker's "Most used" section.
+- **Three surfaces**:
+  1. **TipTap text blocks**: trigger arms in `useBlockEditor.ts` `onUpdate` mirror the mention pattern — open regex `/(^|\s):[^\s:￼]$/` (the `￼`/`ATOM_CHAR` exclusion keeps a mention atom from acting as the query char; all `textBetween` calls use `mentionLeafText`), `colonStartPosRef` re-validated each update, closes on space/newline/atom/second-`:`/backspace-to-bare-`:`. `insertEmoji` replaces `:query` via `undoManager.transact` (Ctrl+Z restores the typed text), **no trailing space**. `emojiMenuOpenRef` is OR'd into the keyboard extension's Enter/Escape/Arrow guards; external-content sync closes the menu. Rendered in the 7 text registry components (`CodeBlockEdit` excluded).
+  2. **Page title input** (`PageHeader.tsx`): `apps/web/src/lib/emoji/useInputEmojiTrigger.ts` — regex `/(^|\s):([^\s:]+)$/` against `value.slice(0, selectionStart)` on every `onChange`; caret x approximated with canvas `measureText`; splice-insert restores the caret via rAF. `handleKeyDownCapture` runs first in the input's `onKeyDown` so Enter/Escape go to the menu, not save/revert.
+  3. **Page-icon picker**: `EmojiPickerPopover.tsx` (button-anchored, own focused search input, "Most used" + category grids, Enter picks first result, "Remove icon" row) replaced the old hardcoded 12-emoji grid.
+- **`EmojiMenu.tsx`** (caret surfaces): clone of `MentionMenu` mechanics (portal, fixed-position flip, document-level keydown so the editor/input keeps focus, `data-emoji-menu`). **Zero matches auto-close** (emoticons like `:-)` never leave a dead box). Container `onMouseDown` `preventDefault` keeps the title input focused during row clicks.
+- **Schema**: `icon: z.string().max(32)` (was 10) in `packages/shared/src/schemas/page.ts` — ZWJ sequences (family emoji = 11 UTF-16 units) now accepted as page icons.
+- Punted: `:shortcode:` closing-colon autocomplete (second `:` just closes the menu), skin tones, `TitleCell` trigger.
+
 ## Critical Files
 
 | File | Purpose |
@@ -398,6 +411,11 @@ Internal page-navigation affordances render real `<a href="/page/<id>">` element
 | `apps/web/src/components/blocks/MentionMenu.tsx` | Caret-anchored @ menu (Users/Pages sections, recents, hybrid page search) |
 | `apps/web/src/components/mentions/UserMentionPopover.tsx` | Info popover shown when a user mention is clicked |
 | `apps/web/src/lib/mention-recents.ts` | localStorage recency tracking for the @ menu (pages on open, users on mention) |
+| `apps/web/src/lib/emoji/emoji-data.ts` | Lazy-loaded emoji dataset (`@emoji-mart/data`) normalized to `EmojiItem` + ranked `searchEmoji` |
+| `apps/web/src/lib/emoji/emoji-usage.ts` | localStorage usage-frequency tracking (most-used ranking + "Most used" section) |
+| `apps/web/src/lib/emoji/useInputEmojiTrigger.ts` | ":" trigger hook for plain `<input>` surfaces (page title) |
+| `apps/web/src/components/blocks/EmojiMenu.tsx` | Caret-anchored ":" emoji search menu (text blocks + title input) |
+| `apps/web/src/components/common/EmojiPickerPopover.tsx` | Button-anchored searchable emoji picker (page icon) |
 | `apps/web/src/components/blocks/registry/index.ts` | Block type registry with shortcuts |
 | `apps/api/src/storage/file-storage-adapter.ts` | `FileStorageAdapter` interface (metadata + BLOB) incl. attachment lifecycle methods |
 | `apps/api/src/storage/attachment-backend.ts` | `AttachmentBlobBackend` interface + per-kind singleton factory (db/supabase bytes path) |

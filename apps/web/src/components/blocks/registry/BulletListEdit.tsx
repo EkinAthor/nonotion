@@ -6,6 +6,7 @@ import { useBlockContext } from '@/contexts/BlockContext';
 import { useBlockStore } from '@/stores/blockStore';
 import SlashCommandMenu from '../SlashCommandMenu';
 import MentionMenu from '../MentionMenu';
+import EmojiMenu from '../EmojiMenu';
 import FormatToolbar from '../FormatToolbar';
 
 const MAX_INDENT = 4;
@@ -38,7 +39,7 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
     }
   }, [block.id, content, indent, updateBlock]);
 
-  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention } = useBlockEditor({
+  const { editor, slashMenu, closeSlashMenu, selectSlashCommand, mentionMenu, closeMentionMenu, insertMention, emojiMenu, closeEmojiMenu, insertEmoji } = useBlockEditor({
     block,
     placeholder: readOnly ? '' : 'List item',
     readOnly,
@@ -132,6 +133,14 @@ export default function BulletListEdit({ block, readOnly = false }: BulletListEd
             position={mentionMenu.position}
             onSelect={insertMention}
             onClose={closeMentionMenu}
+          />
+        )}
+        {!readOnly && emojiMenu.isOpen && (
+          <EmojiMenu
+            query={emojiMenu.query}
+            position={emojiMenu.position}
+            onSelect={insertEmoji}
+            onClose={closeEmojiMenu}
           />
         )}
       </div>
