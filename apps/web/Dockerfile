@@ -41,10 +41,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.js
 
 # Build-time environment variables
 ARG VITE_API_URL=/api
+ARG VITE_APP_TITLE=
+ARG VITE_OPEN_SOURCE_NOTICE=
 
 # Build shared package first, then web
 RUN pnpm --filter @nonotion/shared build && \
-    VITE_API_URL=${VITE_API_URL} pnpm --filter @nonotion/web build
+    VITE_API_URL=${VITE_API_URL} VITE_APP_TITLE=${VITE_APP_TITLE} VITE_OPEN_SOURCE_NOTICE=${VITE_OPEN_SOURCE_NOTICE} pnpm --filter @nonotion/web build
 
 # ==============================================================================
 # Stage 3: Production (nginx)

@@ -18,6 +18,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         - VITE_API_URL=${VITE_API_URL:-/api}
+        - VITE_APP_TITLE=${VITE_APP_TITLE:-}
+        - VITE_OPEN_SOURCE_NOTICE=${VITE_OPEN_SOURCE_NOTICE:-}
     container_name: nonotion-web
     restart: unless-stopped
     ports:

@@ -392,6 +392,9 @@ Typing `:` + ≥1 character at word start (start-of-text or after whitespace —
 - **Schema**: `icon: z.string().max(32)` (was 10) in `packages/shared/src/schemas/page.ts` — ZWJ sequences (family emoji = 11 UTF-16 units) now accepted as page icons.
 - Punted: `:shortcode:` closing-colon autocomplete (second `:` just closes the menu), skin tones, `TitleCell` trigger.
 
+### 36. Deployment Branding (Visual Only)
+`apps/web/src/lib/branding.ts` centralizes deployment-level branding constants, all baked in at build time: `APP_TITLE` (`VITE_APP_TITLE`, default `Nonotion` — used for `document.title` in `main.tsx`, the sidebar brand, and the login/register/MCP-consent headings), `SHOW_OPEN_SOURCE_NOTICE` (`VITE_OPEN_SOURCE_NOTICE !== 'false'` — default-ON gate for the login page's open-source landing line + GitHub footer link), and `GITHUB_REPO_URL`. **Visual re-branding only** — code identifiers, `@nonotion/*` packages, `text-notion-*` Tailwind tokens, and `nonotion_*` localStorage keys are never renamed. Demo seed content keeps its hardcoded "Nonotion" strings. New user-visible brand strings should interpolate `APP_TITLE`, not hardcode "Nonotion".
+
 ## Critical Files
 
 | File | Purpose |

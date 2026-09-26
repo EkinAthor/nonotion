@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
+import { APP_TITLE } from '@/lib/branding';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md px-8 py-10">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-notion-text">Create an account</h1>
-          <p className="text-notion-text-secondary mt-2">Get started with Nonotion</p>
+          <p className="text-notion-text-secondary mt-2">Get started with {APP_TITLE}</p>
         </div>
 
         {displayError && (

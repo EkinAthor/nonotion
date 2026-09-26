@@ -23,6 +23,7 @@ import SortablePageTreeItem from './SortablePageTreeItem';
 import StarredSection from './StarredSection';
 import UserMenu from './UserMenu';
 import ImportDialog from './ImportDialog';
+import { APP_TITLE } from '@/lib/branding';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -123,7 +124,7 @@ export default function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-notion-border">
-        <span className="font-semibold text-notion-text">Nonotion</span>
+        <span className="font-semibold text-notion-text">{APP_TITLE}</span>
         <button
           onClick={toggleSidebar}
           className="p-1 rounded hover:bg-notion-hover text-notion-text-secondary"
