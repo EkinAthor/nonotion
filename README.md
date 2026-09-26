@@ -240,6 +240,8 @@ All perf entities carry a `_perf_` id infix, so `--clean` can never touch real d
 | `MAX_IMPORT_SIZE_MB` | Maximum Notion import ZIP size in MB | `100` |
 | `WEB_PORT` | Web server port (Docker only) | `80` |
 | `VITE_DEMO_MODE` | Enable demo mode (frontend-only, no backend) | `false` |
+| `VITE_APP_TITLE` | User-visible app title (tab, sidebar, auth pages); visual only, baked into the web build | `Nonotion` |
+| `VITE_OPEN_SOURCE_NOTICE` | Show open-source notice + GitHub link on the login page (`false` to hide); baked into the web build | `true` |
 | `RATE_LIMIT_ENABLED` | Enable/disable rate limiting (auto-disabled on Vercel) | `true` |
 | `RATE_LIMIT_GLOBAL_MAX` | Global: max requests per window per IP | `100` |
 | `RATE_LIMIT_GLOBAL_WINDOW_MINUTES` | Global: window duration in minutes | `1` |

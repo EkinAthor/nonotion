@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
+import { APP_TITLE, GITHUB_REPO_URL, SHOW_OPEN_SOURCE_NOTICE } from '@/lib/branding';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -120,7 +121,12 @@ export default function LoginPage() {
         <>
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-notion-text">Welcome back</h1>
-          <p className="text-notion-text-secondary mt-2">Sign in to your Nonotion account</p>
+          <p className="text-notion-text-secondary mt-2">Sign in to your {APP_TITLE} account</p>
+          {SHOW_OPEN_SOURCE_NOTICE && (
+            <p className="text-sm text-notion-text-secondary mt-2">
+              {APP_TITLE}: open-source personal workspace
+            </p>
+          )}
         </div>
 
         {error && (
@@ -199,6 +205,20 @@ export default function LoginPage() {
           </>
         )}
         </>
+        )}
+
+        {SHOW_OPEN_SOURCE_NOTICE && (
+          <p className="mt-8 text-center text-sm text-notion-text-secondary">
+            Open source ·{' '}
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              GitHub — EkinAthor/nonotion
+            </a>
+          </p>
         )}
       </div>
     </div>

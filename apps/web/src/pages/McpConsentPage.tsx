@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { mcpApi } from '@/api/client';
 import type { McpAccessWithTitle } from '@/api/client';
 import type { McpOAuthClientInfo } from '@nonotion/shared';
+import { APP_TITLE } from '@/lib/branding';
 
 /**
  * OAuth consent screen for MCP clients. The API's /mcp/oauth/authorize
@@ -88,7 +89,7 @@ export default function McpConsentPage() {
           ) : (
             <>
               <div className="text-center mb-6">
-                <h1 className="text-xl font-bold text-notion-text">Connect to Nonotion</h1>
+                <h1 className="text-xl font-bold text-notion-text">Connect to {APP_TITLE}</h1>
                 <p className="text-notion-text-secondary mt-2">
                   <span className="font-medium text-notion-text">{client.name}</span> is requesting{' '}
                   <span className="font-medium">read-only</span> access to the databases you have

@@ -5,7 +5,10 @@ import App from './App';
 import AuthConfigProvider from './components/auth/AuthConfigProvider';
 import { IS_DEMO_MODE } from '@/api/client';
 import { initDemoMode } from '@/api/demo-init';
+import { APP_TITLE } from '@/lib/branding';
 import './index.css';
+
+document.title = APP_TITLE;
 
 if (IS_DEMO_MODE) {
   initDemoMode();

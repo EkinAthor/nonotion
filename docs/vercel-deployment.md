@@ -92,6 +92,9 @@ The Web client is a Vite/React SPA.
     The repo includes `apps/web/vercel.json` with a rewrite rule that sends all paths to `index.html`, allowing React Router to handle client-side routing.
 5.  **Environment Variables**:
     *   `VITE_API_URL`: The URL of your API deployment (e.g., `https://your-nonotion-project-api.vercel.app/api`, or your custom API domain). Note: the `/api` suffix is required because all routes are registered under `/api/`.
+    *   `VITE_APP_TITLE` (optional): Override the user-visible app title (browser tab, sidebar, auth pages). Defaults to `Nonotion`.
+    *   `VITE_OPEN_SOURCE_NOTICE` (optional): Set to `false` to hide the open-source notice + GitHub link on the login page. On by default.
+    *   All `VITE_*` variables are baked into the JavaScript bundle at **build time** — changing one requires a redeploy to take effect.
 
 ---
 
