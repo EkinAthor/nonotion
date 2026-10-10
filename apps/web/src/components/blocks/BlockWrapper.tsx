@@ -39,7 +39,6 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
   const { deleteBlock, createBlock, createMultipleBlocks, changeBlockType, updateBlock, setFocusBlock, getBlockById, getAdjacentBlockId } = useBlockStore();
   const { createPage } = usePageStore();
   const navigate = useNavigate();
-  const [showActions, setShowActions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const kebabButtonRef = useRef<HTMLButtonElement>(null);
@@ -289,54 +288,58 @@ export default function BlockWrapper({ block, pageId, isDragging, isInDragSet = 
       className={`group relative flex items-start py-1 ${isSelected ? 'bg-blue-100/50 rounded-sm' : ''}`}
       data-block-id={block.id}
       data-block-type={block.type}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => !menuOpen && setShowActions(false)}
     >
-      {/* Action buttons (hidden in readOnly mode) */}
+      {/* Action buttons (hidden in readOnly mode).
+          The outer div is an always-present, transparent hit area spanning the
+          full gutter (width + block height). It is a DOM child of the block root,
+          so hovering the gutter from any direction puts the root in :hover and
+          reveals the buttons via group-hover. Visibility (not opacity) is used
+          on purpose — see the GPU-layer note above the `style` computation. */}
       {!readOnly && (
-        <div
-          className={`absolute right-full top-1 flex items-center gap-0.5 pr-2 ${showActions || menuOpen ? 'visible' : 'invisible'
-            }`}
-        >
-          {/* Drag handle */}
-          <button
-            {...attributes}
-            {...listeners}
-            className="p-1 rounded hover:bg-notion-hover cursor-grab active:cursor-grabbing"
-            title="Drag to reorder"
+        <div className="absolute right-full top-0 bottom-0 w-16 flex items-start justify-end pt-1 pr-1.5">
+          <div
+            className={`flex items-center gap-0.5 ${menuOpen ? 'visible' : 'invisible group-hover:visible'}`}
           >
-            <svg
-              className="w-4 h-4 text-notion-text-secondary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            {/* Drag handle */}
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 rounded hover:bg-notion-hover cursor-grab active:cursor-grabbing"
+              title="Drag to reorder"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 8h16M4 16h16"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-4 h-4 text-notion-text-secondary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 8h16M4 16h16"
+                />
+              </svg>
+            </button>
 
-          {/* Kebab menu button */}
-          <button
-            ref={kebabButtonRef}
-            onClick={handleKebabClick}
-            className="p-1 rounded hover:bg-notion-hover"
-            title="More options"
-          >
-            <svg
-              className="w-4 h-4 text-notion-text-secondary"
-              fill="currentColor"
-              viewBox="0 0 24 24"
+            {/* Kebab menu button */}
+            <button
+              ref={kebabButtonRef}
+              onClick={handleKebabClick}
+              className="p-1 rounded hover:bg-notion-hover"
+              title="More options"
             >
-              <circle cx="12" cy="5" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="19" r="2" />
-            </svg>
-          </button>
+              <svg
+                className="w-4 h-4 text-notion-text-secondary"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
