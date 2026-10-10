@@ -6,6 +6,7 @@ import { pagesApi } from '@/api/client';
 import { getRealtimeManager } from '@/lib/realtime';
 import { undoManager } from '@/lib/undo/undo-manager';
 import { usePresenceStore } from '@/stores/presenceStore';
+import { useUiStore } from '@/stores/uiStore';
 import PresenceAvatarBar from '@/components/presence/PresenceAvatarBar';
 import PageHeader from './PageHeader';
 import PageBreadcrumb from './PageBreadcrumb';
@@ -36,6 +37,8 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const realtimeConnected = usePresenceStore((s) => s.connected);
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const sidebarAutoCollapsed = useUiStore((s) => s.sidebarAutoCollapsed);
 
   const page = pages.get(pageId);
   const blocks = getBlocksForPage(pageId);
@@ -142,11 +145,16 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
     }
   };
 
+  // MainLayout renders a fixed "Open sidebar" hamburger (x 8–40px) when the
+  // sidebar is manually collapsed; reserve room for it so the breadcrumb's
+  // page icon doesn't render underneath. Same condition MainLayout uses.
+  const showSidebarToggle = !isPeek && !sidebarOpen && !sidebarAutoCollapsed;
+
   return (
     <div className="min-h-full">
       {/* Top bar */}
       <div className="sticky top-0 z-20 bg-notion-bg/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between py-2 px-4">
+        <div className={`flex items-center justify-between py-2 pr-4 ${showSidebarToggle ? 'pl-12' : 'pl-4'}`}>
           {isPeek ? (
             <div className="flex items-center gap-1">
               <button
@@ -227,7 +235,10 @@ export default function PageContent({ pageId, variant = 'full', onClose, onOpenF
         </div>
       </div>
 
-      <div className={`mx-auto py-4 ${isDatabase ? 'max-w-6xl px-8' : 'max-w-4xl px-10'}`}>
+      {/* Document pages get a 64px left gutter so the block action strip
+          (drag handle + menu, hanging left of each block) is never clipped
+          when the column touches its scroll container (narrow window / peek). */}
+      <div className={`mx-auto py-4 ${isDatabase ? 'max-w-6xl px-8' : 'max-w-4xl pl-16 pr-10'}`}>
         <PageHeader page={page} readOnly={!canEdit} />
         {!canEdit && (
           <div className="mb-4 px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-md">
